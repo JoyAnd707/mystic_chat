@@ -104,7 +104,7 @@ Future<void> _playLoopingAsset(String asset) async {
     await _player.setSource(AssetSource(asset));
 
     if (resumePos != null) {
-      await _player.seek(resumePos!);
+      await _player.seek(resumePos);
 
       _lastStoppedAsset = null;
       _lastStoppedPosition = null;
