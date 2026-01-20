@@ -578,21 +578,22 @@ final Color frameColor =
                   ),
                 ),
 
-                if (ts.isNotEmpty)
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: Text(
-                      ts,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.82),
+if (ts.isNotEmpty)
+  Positioned(
+    top: 6,
+    right: 6,
+    child: Text(
+      ts,
+      style: TextStyle(
+        color: Colors.white.withValues(alpha: 0.78),
+        fontSize: 13.0,          // ✅ קטן יותר
+        fontWeight: FontWeight.w500, // ✅ פחות "רזה"
+        height: 1.0,
+        letterSpacing: 0.1,      // ✅ טיפה יותר קריא
+      ),
+    ),
+  ),
 
-                        fontSize: 16.0,
-                        fontWeight: FontWeight.w200,
-                        height: 1.0,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
