@@ -253,26 +253,50 @@ Color _bubbleColorForUserId(String userId) {
 List<Widget> _buildHeartIcons(Set<String> reactorIds, double uiScale) {
   if (reactorIds.isEmpty) return const <Widget>[];
 
-  final ids = reactorIds.toList();
-  ids.sort(); // יציב (לא חובה, אבל נעים)
+  const double baseHeartSize = 40; // הגודל הוויזואלי של הלב
+  const double baseHeartGap = 2.0;
+
+  // גובה "שורת שם" בלבד (זה מה שמונע מהבועה לרדת)
+  final double lineHeight = 16 * uiScale;
+
+  final ids = reactorIds.toList()..sort();
 
   return ids.map((rid) {
     final tint = _bubbleColorForUserId(rid);
 
     return Padding(
-      padding: EdgeInsets.only(left: 3 * uiScale),
-      child: ColorFiltered(
-        colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
-        child: Image.asset(
-          _heartAsset,
-          width: 14 * uiScale,
-          height: 14 * uiScale,
-          filterQuality: FilterQuality.high,
+      padding: EdgeInsets.only(left: baseHeartGap * uiScale),
+      child: SizedBox(
+        // ✅ הלייאאוט תופס רק גובה של שורת טקסט
+        height: lineHeight,
+        width: baseHeartSize * uiScale, // מספיק מקום ללב
+        child: OverflowBox(
+          // ✅ מאפשר לצייר את הלב "מחוץ" לגובה השורה בלי להגדיל את השורה
+          alignment: Alignment.topCenter,
+          minHeight: 0,
+          maxHeight: baseHeartSize * uiScale,
+          minWidth: 0,
+          maxWidth: baseHeartSize * uiScale,
+          child: ColorFiltered(
+            colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
+            child: Transform.translate(
+              offset: Offset(0, -16 * uiScale), // להזיז למעלה בלי להשפיע על לייאאוט
+              child: Image.asset(
+                _heartAsset,
+                width: baseHeartSize * uiScale,
+                height: baseHeartSize * uiScale,
+                filterQuality: FilterQuality.high,
+              ),
+            ),
+          ),
         ),
       ),
     );
   }).toList();
 }
+
+
+
 
 Widget _nameWithHeartsHeader({
   required ChatUser user,
