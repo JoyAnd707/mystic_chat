@@ -70,6 +70,7 @@ String mysticTimestampFromMs(int ms) {
 
   return '$dd/$mm/$yy $ampm $hhStr:$minStr';
 }
+
 String mysticTimeOnlyFromMs(int ms) {
   if (ms <= 0) return '';
 
@@ -84,6 +85,29 @@ String mysticTimeOnlyFromMs(int ms) {
   final minStr = dt.minute.toString().padLeft(2, '0');
 
   return '$ampm $hhStr:$minStr';
+}
+
+// ✅ NEW: yyyy.MM.dd EEE like Mystic
+String mysticDmDateHeaderFromMs(int ms) {
+  if (ms <= 0) return '';
+
+  final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+
+  const w = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final week = w[(dt.weekday - 1).clamp(0, 6)];
+
+  final yyyy = dt.year.toString().padLeft(4, '0');
+  final mm = dt.month.toString().padLeft(2, '0');
+  final dd = dt.day.toString().padLeft(2, '0');
+
+  return '$yyyy.$mm.$dd $week';
+}
+
+bool mysticIsSameDayMs(int aMs, int bMs) {
+  if (aMs <= 0 || bMs <= 0) return false;
+  final a = DateTime.fromMillisecondsSinceEpoch(aMs);
+  final b = DateTime.fromMillisecondsSinceEpoch(bMs);
+  return a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 
@@ -981,12 +1005,24 @@ Expanded(
           final isMe = sender == widget.currentUserId;
           final text = (m['text'] ?? '').toString();
           final int ts = (m['ts'] is int) ? m['ts'] as int : 0;
-final String timeLabel = mysticTimeOnlyFromMs(ts);
+          final String timeLabel = mysticTimeOnlyFromMs(ts);
 
+          // ✅ Date Divider logic
+          int prevTs = 0;
+          if (i > 0) {
+            final prev = _messages[i - 1];
+            if ((prev['type'] ?? 'text') == 'text') {
+              prevTs = (prev['ts'] is int) ? prev['ts'] as int : 0;
+            }
+          }
 
-          // ✅ spacing logic:
-          // - same sender streak: a bit more space than before
-          // - switch between ISME <-> OTHERS: noticeably larger gap (Mystic vibe)
+          final bool showDateDivider =
+              (i == 0 && ts > 0) ||
+              (i > 0 && ts > 0 && !mysticIsSameDayMs(prevTs, ts));
+
+          final String dateHeader = mysticDmDateHeaderFromMs(ts);
+
+          // ✅ spacing logic (your existing vibe)
           String prevSender = '';
           if (i > 0) {
             final prev = _messages[i - 1];
@@ -1006,23 +1042,41 @@ final String timeLabel = mysticTimeOnlyFromMs(ts);
 
           return Padding(
             padding: EdgeInsets.only(bottom: bottomGap),
-child: _DmMessageRow(
-  isMe: isMe,
-  text: text,
-  time: timeLabel,
-  uiScale: uiScale,
-  meLetter: (dmUsers[widget.currentUserId]?.name.characters.first ?? ' ').toUpperCase(),
-  otherLetter: (dmUsers[widget.otherUserId]?.name.characters.first ?? ' ').toUpperCase(),
-),
-
-
-
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showDateDivider)
+                  _DmDateDivider(
+                    text: dateHeader,
+                    uiScale: uiScale,
+                  ),
+                _DmMessageRow(
+                  isMe: isMe,
+                  text: text,
+                  time: timeLabel,
+                  uiScale: uiScale,
+                  meLetter: (dmUsers[widget.currentUserId]
+                              ?.name
+                              .characters
+                              .first ??
+                          ' ')
+                      .toUpperCase(),
+                  otherLetter: (dmUsers[widget.otherUserId]
+                              ?.name
+                              .characters
+                              .first ??
+                          ' ')
+                      .toUpperCase(),
+                ),
+              ],
+            ),
           );
         },
       ),
     ],
   ),
 ),
+
 
 
           _DmBottomBar(
@@ -2178,3 +2232,114 @@ final double stemYNudge;
 
 
 
+class _DmDateDivider extends StatelessWidget {
+  final String text;
+  final double uiScale;
+
+  const _DmDateDivider({
+    required this.text,
+    required this.uiScale,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * uiScale;
+
+    if (text.trim().isEmpty) return const SizedBox.shrink();
+
+    // ⭐ size already good
+    final double starSize = s(24);
+    final double lineH = s(1.2);
+    final Color lineColor = Colors.white.withValues(alpha: 0.72);
+
+    // ListView horizontal padding in your DM screen:
+    // left/right: s(14)
+    final double listHPad = s(14);
+
+    Widget star() {
+      return Image.asset(
+        'assets/ui/DmsDateStar.png',
+        width: starSize,
+        height: starSize,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (_, __, ___) =>
+            SizedBox(width: starSize, height: starSize),
+      );
+    }
+
+    Widget line() {
+      return Container(height: lineH, color: lineColor);
+    }
+
+    // ✅ One side = line underneath + 2 stars on top (forces “connected” look)
+    Widget sideStarsAndLine() {
+      return SizedBox(
+        height: starSize, // so we can vertically center the line
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // line behind
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.center,
+                child: line(),
+              ),
+            ),
+
+            // stars on top, tight to edges
+            Positioned(
+              left: 0,
+              child: star(),
+            ),
+            Positioned(
+              right: 0,
+              child: star(),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: s(14)),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          // ✅ expand to full width by canceling ListView padding
+          // and push outer stars almost to screen edges
+          return Transform.translate(
+            offset: Offset(-listHPad, 0),
+            child: SizedBox(
+              width: c.maxWidth + (listHPad * 2),
+              child: Row(
+                children: [
+                  // left side (outer+inner) with line truly connected
+                  Expanded(child: sideStarsAndLine()),
+
+                  SizedBox(width: s(12)),
+
+                  // date text
+                  Text(
+                    text,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      fontSize: s(18),
+                      fontWeight: FontWeight.w400,
+                      height: 1.0,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+
+                  SizedBox(width: s(12)),
+
+                  // right side (inner+outer) with line truly connected
+                  Expanded(child: sideStarsAndLine()),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
