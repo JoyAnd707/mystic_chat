@@ -798,42 +798,58 @@ _messages.add({
     _scrollToBottom(keepFocus: true);
   }
 
-  @override
-  void initState() {
-    super.initState();
-      // ✅ DM screen uses same Home/DMs BGM
+@override
+void initState() {
+  super.initState();
+
+  // ✅ DM screen uses same Home/DMs BGM
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     await Bgm.I.playHomeDm();
   });
 
-    // ✅ Twinkle animation controller (same as DMs list)
-    _twinkleController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    )..repeat();
+  // ✅ Twinkle animation controller (same as DMs list)
+  _twinkleController = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 6),
+  )..repeat();
 
-    _c.addListener(() {
-      final hasText = _c.text.trim().isNotEmpty;
-      final shouldType = _focus.hasFocus && hasText;
-      // no spam; we only use it for UI state
-      if (_isTyping != shouldType && mounted) {
-        setState(() => _isTyping = true);
+  // ✅ KEY: when keyboard closes (focus lost) -> back to ANSWER button
+  _focus.addListener(() {
+    if (!_focus.hasFocus) {
+      if (mounted) {
+        setState(() {
+          _isTyping = false;
+        });
       }
-    });
+    }
+  });
 
-    _load().then((_) async {
-      await _markReadNow();
-      if (mounted) _scrollToBottom();
-    });
+  // ✅ Optional: if user taps the field and starts typing, keep typing mode.
+  // But DO NOT force typing mode to stay on when keyboard is closed.
+  _c.addListener(() {
+    // אם יש פוקוס (מקלדת פתוחה) – להשאיר typing mode
+    if (_focus.hasFocus && !_isTyping) {
+      if (mounted) {
+        setState(() {
+          _isTyping = true;
+        });
+      }
+    }
+  });
 
-    _box().then((box) {
-      box.watch(key: _roomKey()).listen((_) async {
-        await _load();
-        if (!mounted) return;
-        _scrollToBottom();
-      });
+  _load().then((_) async {
+    await _markReadNow();
+    if (mounted) _scrollToBottom();
+  });
+
+  _box().then((box) {
+    box.watch(key: _roomKey()).listen((_) async {
+      await _load();
+      if (!mounted) return;
+      _scrollToBottom();
     });
-  }
+  });
+}
 
 
   @override
@@ -965,117 +981,123 @@ Align(
 
 
 Expanded(
-  child: Stack(
-    children: [
-      // ✅ Same star background as DMs list
-      Positioned.fill(
-        child: Image.asset(
-          'assets/backgrounds/StarsBG.png',
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+  child: GestureDetector(
+    behavior: HitTestBehavior.translucent,
+    onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+    child: Stack(
+      children: [
+        // ✅ Same star background as DMs list
+        Positioned.fill(
+          child: Image.asset(
+            'assets/backgrounds/StarsBG.png',
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          ),
         ),
-      ),
 
-      // ✅ Same twinkle overlay as DMs list
-      Positioned.fill(
-        child: MysticStarTwinkleOverlay(
-          animation: _twinkleController,
-          starCount: 58,
-          sizeMultiplier: 1.0,
+        // ✅ Same twinkle overlay as DMs list
+        Positioned.fill(
+          child: MysticStarTwinkleOverlay(
+            animation: _twinkleController,
+            starCount: 58,
+            sizeMultiplier: 1.0,
+          ),
         ),
-      ),
 
-      // ✅ Messages on top
-      ListView.builder(
-        controller: _scroll,
-        padding: EdgeInsets.only(
-          left: s(14),
-          right: s(14),
-          top: s(10),
-          bottom: s(90),
-        ),
-        itemCount: _messages.length,
-        itemBuilder: (context, i) {
-          final m = _messages[i];
-          if ((m['type'] ?? 'text') != 'text') {
-            return const SizedBox.shrink();
-          }
-
-          final sender = (m['senderId'] ?? '').toString();
-          final isMe = sender == widget.currentUserId;
-          final text = (m['text'] ?? '').toString();
-          final int ts = (m['ts'] is int) ? m['ts'] as int : 0;
-          final String timeLabel = mysticTimeOnlyFromMs(ts);
-
-          // ✅ Date Divider logic
-          int prevTs = 0;
-          if (i > 0) {
-            final prev = _messages[i - 1];
-            if ((prev['type'] ?? 'text') == 'text') {
-              prevTs = (prev['ts'] is int) ? prev['ts'] as int : 0;
+        // ✅ Messages on top
+        ListView.builder(
+          controller: _scroll,
+          padding: EdgeInsets.only(
+            left: s(14),
+            right: s(14),
+            top: s(10),
+            bottom: s(90),
+          ),
+          itemCount: _messages.length,
+          itemBuilder: (context, i) {
+            final m = _messages[i];
+            if ((m['type'] ?? 'text') != 'text') {
+              return const SizedBox.shrink();
             }
-          }
 
-          final bool showDateDivider =
-              (i == 0 && ts > 0) ||
-              (i > 0 && ts > 0 && !mysticIsSameDayMs(prevTs, ts));
+            final sender = (m['senderId'] ?? '').toString();
+            final isMe = sender == widget.currentUserId;
+            final text = (m['text'] ?? '').toString();
+            final int ts = (m['ts'] is int) ? m['ts'] as int : 0;
+            final String timeLabel = mysticTimeOnlyFromMs(ts);
 
-          final String dateHeader = mysticDmDateHeaderFromMs(ts);
-
-          // ✅ spacing logic (your existing vibe)
-          String prevSender = '';
-          if (i > 0) {
-            final prev = _messages[i - 1];
-            if ((prev['type'] ?? 'text') == 'text') {
-              prevSender = (prev['senderId'] ?? '').toString();
+            // ✅ Date Divider logic
+            int prevTs = 0;
+            if (i > 0) {
+              final prev = _messages[i - 1];
+              if ((prev['type'] ?? 'text') == 'text') {
+                prevTs = (prev['ts'] is int) ? prev['ts'] as int : 0;
+              }
             }
-          }
 
-          final bool switchedSender =
-              (prevSender.isNotEmpty && prevSender != sender);
+            final bool showDateDivider =
+                (i == 0 && ts > 0) ||
+                (i > 0 && ts > 0 && !mysticIsSameDayMs(prevTs, ts));
 
-          final double sameSenderGap = s(22);
-          final double switchedSenderGap = s(34);
+            final String dateHeader = mysticDmDateHeaderFromMs(ts);
 
-          final double bottomGap =
-              switchedSender ? switchedSenderGap : sameSenderGap;
+            // ✅ spacing logic (your existing vibe)
+            String prevSender = '';
+            if (i > 0) {
+              final prev = _messages[i - 1];
+              if ((prev['type'] ?? 'text') == 'text') {
+                prevSender = (prev['senderId'] ?? '').toString();
+              }
+            }
 
-          return Padding(
-            padding: EdgeInsets.only(bottom: bottomGap),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (showDateDivider)
-                  _DmDateDivider(
-                    text: dateHeader,
+            final bool switchedSender =
+                (prevSender.isNotEmpty && prevSender != sender);
+
+            final double sameSenderGap = s(22);
+            final double switchedSenderGap = s(34);
+
+            final double bottomGap =
+                switchedSender ? switchedSenderGap : sameSenderGap;
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: bottomGap),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showDateDivider)
+                    _DmDateDivider(
+                      text: dateHeader,
+                      uiScale: uiScale,
+                    ),
+                  _DmMessageRow(
+                    isMe: isMe,
+                    text: text,
+                    time: timeLabel,
                     uiScale: uiScale,
+                    meLetter: (dmUsers[widget.currentUserId]
+                                ?.name
+                                .characters
+                                .first ??
+                            ' ')
+                        .toUpperCase(),
+                    otherLetter: (dmUsers[widget.otherUserId]
+                                ?.name
+                                .characters
+                                .first ??
+                            ' ')
+                        .toUpperCase(),
                   ),
-                _DmMessageRow(
-                  isMe: isMe,
-                  text: text,
-                  time: timeLabel,
-                  uiScale: uiScale,
-                  meLetter: (dmUsers[widget.currentUserId]
-                              ?.name
-                              .characters
-                              .first ??
-                          ' ')
-                      .toUpperCase(),
-                  otherLetter: (dmUsers[widget.otherUserId]
-                              ?.name
-                              .characters
-                              .first ??
-                          ' ')
-                      .toUpperCase(),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    ],
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    ),
   ),
 ),
+
+
 
 
 
@@ -1880,15 +1902,17 @@ child: TextField(
   // ✅ bigger + centered vertically
   textAlignVertical: TextAlignVertical.center,
 
+  // ✅ IMPORTANT: makes "Done" actually close and lose focus
+  textInputAction: TextInputAction.done,
+
   // ✅ white text
   style: TextStyle(
     color: Colors.white,
-    fontSize: s(18),  // ⬅️ תעלי/תרדי אם צריך (למשל 17/19/20)
+    fontSize: s(18),
     height: 1.0,
     fontWeight: FontWeight.w600,
   ),
 
-  // ✅ make cursor visible on dark bg
   cursorColor: Colors.white,
 
   decoration: InputDecoration(
@@ -1900,19 +1924,24 @@ child: TextField(
       height: 1.0,
       fontWeight: FontWeight.w600,
     ),
-
-    // ✅ helps true vertical centering
     isDense: true,
     contentPadding: EdgeInsets.only(
       left: 0,
       right: 0,
-      top: s(2),     // ⬅️ אם עדיין יושב גבוה/נמוך – זה הכיוון
+      top: s(2),
       bottom: s(0),
     ),
   ),
 
+  // ✅ when keyboard is dismissed via "Done"/IME -> go back to button
+  onEditingComplete: () {
+    focusNode.unfocus();
+  },
+
+  // ✅ keep your submit behavior (send)
   onSubmitted: (_) => onSend(),
 ),
+
 
                 ),
               ),
