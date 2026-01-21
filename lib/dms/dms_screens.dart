@@ -1795,15 +1795,19 @@ class _DmBottomBar extends StatelessWidget {
   });
 
   static const double _typeButtonWidth = 260;
-  static const double _sendBoxSize = 40;
-  static const double _sendScale = 0.8;
 
+  // ✅ one send button on the RIGHT only
+  static const double _sendBoxSize = 40;
+  static const double _sendScale = 0.9;
   static const double _sendInset = 14;
   static const double _sendDown = 3;
 
   // ✅ NEW assets for DMs
   static const String _answerButtonAsset = 'assets/ui/DmsAnswerButton.png';
   static const String _answerBarAsset = 'assets/ui/DmsAnswerBar.png';
+
+  // ✅ Your new envelope send icon
+  static const String _sendEnvelopeAsset = 'assets/ui/DmsSendMessageButton.png';
 
   @override
   Widget build(BuildContext context) {
@@ -1836,19 +1840,18 @@ class _DmBottomBar extends StatelessWidget {
             ),
           ),
         ),
-        _inactiveSendButton(left: true, s: s),
-        _inactiveSendButton(left: false, s: s),
+
+        // ✅ ONLY ONE on the RIGHT (inactive in answer mode)
+        _inactiveSendButtonRightOnly(s: s),
       ],
     );
   }
 
-  Widget _inactiveSendButton({
-    required bool left,
+  Widget _inactiveSendButtonRightOnly({
     required double Function(double) s,
   }) {
     return Positioned(
-      left: left ? s(_sendInset) : null,
-      right: left ? null : s(_sendInset),
+      right: s(_sendInset),
       child: Transform.translate(
         offset: Offset(0, s(_sendDown)),
         child: IgnorePointer(
@@ -1858,18 +1861,11 @@ class _DmBottomBar extends StatelessWidget {
             height: s(_sendBoxSize),
             child: Transform.scale(
               scale: _sendScale,
-              child: left
-                  ? Transform.flip(
-                      flipX: true,
-                      child: Image.asset(
-                        'assets/ui/SendMessageButton.png',
-                        fit: BoxFit.contain,
-                      ),
-                    )
-                  : Image.asset(
-                      'assets/ui/SendMessageButton.png',
-                      fit: BoxFit.contain,
-                    ),
+              child: Image.asset(
+                _sendEnvelopeAsset,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
             ),
           ),
         ),
@@ -1894,78 +1890,68 @@ class _DmBottomBar extends StatelessWidget {
               ),
               Positioned.fill(
                 child: Padding(
-                  // 🎯 אם תראי שהטקסט “יושב” לא נכון, זה המקום לכוון
                   padding: EdgeInsets.symmetric(
                     horizontal: s(18),
                     vertical: s(8),
                   ),
-child: TextField(
-  controller: controller,
-  focusNode: focusNode,
-  maxLines: 1,
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    maxLines: 1,
 
-  // ✅ bigger + centered vertically
-  textAlignVertical: TextAlignVertical.center,
+                    textAlignVertical: TextAlignVertical.center,
+                    textInputAction: TextInputAction.done,
 
-  // ✅ IMPORTANT: makes "Done" actually close and lose focus
-  textInputAction: TextInputAction.done,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: s(18),
+                      height: 1.0,
+                      fontWeight: FontWeight.w600,
+                    ),
 
-  // ✅ white text
-  style: TextStyle(
-    color: Colors.white,
-    fontSize: s(18),
-    height: 1.0,
-    fontWeight: FontWeight.w600,
-  ),
+                    cursorColor: Colors.white,
 
-  cursorColor: Colors.white,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      hintText: 'Type...',
+                      hintStyle: TextStyle(
+                        color: Colors.white.withOpacity(0.55),
+                        fontSize: s(18),
+                        height: 1.0,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      isDense: true,
+                      contentPadding: EdgeInsets.only(
+                        left: 0,
+                        right: 0,
+                        top: s(2),
+                        bottom: s(0),
+                      ),
+                    ),
 
-  decoration: InputDecoration(
-    border: InputBorder.none,
-    hintText: 'Type...',
-    hintStyle: TextStyle(
-      color: Colors.white.withOpacity(0.55),
-      fontSize: s(18),
-      height: 1.0,
-      fontWeight: FontWeight.w600,
-    ),
-    isDense: true,
-    contentPadding: EdgeInsets.only(
-      left: 0,
-      right: 0,
-      top: s(2),
-      bottom: s(0),
-    ),
-  ),
+                    onEditingComplete: () {
+                      focusNode.unfocus();
+                    },
 
-  // ✅ when keyboard is dismissed via "Done"/IME -> go back to button
-  onEditingComplete: () {
-    focusNode.unfocus();
-  },
-
-  // ✅ keep your submit behavior (send)
-  onSubmitted: (_) => onSend(),
-),
-
-
+                    onSubmitted: (_) => onSend(),
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        _activeSendButton(left: true, s: s),
-        _activeSendButton(left: false, s: s),
+
+        // ✅ ONLY ONE on the RIGHT (active in typing mode)
+        _activeSendButtonRightOnly(s: s),
       ],
     );
   }
 
-  Widget _activeSendButton({
-    required bool left,
+  Widget _activeSendButtonRightOnly({
     required double Function(double) s,
   }) {
     return Positioned(
-      left: left ? s(_sendInset) : null,
-      right: left ? null : s(_sendInset),
+      right: s(_sendInset),
       child: Transform.translate(
         offset: Offset(0, s(_sendDown)),
         child: GestureDetector(
@@ -1976,18 +1962,11 @@ child: TextField(
             height: s(_sendBoxSize),
             child: Transform.scale(
               scale: _sendScale,
-              child: left
-                  ? Transform.flip(
-                      flipX: true,
-                      child: Image.asset(
-                        'assets/ui/SendMessageButton.png',
-                        fit: BoxFit.contain,
-                      ),
-                    )
-                  : Image.asset(
-                      'assets/ui/SendMessageButton.png',
-                      fit: BoxFit.contain,
-                    ),
+              child: Image.asset(
+                _sendEnvelopeAsset,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
             ),
           ),
         ),
@@ -1995,6 +1974,7 @@ child: TextField(
     );
   }
 }
+
 
 /// =======================================
 /// Star twinkle overlay (DMs list only)

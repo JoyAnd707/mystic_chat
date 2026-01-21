@@ -70,6 +70,7 @@ flutter:
     - assets/bgm/
     - assets/reactions/
     - assets/ui/GCHourglassDateAndTime.png
+    - assets/ui/DmsSendMessageButton.png
   fonts:
     - family: NotoSans
       fonts:
