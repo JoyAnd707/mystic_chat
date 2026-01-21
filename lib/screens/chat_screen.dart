@@ -1466,19 +1466,23 @@ _roomSub = box.watch(key: _roomKey(widget.roomId)).listen((event) async {
       if (m.ts > 0) _seenMessageTs.add(m.ts);
     }
   } else {
-    // detect truly new messages
-    for (final m in _messages) {
-      final int ts = m.ts;
-      if (ts > 0 && !oldSeen.contains(ts)) {
-        _seenMessageTs.add(ts);
+// detect truly new messages
+for (final m in _messages) {
+  final int ts = m.ts;
+  if (ts > 0 && !oldSeen.contains(ts)) {
+    _seenMessageTs.add(ts);
 
-        // show NEW only for messages from others (live vibe)
-        final bool isMe = m.senderId == widget.currentUserId;
-        if (!isMe && m.type == ChatMessageType.text) {
-          _triggerNewBadgeForTs(ts);
-        }
+    // ✅ NEW badge ONLY in GROUP CHAT
+    if (widget.roomId == 'group_main') {
+      // show NEW only for messages from others (live vibe)
+      final bool isMe = m.senderId == widget.currentUserId;
+      if (!isMe && m.type == ChatMessageType.text) {
+        _triggerNewBadgeForTs(ts);
       }
     }
+  }
+}
+
   }
 
   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1848,38 +1852,46 @@ if (index < _messages.length) {
     return const SizedBox.shrink();
   }
 
-  final isMe = user.id == widget.currentUserId;
-  final bool showNew = _newBadgeVisibleByTs[msg.ts] ?? false;
+final isMe = user.id == widget.currentUserId;
 
-  pieces.add(
-    Padding(
-      padding: EdgeInsets.fromLTRB(
-        chatSidePadding * uiScale,
-        topSpacing * uiScale,
-        chatSidePadding * uiScale,
-        0,
-      ),
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onDoubleTap: () => _toggleHeartForMessage(msg),
-        child: MessageRow(
-          user: user,
-          text: msg.text,
-          isMe: isMe,
-          bubbleTemplate: msg.bubbleTemplate,
-          decor: msg.decor,
-          fontFamily: msg.fontFamily,
+// ✅ Group-only UI features
+final bool isGroup = widget.roomId == 'group_main';
+final bool showNew = isGroup ? (_newBadgeVisibleByTs[msg.ts] ?? false) : false;
 
-          showName: true,
-          nameHearts: _buildHeartIcons(msg.heartReactorIds, uiScale),
+pieces.add(
+  Padding(
+    padding: EdgeInsets.fromLTRB(
+      chatSidePadding * uiScale,
+      topSpacing * uiScale,
+      chatSidePadding * uiScale,
+      0,
+    ),
+    child: GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onDoubleTap: () => _toggleHeartForMessage(msg),
+      child: MessageRow(
+        user: user,
+        text: msg.text,
+        isMe: isMe,
+        bubbleTemplate: msg.bubbleTemplate,
+        decor: msg.decor,
+        fontFamily: msg.fontFamily,
 
-          showNewBadge: showNew,
-          usernameColor: usernameColor,
-          uiScale: uiScale,
-        ),
+        showName: true,
+        nameHearts: _buildHeartIcons(msg.heartReactorIds, uiScale),
+
+        // ✅ NEW: show time for group too (DMs already have their own logic elsewhere)
+        showTime: (widget.roomId == 'group_main'),
+        timeMs: msg.ts,
+
+        showNewBadge: showNew,
+        usernameColor: usernameColor,
+        uiScale: uiScale,
       ),
     ),
-  );
+  ),
+);
+
 
   return Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,

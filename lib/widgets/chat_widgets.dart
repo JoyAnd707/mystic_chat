@@ -467,7 +467,7 @@ class MessageRow extends StatelessWidget {
   final ChatUser user;
   final String text;
   final bool isMe;
-final List<Widget> nameHearts;
+  final List<Widget> nameHearts;
 
   /// ✅ איזה טמפלייט לצייר
   final BubbleTemplate bubbleTemplate;
@@ -478,27 +478,33 @@ final List<Widget> nameHearts;
   /// ✅ Optional per-message font family (English random fonts)
   final String? fontFamily;
 
-final bool showName;
-final Color usernameColor;
-final double uiScale; // ✅ NEW
-final bool showNewBadge;
+  final bool showName;
+  final Color usernameColor;
+  final double uiScale; // ✅ NEW
+  final bool showNewBadge;
 
+  /// ✅ NEW: time under message (like DMs)
+  final bool showTime;
+  final int timeMs;
 
-const MessageRow({
-  super.key,
-  required this.user,
-  required this.text,
-  required this.isMe,
-  required this.bubbleTemplate,
-  this.decor = BubbleDecor.none,
-  this.fontFamily,
-  this.showName = true,
-  required this.usernameColor,
-  required this.showNewBadge,
-this.nameHearts = const <Widget>[],
-  required this.uiScale, // ✅ NEW
-});
+  const MessageRow({
+    super.key,
+    required this.user,
+    required this.text,
+    required this.isMe,
+    required this.bubbleTemplate,
+    this.decor = BubbleDecor.none,
+    this.fontFamily,
+    this.showName = true,
+    required this.usernameColor,
+    required this.showNewBadge,
+    this.nameHearts = const <Widget>[],
+    required this.uiScale,
 
+    // ✅ NEW
+    this.showTime = false,
+    this.timeMs = 0,
+  });
 
   Color _decorBaseFromUser(Color c) {
     // Very light tint (reference: #fff8f8 on red)
@@ -560,7 +566,6 @@ this.nameHearts = const <Widget>[],
       ),
     );
   }
-
 
   Color _lerp(Color a, Color b, double t) {
     return Color.lerp(a, b, t) ?? a;
@@ -626,26 +631,29 @@ this.nameHearts = const <Widget>[],
     return HSLColor.fromAHSL(1.0, hue, sat, light).toColor();
   }
 
-@override
-Widget build(BuildContext context) {
-  final double avatarSize = 56 * uiScale; // ✅ scale with device
-  final double gap = 10 * uiScale;
-  double s(double v) => v * uiScale;
+  // ✅ NEW: simple HH:mm formatter (no intl)
+  String _timeLabel(int ms) {
+    if (ms <= 0) return '';
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+    String two(int x) => x.toString().padLeft(2, '0');
+    return '${two(dt.hour)}:${two(dt.minute)}';
+  }
 
+  @override
+  Widget build(BuildContext context) {
+    final double avatarSize = 56 * uiScale; // ✅ scale with device
+    final double gap = 10 * uiScale;
+    double s(double v) => v * uiScale;
 
-
-
-
-final avatar = SizedBox(
-  width: avatarSize,
-  height: avatarSize,
-  child: SquareAvatar(
-    size: avatarSize,
-    letter: user.name[0],
-    imagePath: user.avatarPath,
-  ),
-);
-
+    final avatar = SizedBox(
+      width: avatarSize,
+      height: avatarSize,
+      child: SquareAvatar(
+        size: avatarSize,
+        letter: user.name[0],
+        imagePath: user.avatarPath,
+      ),
+    );
 
     final BubbleTemplate effectiveTemplate = bubbleTemplate;
 
@@ -659,125 +667,103 @@ final avatar = SizedBox(
     final Color innerDarkGlow = _innerDarkGlowFromBase(bubbleFill);
     final Color outerBrightGlow = _outerBrightGlowFromBase(bubbleFill);
 
-    // ✅ Corner Stars (Glow) – precomputed (so we don't declare finals inside list literals)
+    // ✅ Corner Stars (Glow)
     final Color cornerStarsBaseTint = _decorBaseFromUser(user.bubbleColor);
     final Color cornerStarsGlowTint = _decorGlowFromUser(user.bubbleColor);
 
     const String cornerStarsLeftAsset =
         'assets/decors/TextBubble4CornerStarsLeft.png';
-const String cornerStarsRightAsset =
-    'assets/decors/TextBubble4CornerStarsRightpng.png';
+    const String cornerStarsRightAsset =
+        'assets/decors/TextBubble4CornerStarsRightpng.png';
 
-
-final bubbleInner = Padding(
-  padding: EdgeInsets.symmetric(
-    horizontal: 10 * uiScale,
-    vertical: 6 * uiScale,
-  ),
-  child: Directionality(
-    textDirection: _isProbablyRtl(text) ? TextDirection.rtl : TextDirection.ltr,
-    child: Text(
-      _bidiIsolate(text),
-      textAlign: _isProbablyRtl(text) ? TextAlign.right : TextAlign.left,
-      strutStyle: StrutStyle(
-        fontSize: 16 * uiScale,
-        height: 1.2,
-        forceStrutHeight: true,
+    final bubbleInner = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: 10 * uiScale,
+        vertical: 6 * uiScale,
       ),
-      textHeightBehavior: const TextHeightBehavior(
-        applyHeightToFirstAscent: false,
-        applyHeightToLastDescent: false,
+      child: Directionality(
+        textDirection: _isProbablyRtl(text) ? TextDirection.rtl : TextDirection.ltr,
+        child: Text(
+          _bidiIsolate(text),
+          textAlign: _isProbablyRtl(text) ? TextAlign.right : TextAlign.left,
+          strutStyle: StrutStyle(
+            fontSize: 16 * uiScale,
+            height: 1.2,
+            forceStrutHeight: true,
+          ),
+          textHeightBehavior: const TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
+          ),
+          style: TextStyle(
+            fontFamily: fontFamily,
+            fontSize: 16 * uiScale,
+            height: 1.2,
+            color: Colors.black,
+            fontWeight: FontWeight.w400,
+            letterSpacing: -0.15 * uiScale,
+            leadingDistribution: TextLeadingDistribution.even,
+          ),
+        ),
       ),
-style: TextStyle(
-  fontFamily: fontFamily,
-  fontSize: 16 * uiScale,
-  height: 1.2,
-  color: Colors.black,
-  fontWeight: FontWeight.w400,
-  letterSpacing: -0.15 * uiScale, // ✅ tighter message text
-  leadingDistribution: TextLeadingDistribution.even,
-),
+    );
 
-    ),
-  ),
-);
+    final double screenW = MediaQuery.of(context).size.width;
+    final double sidePadding = 16 * uiScale;
+    final double availableForBubble =
+        screenW - (sidePadding * 2) - (avatarSize + gap);
 
+    final double groupMax = availableForBubble * 0.75;
+    final double legacyMax = 260 * uiScale;
+    final double maxBubbleWidth = math.min(legacyMax, groupMax);
 
+    final bubbleWidget = ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+      child: BubbleWithTail(
+        color: bubbleFill,
+        isMe: isMe,
+        radius: 6 * uiScale,
+        tailWidth: 10 * uiScale,
+        tailHeight: 6 * uiScale,
+        tailTop: 12 * uiScale,
+        glowEnabled: (effectiveTemplate == BubbleTemplate.glow),
+        glowInnerColor: innerDarkGlow,
+        glowOuterColor: outerBrightGlow,
+        child: bubbleInner,
+      ),
+    );
 
-final double screenW = MediaQuery.of(context).size.width;
-
-// padding חיצוני שמגיע מה־ChatScreen (16 * uiScale מכל צד)
-final double sidePadding = 16 * uiScale;
-
-// כמה באמת נשאר לבועה, אחרי padding חיצוני + אווטאר + gap
-final double availableForBubble =
-    screenW - (sidePadding * 2) - (avatarSize + gap);
-
-// ✅ 3/4 מהרוחב הזמין
-final double groupMax = availableForBubble * 0.75;
-
-// ✅ המגבלה הישנה (לשמור על “הלוק” הרגיל)
-final double legacyMax = 260 * uiScale;
-
-// ✅ בוחרים את הקטן מביניהם
-final double maxBubbleWidth = math.min(legacyMax, groupMax);
-
-final bubbleWidget = ConstrainedBox(
-  constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-  child: BubbleWithTail(
-    color: bubbleFill,
-    isMe: isMe,
-    radius: 6 * uiScale,
-    tailWidth: 10 * uiScale,
-    tailHeight: 6 * uiScale,
-    tailTop: 12 * uiScale,
-    glowEnabled: (effectiveTemplate == BubbleTemplate.glow),
-    glowInnerColor: innerDarkGlow,
-    glowOuterColor: outerBrightGlow,
-    child: bubbleInner,
-  ),
-);
-
-
-
-
-
-
-    // ✅ bubble + decor overlay
     final bubbleStack = Stack(
       clipBehavior: Clip.none,
       children: [
         bubbleWidget,
-// ✅ NEW badge (shows briefly when message arrives)
-Positioned(
-  top: s(-10),
-  left: isMe ? s(-14) : null,
-  right: isMe ? null : s(-14),
-  child: IgnorePointer(
-    ignoring: true,
-    child: AnimatedOpacity(
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOut,
-      opacity: showNewBadge ? 1.0 : 0.0,
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutBack,
-        scale: showNewBadge ? 1.08 : 0.92,
-        child: MysticNewBadge(
-          uiScale: uiScale, // ✅ חשוב: לא 1.0
+
+        // ✅ NEW badge
+        Positioned(
+          top: s(-10),
+          left: isMe ? s(-14) : null,
+          right: isMe ? null : s(-14),
+          child: IgnorePointer(
+            ignoring: true,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOut,
+              opacity: showNewBadge ? 1.0 : 0.0,
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutBack,
+                scale: showNewBadge ? 1.08 : 0.92,
+                child: MysticNewBadge(
+                  uiScale: uiScale,
+                ),
+              ),
+            ),
+          ),
         ),
-      ),
-    ),
-  ),
-),
-
-
-
 
         // ✅ DECOR: Hearts
         if (decor == BubbleDecor.hearts) ...[
           if (isMe) ...[
-            // ✅ רחוק מהאווטאר: למעלה
             Positioned(
               top: s(-22),
               left: s(-28),
@@ -791,9 +777,6 @@ Positioned(
                 ),
               ),
             ),
-
-            // ✅ קרוב לאווטאר: לתחתית + "נוגע" בבועה (לא מרחף)
-            // שינוי מרכזי: bottom פחות שלילי + right פחות שלילי
             Positioned(
               bottom: s(-8),
               right: s(-20),
@@ -808,7 +791,6 @@ Positioned(
               ),
             ),
           ] else ...[
-            // ✅ אחרים: העליון בלבד בפנים, התחתון בחוץ ליד האווטאר (כמו שהוגדר ב-handoff)
             Positioned(
               top: s(-22),
               right: s(-28),
@@ -828,12 +810,9 @@ Positioned(
           ],
         ],
 
-
-
         // ✅ DECOR: Pink Hearts
         if (decor == BubbleDecor.pinkHearts) ...[
           if (isMe) ...[
-            // ✅ רחוק מהאווטאר: למעלה
             Positioned(
               top: s(-22),
               left: s(-28),
@@ -847,8 +826,6 @@ Positioned(
                 ),
               ),
             ),
-
-            // ✅ קרוב לאווטאר: לתחתית + נוגע בבועה
             Positioned(
               bottom: s(-8),
               right: s(-20),
@@ -863,7 +840,6 @@ Positioned(
               ),
             ),
           ] else ...[
-            // ✅ אחרים: העליון בלבד בפנים, התחתון בחוץ ליד האווטאר
             Positioned(
               top: s(-22),
               right: s(-28),
@@ -882,8 +858,6 @@ Positioned(
             ),
           ],
         ],
-
-
 
         // ✅ DECOR: Flowers + Ribbon
         if (decor == BubbleDecor.flowersRibbon) ...[
@@ -1048,56 +1022,48 @@ Positioned(
           ),
         ],
 
-
-if (decor == BubbleDecor.cornerStarsGlow) ...[
-  if (isMe) ...[
-    // 🔹 top (far from avatar)
-    Positioned(
-      top: s(-18),
-      left: s(-22),
-      child: _decorWithGlow(
-        asset: cornerStarsLeftAsset,
-        w: s(46),
-        h: s(46),
-        baseTint: cornerStarsBaseTint,
-        glowTint: cornerStarsGlowTint,
-      ),
-    ),
-
-    // 🔹 bottom (near avatar) — לא נוגעים
-    Positioned(
-      bottom: s(-8),
-      right: s(-20),
-      child: _decorWithGlow(
-        asset: cornerStarsRightAsset,
-        w: s(48),
-        h: s(48),
-        baseTint: cornerStarsBaseTint,
-        glowTint: cornerStarsGlowTint,
-      ),
-    ),
-  ] else ...[
-    // 🔹 LEFT bubbles: אותו מרחק כמו isMe אבל במראה
-    Positioned(
-      top: s(-18),
-      right: s(-22),
-      child: Transform.flip(
-        flipX: true,
-        child: _decorWithGlow(
-          asset: cornerStarsLeftAsset,
-          w: s(46),
-          h: s(46),
-          baseTint: cornerStarsBaseTint,
-          glowTint: cornerStarsGlowTint,
-        ),
-      ),
-    ),
-  ],
-],
-
-
-
-
+        // ✅ DECOR: Corner Stars Glow
+        if (decor == BubbleDecor.cornerStarsGlow) ...[
+          if (isMe) ...[
+            Positioned(
+              top: s(-18),
+              left: s(-22),
+              child: _decorWithGlow(
+                asset: cornerStarsLeftAsset,
+                w: s(46),
+                h: s(46),
+                baseTint: cornerStarsBaseTint,
+                glowTint: cornerStarsGlowTint,
+              ),
+            ),
+            Positioned(
+              bottom: s(-8),
+              right: s(-20),
+              child: _decorWithGlow(
+                asset: cornerStarsRightAsset,
+                w: s(48),
+                h: s(48),
+                baseTint: cornerStarsBaseTint,
+                glowTint: cornerStarsGlowTint,
+              ),
+            ),
+          ] else ...[
+            Positioned(
+              top: s(-18),
+              right: s(-22),
+              child: Transform.flip(
+                flipX: true,
+                child: _decorWithGlow(
+                  asset: cornerStarsLeftAsset,
+                  w: s(46),
+                  h: s(46),
+                  baseTint: cornerStarsBaseTint,
+                  glowTint: cornerStarsGlowTint,
+                ),
+              ),
+            ),
+          ],
+        ],
 
         // ✅ DECOR: Kitty
         if (decor == BubbleDecor.kitty) ...[
@@ -1127,17 +1093,15 @@ if (decor == BubbleDecor.cornerStarsGlow) ...[
                       _darkenColor(_musicNoteTintFromBubble(bubbleFill), 0.25),
                       BlendMode.srcIn,
                     ),
-        child: Transform.scale(
-  scale: 0.78,
-child: Image.asset(
-  'assets/decors/TextBubbleKittyFace.png',
-  width: s(34),
-  height: s(34),
-  fit: BoxFit.contain,
-),
-
-),
-
+                    child: Transform.scale(
+                      scale: 0.78,
+                      child: Image.asset(
+                        'assets/decors/TextBubbleKittyFace.png',
+                        width: s(34),
+                        height: s(34),
+                        fit: BoxFit.contain,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1147,58 +1111,72 @@ child: Image.asset(
       ],
     );
 
+    final String tLabel = showTime ? _timeLabel(timeMs) : '';
 
-    
+    final bubbleWithName = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        if (showName)
+          Padding(
+            padding: EdgeInsets.only(bottom: 2 * uiScale),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isMe) ...nameHearts,
+                if (isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
+                Text(
+                  user.name,
+                  style: TextStyle(
+                    color: usernameColor,
+                    fontSize: 13.5 * uiScale,
+                    fontWeight: FontWeight.w400,
+                    height: 1.0,
+                    letterSpacing: 0.2 * uiScale,
+                  ),
+                ),
+                if (!isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
+                if (!isMe) ...nameHearts,
+              ],
+            ),
+          ),
 
-final bubbleWithName = Column(
-  mainAxisSize: MainAxisSize.min,
-  crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-  children: [
-    if (showName)
-      Padding(
-        padding: EdgeInsets.only(bottom: 2 * uiScale),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ✅ אם אני: הלבבות משמאל לשם
-            if (isMe) ...nameHearts,
-            if (isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
+        bubbleStack,
 
-            Text(
-              user.name,
-              style: TextStyle(
-                color: usernameColor,
-                fontSize: 13.5 * uiScale,
-                fontWeight: FontWeight.w400,
-                height: 1.0,
-                letterSpacing: 0.2 * uiScale,
+        // ✅ NEW: time under the bubble (like DMs)
+        if (showTime && tLabel.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.only(
+              top: 6 * uiScale,
+              left: isMe ? 0 : 2 * uiScale,
+              right: isMe ? 2 * uiScale : 0,
+            ),
+            child: Align(
+              alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+              child: Text(
+                tLabel,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.55),
+                  fontSize: 12 * uiScale,
+                  fontWeight: FontWeight.w600,
+                  height: 1.0,
+                  letterSpacing: 0.2 * uiScale,
+                ),
               ),
             ),
+          ),
+      ],
+    );
 
-            // ✅ אם לא אני: הלבבות מימין לשם
-            if (!isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
-            if (!isMe) ...nameHearts,
-          ],
-        ),
-      ),
-
-    bubbleStack,
-  ],
-);
-
-
-
-
-    // ✅ אחרים (isMe=false): האווטאר חייב להיות שכבה מעל ה"מדבקה" התחתונה
+    // ✅ אחרים (isMe=false): האווטאר חייב להיות שכבה מעל המדבקה התחתונה
     if (!isMe) {
       return Stack(
         clipBehavior: Clip.none,
         children: [
-Padding(
-  padding: EdgeInsets.only(left: avatarSize + gap),
-  child: bubbleWithName,
-),
-
+          Padding(
+            padding: EdgeInsets.only(left: avatarSize + gap),
+            child: bubbleWithName,
+          ),
 
           if (decor == BubbleDecor.hearts)
             Positioned(
@@ -1236,32 +1214,27 @@ Padding(
               ),
             ),
 
+          if (decor == BubbleDecor.cornerStarsGlow)
+            Positioned(
+              left: (avatarSize + gap) - s(22),
+              bottom: s(-18),
+              child: Transform.flip(
+                flipX: true,
+                child: _decorWithGlow(
+                  asset: 'assets/decors/TextBubble4CornerStarsRightpng.png',
+                  w: s(48),
+                  h: s(48),
+                  baseTint: _decorBaseFromUser(user.bubbleColor),
+                  glowTint: _decorGlowFromUser(user.bubbleColor),
+                ),
+              ),
+            ),
 
-if (decor == BubbleDecor.cornerStarsGlow)
-  Positioned(
-    left: (avatarSize + gap) - s(22),
-    bottom: s(-18),
-    child: Transform.flip(
-      flipX: true,
-      child: _decorWithGlow(
-        asset: 'assets/decors/TextBubble4CornerStarsRightpng.png',
-        w: s(48),
-        h: s(48),
-        baseTint: _decorBaseFromUser(user.bubbleColor),
-        glowTint: _decorGlowFromUser(user.bubbleColor),
-      ),
-    ),
-  ),
-
-
-
-
-Positioned(
-  left: 0,
-  top: 0,
-  child: avatar,
-),
-
+          Positioned(
+            left: 0,
+            top: 0,
+            child: avatar,
+          ),
         ],
       );
     }
@@ -1270,24 +1243,23 @@ Positioned(
     return Stack(
       clipBehavior: Clip.none,
       children: [
-Padding(
-  padding: EdgeInsets.only(right: avatarSize + gap),
-  child: Align(
-    alignment: Alignment.centerRight,
-    child: bubbleWithName,
-  ),
-),
-
-Positioned(
-  right: 0,
-  top: 0,
-  child: avatar,
-),
-
+        Padding(
+          padding: EdgeInsets.only(right: avatarSize + gap),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: bubbleWithName,
+          ),
+        ),
+        Positioned(
+          right: 0,
+          top: 0,
+          child: avatar,
+        ),
       ],
     );
   }
 }
+
 
 
 
