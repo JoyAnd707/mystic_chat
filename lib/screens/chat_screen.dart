@@ -885,7 +885,7 @@ children: [
   ),
   decorTile(
     decor: BubbleDecor.hearts,
-    label: 'Hearts',
+    label: 'Red Hearts',
     preview: decorPreviewHeartsGray(),
   ),
   decorTile(
@@ -895,7 +895,7 @@ children: [
   ),
     decorTile(
     decor: BubbleDecor.cornerStarsGlow,
-    label: 'Corner Stars',
+    label: 'Shiny Stars',
     preview: decorPreviewCornerStarsGlowGray(),
   ),
 
@@ -911,12 +911,12 @@ children: [
   ),
   decorTile(
     decor: BubbleDecor.dripSad,
-    label: 'Drip',
+    label: 'Gloomy',
     preview: decorPreviewDripSadGray(),
   ),
   decorTile(
     decor: BubbleDecor.musicNotes,
-    label: 'Notes',
+    label: 'Music Notes',
     preview: decorPreviewMusicNotesGray(),
   ),
   decorTile(
