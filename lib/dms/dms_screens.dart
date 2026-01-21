@@ -385,10 +385,10 @@ class _MysticNewBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(1.5),
+      borderRadius: BorderRadius.circular(1.2),
       child: Container(
         color: const Color(0xFFFF4A4A),
-        padding: const EdgeInsets.symmetric(horizontal: 1.0),
+        padding: const EdgeInsets.symmetric(horizontal: 0.8, vertical: 0.2),
         child: const Text(
           'NEW',
           textHeightBehavior: TextHeightBehavior(
@@ -397,16 +397,17 @@ class _MysticNewBadge extends StatelessWidget {
           ),
           style: TextStyle(
             color: Colors.white,
-            fontSize: 9.2,
-            fontWeight: FontWeight.w700,
+            fontSize: 8.2, // ✅ smaller
+            fontWeight: FontWeight.w800,
             height: 1.0,
-            letterSpacing: 0.25,
+            letterSpacing: 0.15,
           ),
         ),
       ),
     );
   }
 }
+
 
 /// =======================================
 /// DM ROW TILE (same look you already tuned)
@@ -434,9 +435,11 @@ class _DmRowTile extends StatelessWidget {
   Widget build(BuildContext context) {
     double s(double v) => v * uiScale;
 
-    // ✅ Taller like Mystic reference
-    final double tileHeight = s(93);
-    final double avatarSize = s(68);
+    // ✅ slightly taller like reference
+    final double tileHeight = s(90);
+
+    // ✅ bigger profile image
+    final double avatarSize = s(72);
 
     final double outerFrameThickness = s(3.2);
     final double innerDarkStroke = s(1.1);
@@ -445,9 +448,12 @@ class _DmRowTile extends StatelessWidget {
     final double innerLeftPadding = s(10);
     final double rightInset = s(8);
 
-    final double envelopeBoxW = s(40);
-    final double envelopeSize = s(34);
-    final double envelopeBottomPad = s(8);
+    // ✅ bigger envelope
+    final double envelopeBoxW = s(44);
+    final double envelopeSize = s(38);
+
+    // ✅ lower envelope a bit
+    final double envelopeBottomPad = s(4.5);
 
     const Color unreadTeal = Color(0xFF46F5D6);
 
@@ -512,14 +518,14 @@ class _DmRowTile extends StatelessWidget {
                             child: Padding(
                               padding: EdgeInsets.only(
                                 right: unread
-                                    ? (envelopeBoxW + s(34) + s(12))
+                                    ? (envelopeBoxW + s(32) + s(12))
                                     : (envelopeBoxW + s(8)),
                               ),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.start,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  SizedBox(height: s(8)), // ✅ more top air
+                                  SizedBox(height: s(8)),
                                   Text(
                                     user.name,
                                     maxLines: 1,
@@ -531,7 +537,9 @@ class _DmRowTile extends StatelessWidget {
                                       height: 1.0,
                                     ),
                                   ),
-                                  SizedBox(height: s(18)), // ✅ bigger gap like reference
+                                  SizedBox(height: s(18)),
+
+                                  // ✅ smaller preview
                                   Text(
                                     (previewText.trim().isEmpty)
                                         ? 'Tap to open chat'
@@ -539,8 +547,8 @@ class _DmRowTile extends StatelessWidget {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.72),
-                                      fontSize: s(16.5),
+                                      color: Colors.white.withValues(alpha: 0.70),
+                                      fontSize: s(15.2), // ✅ a bit smaller
                                       fontWeight: FontWeight.w400,
                                       height: 1.0,
                                     ),
@@ -552,6 +560,7 @@ class _DmRowTile extends StatelessWidget {
                         ],
                       ),
 
+                      // ✅ envelope + NEW
                       Positioned(
                         right: 0,
                         bottom: envelopeBottomPad,
@@ -578,10 +587,12 @@ class _DmRowTile extends StatelessWidget {
                                   ),
                                 ),
                               ),
+
+                              // ✅ NEW smaller + slightly lower
                               if (unread)
                                 Positioned(
                                   right: envelopeSize + s(6),
-                                  bottom: s(14),
+                                  bottom: s(10.5), // ✅ lower than before
                                   child: const _MysticNewBadge(),
                                 ),
                             ],
@@ -615,6 +626,7 @@ class _DmRowTile extends StatelessWidget {
     );
   }
 }
+
 
 
 
