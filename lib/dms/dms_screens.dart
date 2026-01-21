@@ -1092,7 +1092,7 @@ child: Text(
     fontFamily: 'NanumGothic', // ✅ זה השינוי
     color: textColor,
     fontSize: s(20),
-    fontWeight: FontWeight.w400,
+    fontWeight: FontWeight.w500,
     height: 1.3,
   ),
 ),
