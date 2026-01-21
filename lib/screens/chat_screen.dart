@@ -8,6 +8,8 @@ import '../audio/sfx.dart';
 import '../audio/bgm.dart';
 import '../bots/daily_fact_bot.dart';
 import '../fx/heart_reaction_fly_layer.dart';
+import 'dart:ui';
+
 
 double mysticUiScale(BuildContext context) {
   // ✅ UI scale tuned for your Mystic layout.
@@ -236,13 +238,28 @@ class ChatScreen extends StatefulWidget {
 enum BubbleStyle { normal, glow }
 
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateMixin {
+
   static const double _topBarHeight = 0;
   static const double _bottomBarHeight = 80;
   static const double _redFrameTopGap = 0;
   StreamSubscription? _roomSub;
 VoidCallback? _onlineListener;
 
+// =======================
+// Creepy BG Easter Egg
+// =======================
+String? _bgOverride;
+
+late final AnimationController _bgFxCtrl;
+
+// איפה שמכניסים את המילים לטריגר:
+static const List<String> _creepyTriggers = <String>[
+  'glitch',
+  'overtune',
+  'dj silence',
+  'struct', // דוגמה – תוסיפי/תמחקי מה שבא לך
+];
 
 static const String _heartAsset = 'assets/reactions/HeartReaction.png';
 
@@ -296,6 +313,58 @@ List<Widget> _buildHeartIcons(Set<String> reactorIds, double uiScale) {
 }
 
 
+
+bool _shouldTriggerCreepyEgg(String raw) {
+  final s = raw.trim().toLowerCase();
+  if (s.isEmpty) return false;
+
+  for (final t in _creepyTriggers) {
+    final tt = t.trim().toLowerCase();
+    if (tt.isEmpty) continue;
+    if (s.contains(tt)) return true;
+  }
+  return false;
+}
+
+Future<void> _playCreepyEggFx() async {
+  if (!mounted) return;
+
+  // 1) swap bg (AnimatedSwitcher will fade)
+  setState(() {
+    _bgOverride = 'assets/backgrounds/CreepyBackgroundEasterEgg.png';
+  });
+
+  // ✅ let the BG fade start, then start the egg
+  await Future.delayed(const Duration(milliseconds: 120));
+
+  // 2) creepy music
+  if (widget.enableBgm) {
+    await Bgm.I.playEasterEgg('bgm/CreepyMusic.mp3');
+  }
+
+  // 3) glitch pulses + SFX
+  for (int i = 0; i < 3; i++) {
+    Sfx.I.playGlitch();
+    await _bgFxCtrl.forward(from: 0);
+    await Future.delayed(const Duration(milliseconds: 120));
+  }
+
+  // 4) keep creepy bg a moment
+  await Future.delayed(const Duration(milliseconds: 700));
+  if (!mounted) return;
+
+  // ✅ IMPORTANT: stop egg audio now (don’t wait for track to end)
+  if (widget.enableBgm) {
+    await Bgm.I.cancelEasterEggAndRestore(
+      fadeOut: const Duration(milliseconds: 650),
+    );
+  }
+
+  // 5) return background
+  setState(() {
+    _bgOverride = null;
+  });
+}
 
 
 Widget _nameWithHeartsHeader({
@@ -1401,6 +1470,10 @@ Future<void> _emitLeft({bool showInUi = true}) async {
 void initState() {
   super.initState();
   _messages = <ChatMessage>[];
+_bgFxCtrl = AnimationController(
+  vsync: this,
+  duration: const Duration(milliseconds: 900),
+);
 
   // ✅ initialize hour for live UI updates
   _uiHour = DateTime.now().hour;
@@ -1521,6 +1594,7 @@ void dispose() {
     _onlineNotifier.removeListener(_onlineListener!);
     _onlineListener = null;
   }
+_bgFxCtrl.dispose();
 
   super.dispose();
 }
@@ -1575,6 +1649,8 @@ Future<void> _debugSimulateIncomingMessage() async {
 
 void _sendMessage() {
   final text = _controller.text.trim();
+  final bool triggerCreepy = _shouldTriggerCreepyEgg(text);
+
   if (text.isEmpty) return;
 
   final bool triggerEgg = _shouldTrigger707Egg(text);
@@ -1621,6 +1697,11 @@ void _sendMessage() {
     Sfx.I.play707VoiceLine();
   }
 
+  // ✅ Creepy background + glitch + music (Easter Egg)
+  if (triggerCreepy) {
+    _playCreepyEggFx();
+  }
+
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -1639,9 +1720,10 @@ void _sendMessage() {
 
 @override
 Widget build(BuildContext context) {
-  final int hour = _uiHour;
-  final bg = backgroundForHour(hour);
-  final Color usernameColor = usernameColorForHour(hour);
+final int hour = _uiHour;
+final bg = _bgOverride ?? backgroundForHour(hour);
+final Color usernameColor = usernameColorForHour(hour);
+
 
   final double uiScale = mysticUiScale(context);
 
@@ -1719,11 +1801,49 @@ Positioned(
     );
   },
 
-  child: Image.asset(
-    bg,
-    key: ValueKey(bg),
-    fit: BoxFit.cover,
-  ),
+child: AnimatedBuilder(
+  key: ValueKey(bg),
+  animation: _bgFxCtrl,
+  builder: (context, _) {
+    final t = _bgFxCtrl.value;
+
+    final bool glitchOn = _bgOverride != null;
+
+    final double pulse = (t * (1.0 - t)) * 4.0; // 0..~1
+    final double blur = glitchOn ? (pulse * 7.0) : 0.0;
+
+    final double dx = glitchOn ? (sin(t * 40) * 8.0) : 0.0;
+    final double dy = glitchOn ? (cos(t * 36) * 6.0) : 0.0;
+    final double rot = glitchOn ? (sin(t * 20) * 0.03) : 0.0;
+
+    Widget img = Image.asset(
+      bg,
+      fit: BoxFit.cover,
+    );
+
+    if (!glitchOn) return img;
+
+    return Transform.translate(
+      offset: Offset(dx, dy),
+      child: Transform.rotate(
+        angle: rot,
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: ColorFiltered(
+            colorFilter: ColorFilter.matrix(<double>[
+              1, 0, 0, 0, 18 * pulse,
+              0, 1, 0, 0, 6 * pulse,
+              0, 0, 1, 0, 24 * pulse,
+              0, 0, 0, 1, 0,
+            ]),
+            child: img,
+          ),
+        ),
+      ),
+    );
+  },
+),
+
 ),
 
 ),

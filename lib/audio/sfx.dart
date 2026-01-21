@@ -57,6 +57,7 @@ class Sfx {
     _pool.clear();
   }
 
+Future<void> playGlitch() => _playOne('assets/fx/GlitchSFX.mp3', volume: 0.95);
 
   Future<void> stopAll() async {
   try {

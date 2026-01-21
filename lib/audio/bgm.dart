@@ -31,6 +31,13 @@ class Bgm {
 
   // ✅ Home + DMs use the same track
   static const String _homeDmAsset = 'bgm/MenuAndDmsMusic.mp3';
+  // ✅ Track volume locally (because some audioplayers versions don't have getVolume())
+  double _volume = 0.45;
+
+  Future<void> _setVolume(double v) async {
+    _volume = v.clamp(0.0, 1.0);
+    await _player.setVolume(_volume);
+  }
 
   Future<void> init() async {
     final bgmContext = AudioContext(
@@ -51,8 +58,55 @@ class Bgm {
 
     await _player.setAudioContext(bgmContext);
     await _player.setReleaseMode(ReleaseMode.loop);
-    await _player.setVolume(0.45);
+
+    // ✅ use our tracked volume
+    await _setVolume(0.45);
   }
+
+
+
+
+
+
+  Timer? _fadeTimer;
+
+  Future<void> _fadeVolume(double from, double to, Duration duration) async {
+    _fadeTimer?.cancel();
+    if (!enabled) return;
+
+    final int steps = 18; // smooth enough
+    final int stepMs =
+        (duration.inMilliseconds / steps).round().clamp(10, 1000);
+    final double delta = (to - from) / steps;
+
+    double v = from;
+    await _setVolume(v);
+
+    final completer = Completer<void>();
+
+    int i = 0;
+    _fadeTimer = Timer.periodic(Duration(milliseconds: stepMs), (t) async {
+      i++;
+      v += delta;
+      await _setVolume(v);
+
+      if (i >= steps) {
+        t.cancel();
+        _fadeTimer = null;
+        completer.complete();
+      }
+    });
+
+    return completer.future;
+  }
+
+  /// Fade current player volume (whatever is playing right now)
+  Future<void> fadeTo(double target, Duration duration) async {
+    // ✅ no getVolume(); use tracked _volume
+    final current = _volume;
+    await _fadeVolume(current, target, duration);
+  }
+
 
   // ==========================
   // HOME + DMs
@@ -150,48 +204,71 @@ class Bgm {
       _preEggOverrideActive = _overrideActive;
       _preEggPosition = await _player.getCurrentPosition();
 
-      await _player.pause();
+// fade out current bgm quickly
+await fadeTo(0.0, const Duration(milliseconds: 450));
+await _player.pause();
 
-      _currentAsset = asset;
+_currentAsset = asset;
 
-      await _player.setReleaseMode(ReleaseMode.stop);
-      await _player.stop();
-      await _player.setSource(AssetSource(asset));
-      await _player.resume();
+await _player.setReleaseMode(ReleaseMode.stop);
+await _player.stop();
+await _player.setSource(AssetSource(asset));
 
-      _eggCompleteSub = _player.onPlayerComplete.listen((_) async {
-        await _restoreAfterEgg();
-      });
+// start creepy at 0 volume then fade in
+await _setVolume(0.0);
+await _player.resume();
+await fadeTo(0.45, const Duration(milliseconds: 900));
+
+
+_eggCompleteSub = _player.onPlayerComplete.listen((_) async {
+  await fadeTo(0.0, const Duration(milliseconds: 600));
+  await _restoreAfterEgg();
+});
+
     } catch (_) {
       await _restoreAfterEgg();
     }
   }
 
-  Future<void> _restoreAfterEgg() async {
-    if (!_eggPlaying) return;
+Future<void> _restoreAfterEgg() async {
+  if (!_eggPlaying) return;
+
+  // ✅ we consider "egg is done" only after we successfully restore
+  await _eggCompleteSub?.cancel();
+  _eggCompleteSub = null;
+
+  _overrideActive = _preEggOverrideActive;
+
+  final prev = _preEggAsset;
+  if (prev == null) {
     _eggPlaying = false;
-
-    await _eggCompleteSub?.cancel();
-    _eggCompleteSub = null;
-
-    _overrideActive = _preEggOverrideActive;
-
-    final prev = _preEggAsset;
-    if (prev == null) return;
-
-    try {
-      await _player.setReleaseMode(ReleaseMode.loop);
-      await _player.stop();
-      await _player.setSource(AssetSource(prev));
-
-      if (_preEggPosition != null) {
-        await _player.seek(_preEggPosition!);
-      }
-
-      await _player.resume();
-      _currentAsset = prev;
-    } catch (_) {}
+    return;
   }
+
+  try {
+    await _player.setReleaseMode(ReleaseMode.loop);
+    await _player.stop();
+    await _player.setSource(AssetSource(prev));
+
+    // ✅ restore from 0 volume then fade back in
+    await _setVolume(0.0);
+
+    if (_preEggPosition != null) {
+      await _player.seek(_preEggPosition!);
+    }
+
+    await _player.resume();
+    await fadeTo(0.45, const Duration(milliseconds: 1200));
+
+    _currentAsset = prev;
+  } catch (_) {
+    // ignore
+  } finally {
+    _eggPlaying = false;
+  }
+}
+
+
 
   // ==========================
   // Manual override (kept)
@@ -211,6 +288,28 @@ class Bgm {
       await playHomeDm();
     }
   }
+Future<void> cancelEasterEggAndRestore({
+  Duration fadeOut = const Duration(milliseconds: 600),
+}) async {
+  if (!_eggPlaying) return;
+
+  try {
+    // stop listening to "complete" (we're forcing exit)
+    await _eggCompleteSub?.cancel();
+    _eggCompleteSub = null;
+
+    // fade out current (egg) audio quickly
+    await fadeTo(0.0, fadeOut);
+
+    // stop current track so it can't keep playing quietly
+    await _player.stop();
+  } catch (_) {
+    // ignore
+  }
+
+  // restore the previous looping bgm immediately
+  await _restoreAfterEgg();
+}
 
   // ==========================
   // Lifecycle controls (kept)
