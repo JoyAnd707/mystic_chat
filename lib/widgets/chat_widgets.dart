@@ -77,7 +77,8 @@ class BottomBorderBar extends StatelessWidget {
 
   static const double _typeButtonWidth = 260;
   static const double _sendBoxSize = 40;
-  static const double _sendScale = 0.8;
+ static const double _sendScale = 1.0;
+
 
   static const double _sendInset = 14;
   static const double _sendDown = 3;
