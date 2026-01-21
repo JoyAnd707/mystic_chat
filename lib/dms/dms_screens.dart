@@ -1774,6 +1774,10 @@ class _DmBottomBar extends StatelessWidget {
   static const double _sendInset = 14;
   static const double _sendDown = 3;
 
+  // ✅ NEW assets for DMs
+  static const String _answerButtonAsset = 'assets/ui/DmsAnswerButton.png';
+  static const String _answerBarAsset = 'assets/ui/DmsAnswerBar.png';
+
   @override
   Widget build(BuildContext context) {
     if (height <= 0) return const SizedBox.shrink();
@@ -1784,11 +1788,14 @@ class _DmBottomBar extends StatelessWidget {
       width: double.infinity,
       color: Colors.black,
       padding: EdgeInsets.only(bottom: s(10)),
-      child: isTyping ? _typingBar(s) : _typeMessageBar(s),
+      child: isTyping ? _typingBar(s) : _answerButtonBar(s),
     );
   }
 
-  Widget _typeMessageBar(double Function(double) s) {
+  // =====================
+  // BEFORE TYPING (ANSWER button)
+  // =====================
+  Widget _answerButtonBar(double Function(double) s) {
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -1797,7 +1804,7 @@ class _DmBottomBar extends StatelessWidget {
           child: SizedBox(
             width: s(_typeButtonWidth),
             child: Image.asset(
-              'assets/ui/TypeMessageButton.png',
+              _answerButtonAsset,
               fit: BoxFit.fitWidth,
             ),
           ),
@@ -1808,7 +1815,10 @@ class _DmBottomBar extends StatelessWidget {
     );
   }
 
-  Widget _inactiveSendButton({required bool left, required double Function(double) s}) {
+  Widget _inactiveSendButton({
+    required bool left,
+    required double Function(double) s,
+  }) {
     return Positioned(
       left: left ? s(_sendInset) : null,
       right: left ? null : s(_sendInset),
@@ -1840,6 +1850,9 @@ class _DmBottomBar extends StatelessWidget {
     );
   }
 
+  // =====================
+  // TYPING MODE (ANSWER bar)
+  // =====================
   Widget _typingBar(double Function(double) s) {
     return Stack(
       alignment: Alignment.center,
@@ -1848,29 +1861,59 @@ class _DmBottomBar extends StatelessWidget {
           width: s(_typeButtonWidth),
           child: Stack(
             children: [
-              Image.asset('assets/ui/TypeBar.png', fit: BoxFit.fitWidth),
+              Image.asset(
+                _answerBarAsset,
+                fit: BoxFit.fitWidth,
+              ),
               Positioned.fill(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: s(18), vertical: s(8)),
-                  child: TextField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    maxLines: 1,
-                    textAlignVertical: TextAlignVertical.center,
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: s(14),
-                      height: 1.2,
-                    ),
-                    cursorColor: Colors.black,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Type...',
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    onSubmitted: (_) => onSend(),
+                  // 🎯 אם תראי שהטקסט “יושב” לא נכון, זה המקום לכוון
+                  padding: EdgeInsets.symmetric(
+                    horizontal: s(18),
+                    vertical: s(8),
                   ),
+child: TextField(
+  controller: controller,
+  focusNode: focusNode,
+  maxLines: 1,
+
+  // ✅ bigger + centered vertically
+  textAlignVertical: TextAlignVertical.center,
+
+  // ✅ white text
+  style: TextStyle(
+    color: Colors.white,
+    fontSize: s(18),  // ⬅️ תעלי/תרדי אם צריך (למשל 17/19/20)
+    height: 1.0,
+    fontWeight: FontWeight.w600,
+  ),
+
+  // ✅ make cursor visible on dark bg
+  cursorColor: Colors.white,
+
+  decoration: InputDecoration(
+    border: InputBorder.none,
+    hintText: 'Type...',
+    hintStyle: TextStyle(
+      color: Colors.white.withOpacity(0.55),
+      fontSize: s(18),
+      height: 1.0,
+      fontWeight: FontWeight.w600,
+    ),
+
+    // ✅ helps true vertical centering
+    isDense: true,
+    contentPadding: EdgeInsets.only(
+      left: 0,
+      right: 0,
+      top: s(2),     // ⬅️ אם עדיין יושב גבוה/נמוך – זה הכיוון
+      bottom: s(0),
+    ),
+  ),
+
+  onSubmitted: (_) => onSend(),
+),
+
                 ),
               ),
             ],
@@ -1882,7 +1925,10 @@ class _DmBottomBar extends StatelessWidget {
     );
   }
 
-  Widget _activeSendButton({required bool left, required double Function(double) s}) {
+  Widget _activeSendButton({
+    required bool left,
+    required double Function(double) s,
+  }) {
     return Positioned(
       left: left ? s(_sendInset) : null,
       right: left ? null : s(_sendInset),
