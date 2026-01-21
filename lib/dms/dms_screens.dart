@@ -1149,9 +1149,14 @@ class _DmMessageRow extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        const Color bodyFill = Color(0xFF4A4A4A);
+        // ✅ DM bubble body transparency (Mystic vibe)
+        // Alpha guide:
+        // 0xFF = fully opaque, 0xCC ≈ 80%, 0xB3 ≈ 70%, 0x99 ≈ 60%
+        const Color bodyFill = Color(0xB3606060);
+
         final Color borderColor = isMe ? Colors.white : const Color(0xFF46F5D6);
         const Color textColor = Colors.white;
+
 
         final double strokeW = s(2);
 
