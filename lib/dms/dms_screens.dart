@@ -1092,7 +1092,7 @@ child: Text(
     fontFamily: 'NanumGothic',
     color: textColor,
     fontSize: s(20),
-    fontWeight: FontWeight.w500,
+    fontWeight: FontWeight.w400,
     height: 1.3,
     letterSpacing: -0.3, // ✅ מקטין רווח בין אותיות
   ),
@@ -1177,7 +1177,7 @@ final row = Padding(
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.65),
                   fontSize: s(14),
-                  fontWeight: FontWeight.w300,
+                  fontWeight: FontWeight.w400,
                   height: 1.0,
                 ),
               ),
@@ -1202,7 +1202,7 @@ final row = Padding(
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.65),
                   fontSize: s(14),
-                  fontWeight: FontWeight.w300,
+                  fontWeight: FontWeight.w400,
                   height: 1.0,
                 ),
               ),
