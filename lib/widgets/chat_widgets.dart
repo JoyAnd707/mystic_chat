@@ -1,7 +1,7 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../audio/sfx.dart';
-
+import 'dart:math' as math;
 
 enum BubbleTemplate {
   normal,
@@ -697,24 +697,41 @@ final bubbleInner = Padding(
 
 
 
+final double screenW = MediaQuery.of(context).size.width;
+
+// padding חיצוני שמגיע מה־ChatScreen (16 * uiScale מכל צד)
+final double sidePadding = 16 * uiScale;
+
+// כמה באמת נשאר לבועה, אחרי padding חיצוני + אווטאר + gap
+final double availableForBubble =
+    screenW - (sidePadding * 2) - (avatarSize + gap);
+
+// ✅ 3/4 מהרוחב הזמין
+final double groupMax = availableForBubble * 0.75;
+
+// ✅ המגבלה הישנה (לשמור על “הלוק” הרגיל)
+final double legacyMax = 260 * uiScale;
+
+// ✅ בוחרים את הקטן מביניהם
+final double maxBubbleWidth = math.min(legacyMax, groupMax);
+
 final bubbleWidget = ConstrainedBox(
-  constraints: BoxConstraints(maxWidth: 260 * uiScale),
+  constraints: BoxConstraints(maxWidth: maxBubbleWidth),
   child: BubbleWithTail(
     color: bubbleFill,
     isMe: isMe,
     radius: 6 * uiScale,
-
     tailWidth: 10 * uiScale,
     tailHeight: 6 * uiScale,
     tailTop: 12 * uiScale,
-
     glowEnabled: (effectiveTemplate == BubbleTemplate.glow),
     glowInnerColor: innerDarkGlow,
     glowOuterColor: outerBrightGlow,
-
     child: bubbleInner,
   ),
 );
+
+
 
 
 
