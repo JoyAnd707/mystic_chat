@@ -378,17 +378,17 @@ class _DmTopBar extends StatelessWidget {
   }
 }
 
-
 class _MysticNewBadge extends StatelessWidget {
   const _MysticNewBadge();
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(1.2),
+      borderRadius: BorderRadius.circular(1.1),
       child: Container(
-        color: const Color(0xFFFF4A4A),
-        padding: const EdgeInsets.symmetric(horizontal: 0.8, vertical: 0.2),
+        color: const Color(0xFFFF6769), // #ff6769
+
+        padding: const EdgeInsets.symmetric(horizontal: 0.7, vertical: 0.15),
         child: const Text(
           'NEW',
           textHeightBehavior: TextHeightBehavior(
@@ -397,16 +397,17 @@ class _MysticNewBadge extends StatelessWidget {
           ),
           style: TextStyle(
             color: Colors.white,
-            fontSize: 8.2, // ✅ smaller
+            fontSize: 7.8, // ✅ smaller
             fontWeight: FontWeight.w800,
             height: 1.0,
-            letterSpacing: 0.15,
+            letterSpacing: 0.12,
           ),
         ),
       ),
     );
   }
 }
+
 
 
 /// =======================================
@@ -435,10 +436,7 @@ class _DmRowTile extends StatelessWidget {
   Widget build(BuildContext context) {
     double s(double v) => v * uiScale;
 
-    // ✅ slightly taller like reference
     final double tileHeight = s(90);
-
-    // ✅ bigger profile image
     final double avatarSize = s(72);
 
     final double outerFrameThickness = s(3.2);
@@ -448,12 +446,13 @@ class _DmRowTile extends StatelessWidget {
     final double innerLeftPadding = s(10);
     final double rightInset = s(8);
 
-    // ✅ bigger envelope
-    final double envelopeBoxW = s(44);
-    final double envelopeSize = s(38);
+    // ✅ envelope a bit bigger
+    final double envelopeBoxW = s(46);
+    final double envelopeSize = s(42); // ⬅️ קצת יותר גדולה
 
-    // ✅ lower envelope a bit
-    final double envelopeBottomPad = s(4.5);
+
+    // ✅ envelope a bit lower
+    final double envelopeBottomPad = s(6.5); // ⬅️ יורדת קצת
 
     const Color unreadTeal = Color(0xFF46F5D6);
 
@@ -465,6 +464,10 @@ class _DmRowTile extends StatelessWidget {
         : 'assets/ui/DMSmessageRead.png';
 
     final String ts = mysticTimestampFromMs(lastUpdatedMs);
+
+    // ✅ compute TOP of envelope inside the Stack so NEW can align to it
+    final double envelopeTop =
+        tileHeight - envelopeBottomPad - envelopeSize;
 
     return GestureDetector(
       onTap: onTap,
@@ -537,9 +540,10 @@ class _DmRowTile extends StatelessWidget {
                                       height: 1.0,
                                     ),
                                   ),
-                                  SizedBox(height: s(18)),
 
-                                  // ✅ smaller preview
+                                  // ✅ preview a bit higher (less gap)
+                                  SizedBox(height: s(14)),
+
                                   Text(
                                     (previewText.trim().isEmpty)
                                         ? 'Tap to open chat'
@@ -548,7 +552,7 @@ class _DmRowTile extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: Colors.white.withValues(alpha: 0.70),
-                                      fontSize: s(15.2), // ✅ a bit smaller
+                                      fontSize: s(15.2),
                                       fontWeight: FontWeight.w400,
                                       height: 1.0,
                                     ),
@@ -560,45 +564,43 @@ class _DmRowTile extends StatelessWidget {
                         ],
                       ),
 
-                      // ✅ envelope + NEW
+                      // ✅ envelope
                       Positioned(
                         right: 0,
                         bottom: envelopeBottomPad,
                         child: SizedBox(
                           width: envelopeBoxW,
                           height: envelopeSize,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Align(
-                                alignment: Alignment.bottomRight,
-                                child: SizedBox(
-                                  width: envelopeSize,
-                                  height: envelopeSize,
-                                  child: Image.asset(
-                                    envelopeAsset,
-                                    fit: BoxFit.contain,
-                                    filterQuality: FilterQuality.high,
-                                    errorBuilder: (_, __, ___) => Icon(
-                                      Icons.mail_outline,
-                                      color: Colors.white.withValues(alpha: 0.8),
-                                      size: s(22),
-                                    ),
-                                  ),
+                          child: Align(
+                            alignment: Alignment.bottomRight,
+                            child: SizedBox(
+                              width: envelopeSize,
+                              height: envelopeSize,
+                              child: Image.asset(
+                                envelopeAsset,
+                                fit: BoxFit.contain,
+                                filterQuality: FilterQuality.high,
+                                errorBuilder: (_, __, ___) => Icon(
+                                  Icons.mail_outline,
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                  size: s(22),
                                 ),
                               ),
-
-                              // ✅ NEW smaller + slightly lower
-                              if (unread)
-                                Positioned(
-                                  right: envelopeSize + s(6),
-                                  bottom: s(10.5), // ✅ lower than before
-                                  child: const _MysticNewBadge(),
-                                ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
+
+                      // ✅ NEW: align TOP with envelope TOP
+                      if (unread)
+                        Positioned(
+                          // put it to the left of envelope
+                          right: envelopeSize + s(6),
+                          // EXACT same top as envelope top
+                          top: envelopeTop + s(2), // ⬅️ אותו offset כמו המעטפה, נשאר מיושר
+
+                          child: const _MysticNewBadge(),
+                        ),
                     ],
                   ),
                 ),
@@ -626,6 +628,7 @@ class _DmRowTile extends StatelessWidget {
     );
   }
 }
+
 
 
 
@@ -1120,7 +1123,7 @@ child: Text(
     fontFamily: 'NanumGothic',
     color: textColor,
     fontSize: s(20),
-    fontWeight: FontWeight.w400,
+    fontWeight: FontWeight.w500,
     height: 1.3,
     letterSpacing: -0.3, // ✅ מקטין רווח בין אותיות
   ),
