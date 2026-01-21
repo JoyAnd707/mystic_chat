@@ -33,29 +33,41 @@ class _NoTransitionsBuilder extends PageTransitionsBuilder {
 /// =======================================
 /// Mystic Chat — App Entry
 /// =======================================
+Future<void> _enableImmersiveSticky() async {
+  // Hide Android navigation bar + status bar until user swipes.
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
+  // Optional: make bars transparent when they do appear (Android).
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Colors.transparent,
+  ));
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
 
-await SystemChrome.setPreferredOrientations([
-  DeviceOrientation.portraitUp,
-]);
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
+
+  // ✅ Hide Android system bars until swipe
+  await _enableImmersiveSticky();
 
   // ✅ ONE global audio session for the whole app
   try {
-final session = await AudioSession.instance;
-await session.configure(AudioSessionConfiguration(
-  avAudioSessionCategory: AVAudioSessionCategory.ambient,
-  avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.mixWithOthers,
-  androidAudioAttributes: const AndroidAudioAttributes(
-    contentType: AndroidAudioContentType.music,
-    usage: AndroidAudioUsage.media,
-  ),
-  androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransientMayDuck,
-  androidWillPauseWhenDucked: false,
-));
-
+    final session = await AudioSession.instance;
+    await session.configure(AudioSessionConfiguration(
+      avAudioSessionCategory: AVAudioSessionCategory.ambient,
+      avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.mixWithOthers,
+      androidAudioAttributes: const AndroidAudioAttributes(
+        contentType: AndroidAudioContentType.music,
+        usage: AndroidAudioUsage.media,
+      ),
+      androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransientMayDuck,
+      androidWillPauseWhenDucked: false,
+    ));
   } catch (e) {
     debugPrint('AudioSession configure failed: $e');
   }
@@ -72,10 +84,10 @@ await session.configure(AudioSessionConfiguration(
   } catch (e) {
     debugPrint('Sfx.init failed: $e');
   }
-runApp(const MysticChatApp());
 
-
+  runApp(const MysticChatApp());
 }
+
 
 
 
@@ -138,10 +150,11 @@ class _MysticChatAppState extends State<MysticChatApp>
       return;
     }
 
-    // App came back → resume BGM if you want
-    if (state == AppLifecycleState.resumed) {
-      await Bgm.I.resumeIfPossible();
-    }
+if (state == AppLifecycleState.resumed) {
+  await _enableImmersiveSticky();
+  await Bgm.I.resumeIfPossible();
+}
+
   }
 
   @override
