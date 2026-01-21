@@ -68,7 +68,7 @@ flutter:
     - assets/avatars/
     - assets/fx/
     - assets/bgm/
-
+    - assets/reactions/
   fonts:
     - family: NotoSans
       fonts:

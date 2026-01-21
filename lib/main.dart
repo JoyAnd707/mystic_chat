@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'dms/dms_screens.dart';
 import 'screens/chat_screen.dart';
-
+import '../fx/heart_reaction_fly_layer.dart';
 
 import '../fx/tap_sparkle_layer.dart';
 import 'audio/sfx.dart';
@@ -169,12 +169,15 @@ return MaterialApp(
       },
     ),
   ),
-  builder: (context, child) {
-    return TapSparkleLayer(
+builder: (context, child) {
+  return HeartReactionFlyLayer(
+    child: TapSparkleLayer(
       debugScale: 0.7,
       child: child ?? const SizedBox.shrink(),
-    );
-  },
+    ),
+  );
+},
+
   home: FutureBuilder<String?>(
     future: _loadSavedUserId(),
     builder: (context, snapshot) {

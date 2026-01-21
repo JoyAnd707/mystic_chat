@@ -467,6 +467,7 @@ class MessageRow extends StatelessWidget {
   final ChatUser user;
   final String text;
   final bool isMe;
+final List<Widget> nameHearts;
 
   /// ✅ איזה טמפלייט לצייר
   final BubbleTemplate bubbleTemplate;
@@ -494,7 +495,7 @@ const MessageRow({
   this.showName = true,
   required this.usernameColor,
   required this.showNewBadge,
-
+this.nameHearts = const <Widget>[],
   required this.uiScale, // ✅ NEW
 });
 
@@ -1151,29 +1152,40 @@ child: Image.asset(
 
 final bubbleWithName = Column(
   mainAxisSize: MainAxisSize.min,
-  crossAxisAlignment:
-      isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+  crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
   children: [
-if (showName)
-  Padding(
-    padding: EdgeInsets.only(bottom: 2 * uiScale),
-    child: Text(
-      user.name,
-      style: TextStyle(
-        color: usernameColor,
-        fontSize: 13.5 * uiScale,
-        fontWeight: FontWeight.w400,
-        height: 1.0,
-        letterSpacing: 0.2 * uiScale,
+    if (showName)
+      Padding(
+        padding: EdgeInsets.only(bottom: 2 * uiScale),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ✅ אם אני: הלבבות משמאל לשם
+            if (isMe) ...nameHearts,
+            if (isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
+
+            Text(
+              user.name,
+              style: TextStyle(
+                color: usernameColor,
+                fontSize: 13.5 * uiScale,
+                fontWeight: FontWeight.w400,
+                height: 1.0,
+                letterSpacing: 0.2 * uiScale,
+              ),
+            ),
+
+            // ✅ אם לא אני: הלבבות מימין לשם
+            if (!isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
+            if (!isMe) ...nameHearts,
+          ],
+        ),
       ),
-    ),
-  ),
-
-
 
     bubbleStack,
   ],
 );
+
 
 
 

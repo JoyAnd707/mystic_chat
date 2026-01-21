@@ -7,7 +7,7 @@ import '../widgets/chat_widgets.dart';
 import '../audio/sfx.dart';
 import '../audio/bgm.dart';
 import '../bots/daily_fact_bot.dart';
-
+import '../fx/heart_reaction_fly_layer.dart';
 
 double mysticUiScale(BuildContext context) {
   // ✅ UI scale tuned for your Mystic layout.
@@ -120,6 +120,10 @@ class ChatMessage {
   /// ✅ Optional per-message font family (English random fonts)
   final String? fontFamily;
 
+  /// ✅ NEW: userIds that heart-reacted to THIS message
+  /// Persisted in Hive as a List<String>
+  final Set<String> heartReactorIds;
+
   ChatMessage({
     required this.type,
     required this.senderId,
@@ -128,7 +132,30 @@ class ChatMessage {
     this.bubbleTemplate = BubbleTemplate.normal,
     this.decor = BubbleDecor.none,
     this.fontFamily,
-  });
+    Set<String>? heartReactorIds,
+  }) : heartReactorIds = heartReactorIds ?? <String>{};
+
+  ChatMessage copyWith({
+    ChatMessageType? type,
+    String? senderId,
+    String? text,
+    int? ts,
+    BubbleTemplate? bubbleTemplate,
+    BubbleDecor? decor,
+    String? fontFamily,
+    Set<String>? heartReactorIds,
+  }) {
+    return ChatMessage(
+      type: type ?? this.type,
+      senderId: senderId ?? this.senderId,
+      text: text ?? this.text,
+      ts: ts ?? this.ts,
+      bubbleTemplate: bubbleTemplate ?? this.bubbleTemplate,
+      decor: decor ?? this.decor,
+      fontFamily: fontFamily ?? this.fontFamily,
+      heartReactorIds: heartReactorIds ?? this.heartReactorIds,
+    );
+  }
 
   Map<String, dynamic> toMap() => <String, dynamic>{
         'type': type.name,
@@ -138,6 +165,7 @@ class ChatMessage {
         'bubbleTemplate': bubbleTemplate.name,
         'decor': decor.name,
         'fontFamily': fontFamily,
+        'heartReactorIds': heartReactorIds.toList(),
       };
 
   static ChatMessage fromMap(Map m) {
@@ -160,13 +188,13 @@ class ChatMessage {
     );
 
     final ff = m['fontFamily'];
-    final fontFamily = (ff == null || ff.toString().trim().isEmpty)
-        ? null
-        : ff.toString();
+    final fontFamily =
+        (ff == null || ff.toString().trim().isEmpty) ? null : ff.toString();
 
-    final int ts = (m['ts'] is int)
-        ? (m['ts'] as int)
-        : 0;
+    final int ts = (m['ts'] is int) ? (m['ts'] as int) : 0;
+
+    final rawReactors = (m['heartReactorIds'] as List?) ?? const [];
+    final reactors = rawReactors.map((e) => e.toString()).toSet();
 
     return ChatMessage(
       type: type,
@@ -176,6 +204,7 @@ class ChatMessage {
       bubbleTemplate: bt,
       decor: decor,
       fontFamily: fontFamily,
+      heartReactorIds: reactors,
     );
   }
 }
@@ -206,12 +235,140 @@ class ChatScreen extends StatefulWidget {
 /// ✅ סוג בועה לשליחה (תפריט)
 enum BubbleStyle { normal, glow }
 
+
 class _ChatScreenState extends State<ChatScreen> {
   static const double _topBarHeight = 0;
   static const double _bottomBarHeight = 80;
   static const double _redFrameTopGap = 0;
   StreamSubscription? _roomSub;
 VoidCallback? _onlineListener;
+
+
+static const String _heartAsset = 'assets/reactions/HeartReaction.png';
+
+Color _bubbleColorForUserId(String userId) {
+  return users[userId]?.bubbleColor ?? Colors.white;
+}
+
+List<Widget> _buildHeartIcons(Set<String> reactorIds, double uiScale) {
+  if (reactorIds.isEmpty) return const <Widget>[];
+
+  final ids = reactorIds.toList();
+  ids.sort(); // יציב (לא חובה, אבל נעים)
+
+  return ids.map((rid) {
+    final tint = _bubbleColorForUserId(rid);
+
+    return Padding(
+      padding: EdgeInsets.only(left: 3 * uiScale),
+      child: ColorFiltered(
+        colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
+        child: Image.asset(
+          _heartAsset,
+          width: 14 * uiScale,
+          height: 14 * uiScale,
+          filterQuality: FilterQuality.high,
+        ),
+      ),
+    );
+  }).toList();
+}
+
+Widget _nameWithHeartsHeader({
+  required ChatUser user,
+  required ChatMessage msg,
+  required bool isMe,
+  required Color usernameColor,
+  required double uiScale,
+}) {
+  if (widget.roomId != 'group_main') return const SizedBox.shrink();
+
+  // same offset so header sits above the bubble, not above the avatar
+  final double avatarSize = 60 * uiScale;
+  final double avatarGap = 10 * uiScale;
+
+  final EdgeInsets sideInset = isMe
+      ? EdgeInsets.only(right: avatarSize + avatarGap)
+      : EdgeInsets.only(left: avatarSize + avatarGap);
+
+  final hearts = _buildHeartIcons(msg.heartReactorIds, uiScale);
+
+  return Padding(
+    // ✅ NO top padding (this is what “lifted” the name)
+    padding: EdgeInsets.only(
+      top: 0,
+      bottom: 2 * uiScale, // tiny gap like the old layout
+    ),
+    child: Padding(
+      padding: sideInset,
+      child: Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // ✅ isMe: hearts BEFORE name (left of name)
+            if (isMe) ...hearts,
+            if (isMe && hearts.isNotEmpty) SizedBox(width: 4 * uiScale),
+
+            Text(
+              user.name,
+              style: TextStyle(
+                color: usernameColor,
+                fontSize: 15 * uiScale,
+                fontWeight: FontWeight.w700,
+                height: 1.0, // ✅ keeps baseline tight (closer to old)
+              ),
+            ),
+
+            // ✅ not isMe: hearts AFTER name (right of name)
+            if (!isMe && hearts.isNotEmpty) SizedBox(width: 4 * uiScale),
+            if (!isMe) ...hearts,
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+
+Future<void> _toggleHeartForMessage(ChatMessage msg) async {
+  // ריאקשנים רק לטקסט (לא system)
+  if (msg.type != ChatMessageType.text) return;
+
+  final me = widget.currentUserId;
+  final isAdding = !msg.heartReactorIds.contains(me);
+
+  final next = msg.heartReactorIds.toSet();
+  if (isAdding) {
+    next.add(me);
+  } else {
+    next.remove(me);
+  }
+
+  final updated = msg.copyWith(heartReactorIds: next);
+
+  setState(() {
+    final i = _messages.indexWhere((m) => m.ts == msg.ts);
+    if (i != -1) _messages[i] = updated;
+  });
+
+  // משתמשים אצלך כבר שומרים את החדר להייב באותה פונקציה ששומרת הכל
+  // אל תשני אותה — רק תקראי לה.
+  await _saveMessagesForRoom(updateMeta: false);
+
+
+  // 🎬 אנימציה: לפי הספציפיקציה — רק מי שכתבה את ההודעה “מקבלת” את הלב.
+  // ברגע שיהיה multi-device אמיתי, זה יעבוד מושלם.
+  if (isAdding && msg.senderId == widget.currentUserId) {
+    final reactorColor = _bubbleColorForUserId(me);
+HeartReactionFlyLayer.of(context).spawnHeart(color: reactorColor);
+
+  }
+}
+
+
+
 
 
 final ScrollController _scrollController = ScrollController();
@@ -1645,23 +1802,31 @@ return Padding(
     chatSidePadding * uiScale,
     0,
   ),
-child: MessageRow(
-  user: user,
-  text: msg.text,
-  isMe: isMe,
-  bubbleTemplate: msg.bubbleTemplate,
-  decor: msg.decor,
-  fontFamily: msg.fontFamily,
-  showName: true,
+child: GestureDetector(
+  behavior: HitTestBehavior.translucent,
+  onDoubleTap: () => _toggleHeartForMessage(msg),
+  child: MessageRow(
+    user: user,
+    text: msg.text,
+    isMe: isMe,
+    bubbleTemplate: msg.bubbleTemplate,
+    decor: msg.decor,
+    fontFamily: msg.fontFamily,
 
-  showNewBadge: showNew, // ✅ FIX: required param name
+    // ✅ חזרה למיקום השם הישן
+    showName: true,
 
-  usernameColor: usernameColor,
-  uiScale: uiScale,
+    // ✅ NEW: לבבות ליד השם באותו קו ובאותו מקום כמו פעם
+    nameHearts: _buildHeartIcons(msg.heartReactorIds, uiScale),
+
+    showNewBadge: showNew,
+    usernameColor: usernameColor,
+    uiScale: uiScale,
+  ),
 ),
 
-
 );
+
 
           }
 
