@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../audio/bgm.dart';
+import '../audio/sfx.dart';
 double mysticUiScale(BuildContext context) {
   // ✅ never upscale above design (prevents overflow on wide devices)
   const double designWidth = 393.0;       // baseline you already tuned
@@ -777,26 +778,32 @@ late final AnimationController _twinkleController;
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
   }
 
-  void _send() async {
-    final text = _c.text.trim();
-    if (text.isEmpty) return;
+void _send() async {
+  final text = _c.text.trim();
+  if (text.isEmpty) return;
 
-    setState(() {
-_messages.add({
-  'type': 'text',
-  'senderId': widget.currentUserId,
-  'text': text,
-  'ts': DateTime.now().millisecondsSinceEpoch, // ⬅️ שעה
-});
+  // 🔊 SFX — רק מי ששולחת שומעת
+  try {
+    await Sfx.I.playSend();
+  } catch (_) {}
 
-      _c.clear();
-      _isTyping = true;
+  setState(() {
+    _messages.add({
+      'type': 'text',
+      'senderId': widget.currentUserId,
+      'text': text,
+      'ts': DateTime.now().millisecondsSinceEpoch,
     });
 
-    await _save(updateMeta: true, lastSenderId: widget.currentUserId);
+    _c.clear();
+    _isTyping = true;
+  });
 
-    _scrollToBottom(keepFocus: true);
-  }
+  await _save(updateMeta: true, lastSenderId: widget.currentUserId);
+
+  _scrollToBottom(keepFocus: true);
+}
+
 
 @override
 void initState() {
