@@ -69,6 +69,7 @@ flutter:
     - assets/fx/
     - assets/bgm/
     - assets/reactions/
+    - assets/ui/GCHourglassDateAndTime.png
   fonts:
     - family: NotoSans
       fonts:

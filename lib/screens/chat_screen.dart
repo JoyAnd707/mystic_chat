@@ -1779,80 +1779,114 @@ padding: EdgeInsets.only(
           // =========================
           // 1) REAL MESSAGES
           // =========================
-          if (index < _messages.length) {
-            final msg = _messages[index];
-            final prev = index > 0 ? _messages[index - 1] : null;
+if (index < _messages.length) {
+  final msg = _messages[index];
+  final prev = index > 0 ? _messages[index - 1] : null;
 
-            double topSpacing;
-            if (msg.type == ChatMessageType.system) {
-              topSpacing = 18;
-            } else if (prev == null) {
-              topSpacing = 14;
-            } else if (prev.type == ChatMessageType.system) {
-              topSpacing = 16;
-            } else if (prev.senderId == msg.senderId) {
-              topSpacing = 40;
-            } else {
-              topSpacing = 20;
-            }
+  // ✅ DATE DIVIDER LOGIC (Group Chat only)
+  bool showDateDivider = false;
+  String dateLabel = '';
 
-            if (msg.type == ChatMessageType.system) {
-          const double systemSideInset = 2.0; // baseline
-return Padding(
-  padding: EdgeInsets.fromLTRB(
-    systemSideInset * uiScale,
-    topSpacing * uiScale,
-    systemSideInset * uiScale,
-    0,
-  ),
-  child: SystemMessageBar(text: msg.text, uiScale: uiScale),
-);
+  if (widget.roomId == 'group_main' && msg.ts > 0) {
+    final msgDay = DateTime.fromMillisecondsSinceEpoch(msg.ts);
 
-            }
+    if (prev == null || prev.ts <= 0) {
+      showDateDivider = true;
+      dateLabel = _dayLabel(msgDay);
+    } else {
+      final prevDay = DateTime.fromMillisecondsSinceEpoch(prev.ts);
+      if (!_isSameDay(msgDay, prevDay)) {
+        showDateDivider = true;
+        dateLabel = _dayLabel(msgDay);
+      }
+    }
+  }
 
-            final user = users[msg.senderId];
-if (user == null) {
-  // sender no longer exists (e.g. removed user like "nella")
-  return const SizedBox.shrink();
+  double topSpacing;
+  if (msg.type == ChatMessageType.system) {
+    topSpacing = 18;
+  } else if (prev == null) {
+    topSpacing = 14;
+  } else if (prev.type == ChatMessageType.system) {
+    topSpacing = 16;
+  } else if (prev.senderId == msg.senderId) {
+    topSpacing = 40;
+  } else {
+    topSpacing = 20;
+  }
+
+  // ✅ We return a Column so we can inject the divider ABOVE the message
+  final List<Widget> pieces = <Widget>[];
+
+  if (showDateDivider) {
+    pieces.add(_GcDateDivider(label: dateLabel, uiScale: uiScale));
+  }
+
+  if (msg.type == ChatMessageType.system) {
+    const double systemSideInset = 2.0; // baseline
+    pieces.add(
+      Padding(
+        padding: EdgeInsets.fromLTRB(
+          systemSideInset * uiScale,
+          topSpacing * uiScale,
+          systemSideInset * uiScale,
+          0,
+        ),
+        child: SystemMessageBar(text: msg.text, uiScale: uiScale),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: pieces,
+    );
+  }
+
+  final user = users[msg.senderId];
+  if (user == null) {
+    // sender no longer exists (e.g. removed user like "nella")
+    return const SizedBox.shrink();
+  }
+
+  final isMe = user.id == widget.currentUserId;
+  final bool showNew = _newBadgeVisibleByTs[msg.ts] ?? false;
+
+  pieces.add(
+    Padding(
+      padding: EdgeInsets.fromLTRB(
+        chatSidePadding * uiScale,
+        topSpacing * uiScale,
+        chatSidePadding * uiScale,
+        0,
+      ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onDoubleTap: () => _toggleHeartForMessage(msg),
+        child: MessageRow(
+          user: user,
+          text: msg.text,
+          isMe: isMe,
+          bubbleTemplate: msg.bubbleTemplate,
+          decor: msg.decor,
+          fontFamily: msg.fontFamily,
+
+          showName: true,
+          nameHearts: _buildHeartIcons(msg.heartReactorIds, uiScale),
+
+          showNewBadge: showNew,
+          usernameColor: usernameColor,
+          uiScale: uiScale,
+        ),
+      ),
+    ),
+  );
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: pieces,
+  );
 }
 
-            final isMe = user.id == widget.currentUserId;
-            final bool showNew = _newBadgeVisibleByTs[msg.ts] ?? false;
-
-return Padding(
-  padding: EdgeInsets.fromLTRB(
-    chatSidePadding * uiScale,
-    topSpacing * uiScale,
-    chatSidePadding * uiScale,
-    0,
-  ),
-child: GestureDetector(
-  behavior: HitTestBehavior.translucent,
-  onDoubleTap: () => _toggleHeartForMessage(msg),
-  child: MessageRow(
-    user: user,
-    text: msg.text,
-    isMe: isMe,
-    bubbleTemplate: msg.bubbleTemplate,
-    decor: msg.decor,
-    fontFamily: msg.fontFamily,
-
-    // ✅ חזרה למיקום השם הישן
-    showName: true,
-
-    // ✅ NEW: לבבות ליד השם באותו קו ובאותו מקום כמו פעם
-    nameHearts: _buildHeartIcons(msg.heartReactorIds, uiScale),
-
-    showNewBadge: showNew,
-    usernameColor: usernameColor,
-    uiScale: uiScale,
-  ),
-),
-
-);
-
-
-          }
 
           // =========================
           // 2) TYPING BUBBLES (INLINE)
@@ -2047,3 +2081,92 @@ class MysticNewBadge extends StatelessWidget {
 }
 
 
+// =======================
+// GROUP CHAT Date Divider
+// =======================
+
+bool _isSameDay(DateTime a, DateTime b) {
+  return a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+String _dayLabel(DateTime d) {
+  // ✅ DMs format: 2026.01.21 Wed
+  const weekdays = <String>[
+    'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
+  ];
+
+  String two(int x) => x.toString().padLeft(2, '0');
+
+  final y = d.year;
+  final m = two(d.month);
+  final day = two(d.day);
+
+  // DateTime.weekday: 1=Mon ... 7=Sun
+  final wd = weekdays[(d.weekday - 1).clamp(0, 6)];
+
+  return '$y.$m.$day $wd';
+}
+
+class _GcDateDivider extends StatelessWidget {
+  final String label;
+  final double uiScale;
+
+  const _GcDateDivider({
+    required this.label,
+    required this.uiScale,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * uiScale;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(s(10), s(10), s(10), s(6)),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // left line
+          Expanded(
+            child: Container(
+              height: s(1),
+              color: Colors.white.withOpacity(0.25),
+            ),
+          ),
+
+          SizedBox(width: s(10)),
+
+          // hourglass icon + text
+          Image.asset(
+            'assets/ui/GCHourglassDateAndTime.png',
+            width: s(26),
+            height: s(26),
+            fit: BoxFit.contain,
+          ),
+
+          SizedBox(width: s(8)),
+
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.85),
+              fontSize: s(12),
+              fontWeight: FontWeight.w800,
+              letterSpacing: s(0.6),
+              height: 1.0,
+            ),
+          ),
+
+          SizedBox(width: s(10)),
+
+          // right line
+          Expanded(
+            child: Container(
+              height: s(1),
+              color: Colors.white.withOpacity(0.25),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
