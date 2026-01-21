@@ -1090,7 +1090,7 @@ class _DmMessageRow extends StatelessWidget {
   text,
   style: TextStyle(
     color: textColor,
-    fontSize: s(22), // ✅ קצת יותר גדול
+    fontSize: s(20), // ✅ קצת יותר גדול
     height: 1.3,
   ),
 ),
