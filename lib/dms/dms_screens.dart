@@ -434,9 +434,9 @@ class _DmRowTile extends StatelessWidget {
   Widget build(BuildContext context) {
     double s(double v) => v * uiScale;
 
-    // ✅ Smaller + scalable (closer to Mystic list density)
-    final double tileHeight = s(76);
-    final double avatarSize = s(64);
+    // ✅ Taller like Mystic reference
+    final double tileHeight = s(93);
+    final double avatarSize = s(68);
 
     final double outerFrameThickness = s(3.2);
     final double innerDarkStroke = s(1.1);
@@ -447,7 +447,7 @@ class _DmRowTile extends StatelessWidget {
 
     final double envelopeBoxW = s(40);
     final double envelopeSize = s(34);
-    final double envelopeBottomPad = s(6);
+    final double envelopeBottomPad = s(8);
 
     const Color unreadTeal = Color(0xFF46F5D6);
 
@@ -519,7 +519,7 @@ class _DmRowTile extends StatelessWidget {
                                 mainAxisAlignment: MainAxisAlignment.start,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  SizedBox(height: s(6)),
+                                  SizedBox(height: s(8)), // ✅ more top air
                                   Text(
                                     user.name,
                                     maxLines: 1,
@@ -531,7 +531,7 @@ class _DmRowTile extends StatelessWidget {
                                       height: 1.0,
                                     ),
                                   ),
-                                  SizedBox(height: s(14)), // ✅ smaller gap
+                                  SizedBox(height: s(18)), // ✅ bigger gap like reference
                                   Text(
                                     (previewText.trim().isEmpty)
                                         ? 'Tap to open chat'
@@ -601,7 +601,7 @@ class _DmRowTile extends StatelessWidget {
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.78),
                         fontSize: s(12.0),
-                        fontWeight: FontWeight.w500, // ✅ זה ה-weight של השעה ברשימה
+                        fontWeight: FontWeight.w500,
                         height: 1.0,
                         letterSpacing: 0.1,
                       ),
@@ -615,6 +615,7 @@ class _DmRowTile extends StatelessWidget {
     );
   }
 }
+
 
 
 
