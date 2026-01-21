@@ -106,6 +106,9 @@ class ChatMessage {
   /// For `system` messages this is the system line (e.g. "Joy has entered...").
   final String text;
 
+  /// ✅ unix ms timestamp (used for NEW badge + ordering)
+  final int ts;
+
   /// ✅ Which bubble template this message uses (normal/glow...)
   final BubbleTemplate bubbleTemplate;
 
@@ -119,6 +122,7 @@ class ChatMessage {
     required this.type,
     required this.senderId,
     required this.text,
+    required this.ts,
     this.bubbleTemplate = BubbleTemplate.normal,
     this.decor = BubbleDecor.none,
     this.fontFamily,
@@ -128,6 +132,7 @@ class ChatMessage {
         'type': type.name,
         'senderId': senderId,
         'text': text,
+        'ts': ts,
         'bubbleTemplate': bubbleTemplate.name,
         'decor': decor.name,
         'fontFamily': fontFamily,
@@ -157,16 +162,22 @@ class ChatMessage {
         ? null
         : ff.toString();
 
+    final int ts = (m['ts'] is int)
+        ? (m['ts'] as int)
+        : 0;
+
     return ChatMessage(
       type: type,
       senderId: (m['senderId'] ?? '').toString(),
       text: (m['text'] ?? '').toString(),
+      ts: ts,
       bubbleTemplate: bt,
       decor: decor,
       fontFamily: fontFamily,
     );
   }
 }
+
 
 
 class ChatScreen extends StatefulWidget {
@@ -330,6 +341,38 @@ if (newHour != _uiHour) {
 
   bool _isTyping = false;
   late List<ChatMessage> _messages;
+  // =======================
+// NEW badge (live in-room)
+// =======================
+final Map<int, bool> _newBadgeVisibleByTs = <int, bool>{};
+final Set<int> _seenMessageTs = <int>{};
+void _triggerNewBadgeForTs(int ts) {
+  if (ts <= 0) return;
+
+  // ✅ Show longer (so the user actually notices it)
+  setState(() {
+    _newBadgeVisibleByTs[ts] = true;
+  });
+
+  // stays visible longer
+  Future.delayed(const Duration(milliseconds: 1150), () {
+
+    if (!mounted) return;
+
+    // ✅ turn OFF (MessageRow will fade it out)
+    setState(() {
+      _newBadgeVisibleByTs[ts] = false;
+    });
+
+    // ✅ keep it in the map a bit longer so fade-out can finish
+    Future.delayed(const Duration(milliseconds: 700), () {
+      if (!mounted) return;
+      _newBadgeVisibleByTs.remove(ts);
+    });
+  });
+}
+
+
 
   // ✅ Currently selected bubble template for the NEXT message
   BubbleTemplate _selectedTemplate = BubbleTemplate.normal;
@@ -1085,11 +1128,12 @@ Future<void> _emitSystemLine(
   bool scroll = true,
 }) async {
   // ✅ Persist system lines to Hive (but do NOT update DM meta / unread)
-  final msg = ChatMessage(
-    type: ChatMessageType.system,
-    senderId: '',
-    text: line,
-  );
+final msg = ChatMessage(
+  type: ChatMessageType.system,
+  senderId: '',
+  text: line,
+  ts: DateTime.now().millisecondsSinceEpoch,
+);
 
   // Add to memory
   _messages.add(msg);
@@ -1226,15 +1270,40 @@ void initState() {
   });
 
   _box().then((box) {
-    _roomSub = box.watch(key: _roomKey(widget.roomId)).listen((event) async {
-      await _loadMessagesForRoom();
+_roomSub = box.watch(key: _roomKey(widget.roomId)).listen((event) async {
+  // snapshot "seen" BEFORE reload
+  final oldSeen = Set<int>.from(_seenMessageTs);
 
-      if (!mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _scrollToBottom();
-      });
-    });
+  await _loadMessagesForRoom();
+  if (!mounted) return;
+
+  // seed seen on first loads (so history won't flash NEW)
+  if (_seenMessageTs.isEmpty) {
+    for (final m in _messages) {
+      if (m.ts > 0) _seenMessageTs.add(m.ts);
+    }
+  } else {
+    // detect truly new messages
+    for (final m in _messages) {
+      final int ts = m.ts;
+      if (ts > 0 && !oldSeen.contains(ts)) {
+        _seenMessageTs.add(ts);
+
+        // show NEW only for messages from others (live vibe)
+        final bool isMe = m.senderId == widget.currentUserId;
+        if (!isMe && m.type == ChatMessageType.text) {
+          _triggerNewBadgeForTs(ts);
+        }
+      }
+    }
+  }
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
+    _scrollToBottom();
+  });
+});
+
   });
 }
 
@@ -1297,6 +1366,25 @@ void dispose() {
       if (keepFocus) _focusNode.requestFocus();
     });
   }
+Future<void> _debugSimulateIncomingMessage() async {
+  final ts = DateTime.now().millisecondsSinceEpoch;
+
+  setState(() {
+    _messages.add(
+      ChatMessage(
+        type: ChatMessageType.text,
+        senderId: 'adi', // כאילו עדי שלחה
+        text: 'Incoming test from Adi ✨',
+        ts: ts,
+      ),
+    );
+  });
+
+  await _saveMessagesForRoom(
+    updateMeta: true,
+    lastSenderId: 'adi',
+  );
+}
 
 void _sendMessage() {
   final text = _controller.text.trim();
@@ -1318,6 +1406,7 @@ void _sendMessage() {
         type: ChatMessageType.text,
         senderId: widget.currentUserId,
         text: text,
+        ts: DateTime.now().millisecondsSinceEpoch,
         bubbleTemplate: templateForThisMessage,
         decor: decorForThisMessage,
         fontFamily: fontFamilyForThisMessage,
@@ -1332,24 +1421,18 @@ void _sendMessage() {
     _selectedDecor = BubbleDecor.none;
   });
 
-_saveMessagesForRoom(
-  updateMeta: true,
-  lastSenderId: widget.currentUserId,
-);
-
-
-
+  _saveMessagesForRoom(
+    updateMeta: true,
+    lastSenderId: widget.currentUserId,
+  );
 
   // ✅ SEND SFX (only when a real message was sent)
   Sfx.I.playSend();
 
-  // ✅ 707 Easter Egg:
-  // - Voice line is SFX (allowed everywhere)
-  // - Easter Egg BGM should only play if this room allows BGM
-if (triggerEgg) {
-  // ✅ keep only the voice line SFX
-  Sfx.I.play707VoiceLine();
-}
+  // ✅ 707 Easter Egg voice line (SFX only)
+  if (triggerEgg) {
+    Sfx.I.play707VoiceLine();
+  }
 
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (_scrollController.hasClients) {
@@ -1378,13 +1461,15 @@ Widget build(BuildContext context) {
 
 
   debugPrint('HOUR=$hour  usernameColor=$usernameColor  bg=$bg  uiScale=$uiScale');
-
-  return Scaffold(
-
-
+return Scaffold(
   backgroundColor: Colors.black,
+  floatingActionButton: FloatingActionButton(
+    onPressed: _debugSimulateIncomingMessage,
+    child: const Icon(Icons.bug_report),
+  ),
   body: Column(
     children: [
+
 
           const TopBorderBar(height: _topBarHeight),
 
@@ -1546,6 +1631,8 @@ if (user == null) {
 }
 
             final isMe = user.id == widget.currentUserId;
+            final bool showNew = _newBadgeVisibleByTs[msg.ts] ?? false;
+
 return Padding(
   padding: EdgeInsets.fromLTRB(
     chatSidePadding * uiScale,
@@ -1553,17 +1640,22 @@ return Padding(
     chatSidePadding * uiScale,
     0,
   ),
-  child: MessageRow(
-    user: user,
-    text: msg.text,
-    isMe: isMe,
-    bubbleTemplate: msg.bubbleTemplate,
-    decor: msg.decor,
-    fontFamily: msg.fontFamily,
-    showName: true,
-    usernameColor: usernameColor,
-    uiScale: uiScale, // ✅ NEW
-  ),
+child: MessageRow(
+  user: user,
+  text: msg.text,
+  isMe: isMe,
+  bubbleTemplate: msg.bubbleTemplate,
+  decor: msg.decor,
+  fontFamily: msg.fontFamily,
+  showName: true,
+
+  showNewBadge: showNew, // ✅ FIX: required param name
+
+  usernameColor: usernameColor,
+  uiScale: uiScale,
+),
+
+
 );
 
           }
@@ -1721,3 +1813,43 @@ class _MysticRedFramePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+class MysticNewBadge extends StatelessWidget {
+  final double uiScale;
+
+  const MysticNewBadge({
+    super.key,
+    this.uiScale = 1.0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * uiScale;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(s(2.4)),
+      child: Container(
+        color: const Color(0xFFFF6769),
+        padding: EdgeInsets.symmetric(
+          horizontal: s(3.2),
+          vertical: s(1.4),
+        ),
+        child: Text(
+          'NEW',
+          textHeightBehavior: const TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
+          ),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: s(9.5),
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+            letterSpacing: s(0.35),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+

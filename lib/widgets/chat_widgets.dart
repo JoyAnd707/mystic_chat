@@ -479,6 +479,7 @@ class MessageRow extends StatelessWidget {
 final bool showName;
 final Color usernameColor;
 final double uiScale; // ✅ NEW
+final bool showNewBadge;
 
 
 const MessageRow({
@@ -491,6 +492,8 @@ const MessageRow({
   this.fontFamily,
   this.showName = true,
   required this.usernameColor,
+  required this.showNewBadge,
+
   required this.uiScale, // ✅ NEW
 });
 
@@ -741,6 +744,31 @@ final bubbleWidget = ConstrainedBox(
       clipBehavior: Clip.none,
       children: [
         bubbleWidget,
+// ✅ NEW badge (shows briefly when message arrives)
+Positioned(
+  top: s(-10),
+  left: isMe ? s(-14) : null,
+  right: isMe ? null : s(-14),
+  child: IgnorePointer(
+    ignoring: true,
+    child: AnimatedOpacity(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+      opacity: showNewBadge ? 1.0 : 0.0,
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutBack,
+        scale: showNewBadge ? 1.08 : 0.92,
+        child: MysticNewBadge(
+          uiScale: uiScale, // ✅ חשוב: לא 1.0
+        ),
+      ),
+    ),
+  ),
+),
+
+
+
 
         // ✅ DECOR: Hearts
         if (decor == BubbleDecor.hearts) ...[
@@ -1792,6 +1820,44 @@ class TypingNamesLine extends StatelessWidget {
             TypingDots(color: Colors.white.withOpacity(0.65), dotSize: s(4.5), gap: s(3.0)),
           ],
         ],
+      ),
+    );
+  }
+}
+class MysticNewBadge extends StatelessWidget {
+  final double uiScale;
+
+  const MysticNewBadge({
+    super.key,
+    this.uiScale = 1.0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * uiScale;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(s(1.8)), // היה 1.1
+      child: Container(
+        color: const Color(0xFFFF6769),
+        padding: EdgeInsets.symmetric(
+          horizontal: s(2.4), // היה 0.7
+          vertical: s(0.9),   // היה 0.15
+        ),
+        child: Text(
+          'NEW',
+          textHeightBehavior: const TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
+          ),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: s(9.2),          // היה 6.0
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+            letterSpacing: s(0.35),     // היה 0.12
+          ),
+        ),
       ),
     );
   }
