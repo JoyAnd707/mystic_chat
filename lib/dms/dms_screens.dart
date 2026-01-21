@@ -236,46 +236,57 @@ _twinkleController = AnimationController(
               children: [
                 const _DmTopBar(),
 
-                Expanded(
-                  child: FutureBuilder<List<_DmEntry>>(
-                    future: _loadDmEntries(),
-                    builder: (context, snap) {
-                      final items = snap.data ?? const <_DmEntry>[];
+Expanded(
+  child: Builder(
+    builder: (context) {
+      final double uiScale = mysticUiScale(context);
+      double s(double v) => v * uiScale;
 
-                      return ListView.separated(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        itemCount: items.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final e = items[index];
+      return FutureBuilder<List<_DmEntry>>(
+        future: _loadDmEntries(),
+        builder: (context, snap) {
+          final items = snap.data ?? const <_DmEntry>[];
 
-                          return _DmRowTile(
-                            user: e.user,
-                            previewText: e.preview,
-                            unread: e.unread,
-                            lastUpdatedMs: e.lastUpdatedMs,
-                            onTap: () async {
-                              await Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => DmChatScreen(
-                                    currentUserId: widget.currentUserId,
-                                    otherUserId: e.user.id,
-                                    otherName: e.user.name,
-                                    roomId: e.roomId,
-                                  ),
-                                ),
-                              );
-                              if (mounted) setState(() {});
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
+          return ListView.separated(
+            padding: EdgeInsets.symmetric(
+              horizontal: s(14),
+              vertical: s(12),
+            ),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => SizedBox(height: s(12)), // יותר אוויר
+itemBuilder: (context, index) {
+  final e = items[index];
+  final double uiScale = mysticUiScale(context);
+
+  return _DmRowTile(
+    user: e.user,
+    previewText: e.preview,
+    unread: e.unread,
+    lastUpdatedMs: e.lastUpdatedMs,
+    uiScale: uiScale,
+    onTap: () async {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => DmChatScreen(
+            currentUserId: widget.currentUserId,
+            otherUserId: e.user.id,
+            otherName: e.user.name,
+            roomId: e.roomId,
+          ),
+        ),
+      );
+      if (mounted) setState(() {});
+    },
+  );
+},
+
+          );
+        },
+      );
+    },
+  ),
+),
+
               ],
             ),
           ),
@@ -336,7 +347,7 @@ class _DmTopBar extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 22,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w300,
                           height: 1.0,
                         ),
                       ),
@@ -408,35 +419,40 @@ class _DmRowTile extends StatelessWidget {
   final String previewText;
   final int lastUpdatedMs;
 
+  final double uiScale;
+
   const _DmRowTile({
     required this.user,
     required this.onTap,
     required this.unread,
     required this.previewText,
     required this.lastUpdatedMs,
+    required this.uiScale,
   });
 
   @override
   Widget build(BuildContext context) {
-    const double tileHeight = 86;
-    const double avatarSize = 73;
+    double s(double v) => v * uiScale;
 
-    const double outerFrameThickness = 3.7;
-    const double innerDarkStroke = 1.2;
+    // ✅ Smaller + scalable (closer to Mystic list density)
+    final double tileHeight = s(76);
+    final double avatarSize = s(64);
 
-    const double gapAfterAvatar = 12;
-    const double innerLeftPadding = 10;
-    const double rightInset = 8;
+    final double outerFrameThickness = s(3.2);
+    final double innerDarkStroke = s(1.1);
 
-    const double envelopeBoxW = 44;
-    const double envelopeSize = 39;
-    const double envelopeBottomPad = 6;
+    final double gapAfterAvatar = s(10);
+    final double innerLeftPadding = s(10);
+    final double rightInset = s(8);
+
+    final double envelopeBoxW = s(40);
+    final double envelopeSize = s(34);
+    final double envelopeBottomPad = s(6);
 
     const Color unreadTeal = Color(0xFF46F5D6);
 
-final Color frameColor =
-    unread ? unreadTeal.withValues(alpha: 0.95) : Colors.white.withValues(alpha: 0.88);
-
+    final Color frameColor =
+        unread ? unreadTeal.withValues(alpha: 0.95) : Colors.white.withValues(alpha: 0.88);
 
     final String envelopeAsset = unread
         ? 'assets/ui/DMSmessageUnread.png'
@@ -456,7 +472,6 @@ final Color frameColor =
             decoration: BoxDecoration(
               border: Border.all(
                 color: Colors.black.withValues(alpha: 0.65),
-
                 width: innerDarkStroke,
               ),
               color: const Color(0x80555555),
@@ -464,7 +479,7 @@ final Color frameColor =
             child: Stack(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(
+                  padding: EdgeInsets.fromLTRB(
                     innerLeftPadding,
                     0,
                     rightInset,
@@ -483,39 +498,40 @@ final Color frameColor =
                               alignment: Alignment.center,
                               child: Text(
                                 user.name.characters.first.toUpperCase(),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 24,
+                                  fontSize: s(22),
                                   fontWeight: FontWeight.w700,
                                   height: 1.0,
                                 ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: gapAfterAvatar),
+                          SizedBox(width: gapAfterAvatar),
                           Expanded(
                             child: Padding(
                               padding: EdgeInsets.only(
-                                right:
-                                    unread ? (envelopeBoxW + 34 + 14) : (envelopeBoxW + 8),
+                                right: unread
+                                    ? (envelopeBoxW + s(34) + s(12))
+                                    : (envelopeBoxW + s(8)),
                               ),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.start,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const SizedBox(height: 5),
+                                  SizedBox(height: s(6)),
                                   Text(
                                     user.name,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 20.5,
-                                      fontWeight: FontWeight.w500,
+                                      fontSize: s(18.5),
+                                      fontWeight: FontWeight.w600,
                                       height: 1.0,
                                     ),
                                   ),
-                                  const SizedBox(height: 18),
+                                  SizedBox(height: s(14)), // ✅ smaller gap
                                   Text(
                                     (previewText.trim().isEmpty)
                                         ? 'Tap to open chat'
@@ -524,8 +540,7 @@ final Color frameColor =
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: Colors.white.withValues(alpha: 0.72),
-
-                                      fontSize: 18.5,
+                                      fontSize: s(16.5),
                                       fontWeight: FontWeight.w400,
                                       height: 1.0,
                                     ),
@@ -558,16 +573,15 @@ final Color frameColor =
                                     errorBuilder: (_, __, ___) => Icon(
                                       Icons.mail_outline,
                                       color: Colors.white.withValues(alpha: 0.8),
-
-                                      size: 24,
+                                      size: s(22),
                                     ),
                                   ),
                                 ),
                               ),
                               if (unread)
                                 Positioned(
-                                  right: envelopeSize + 6,
-                                  bottom: 16,
+                                  right: envelopeSize + s(6),
+                                  bottom: s(14),
                                   child: const _MysticNewBadge(),
                                 ),
                             ],
@@ -578,22 +592,21 @@ final Color frameColor =
                   ),
                 ),
 
-if (ts.isNotEmpty)
-  Positioned(
-    top: 6,
-    right: 6,
-    child: Text(
-      ts,
-      style: TextStyle(
-        color: Colors.white.withValues(alpha: 0.78),
-        fontSize: 13.0,          // ✅ קטן יותר
-        fontWeight: FontWeight.w500, // ✅ פחות "רזה"
-        height: 1.0,
-        letterSpacing: 0.1,      // ✅ טיפה יותר קריא
-      ),
-    ),
-  ),
-
+                if (ts.isNotEmpty)
+                  Positioned(
+                    top: s(6),
+                    right: s(6),
+                    child: Text(
+                      ts,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.78),
+                        fontSize: s(12.0),
+                        fontWeight: FontWeight.w500, // ✅ זה ה-weight של השעה ברשימה
+                        height: 1.0,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -602,6 +615,8 @@ if (ts.isNotEmpty)
     );
   }
 }
+
+
 
 /// =======================================
 /// DM CHAT SCREEN (separate from group ChatScreen)
