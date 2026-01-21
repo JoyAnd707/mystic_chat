@@ -1086,14 +1086,17 @@ class _DmMessageRow extends StatelessWidget {
                       s(14),
                       s(10),
                     ),
-        child: Text(
+child: Text(
   text,
   style: TextStyle(
+    fontFamily: 'NanumGothic', // ✅ זה השינוי
     color: textColor,
-    fontSize: s(20), // ✅ קצת יותר גדול
+    fontSize: s(20),
+    fontWeight: FontWeight.w400,
     height: 1.3,
   ),
 ),
+
 
                   ),
                   Positioned(
