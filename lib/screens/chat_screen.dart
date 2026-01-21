@@ -256,8 +256,25 @@ late final AnimationController _bgFxCtrl;
 // איפה שמכניסים את המילים לטריגר:
 static const List<String> _creepyTriggers = <String>[
   'glitch',
-  'overtune',
-  'dj silence',
+  'Bug',
+  'Saeran',
+  'saeran'
+  "סארן",
+  "סיירן",
+  "גליץ'",
+  "'גליץ",
+  "מנטה",
+  "Mint",
+  "Mint eye",
+  "מינט איי",
+  "גן עדן",
+  "paradise",
+  "searan",
+  "Rika",
+  "ריקה",
+  "באג",
+  "Savior",
+  "סארן",
   'struct', // דוגמה – תוסיפי/תמחקי מה שבא לך
 ];
 
