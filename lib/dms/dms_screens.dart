@@ -987,8 +987,8 @@ final String timeLabel = mysticTimeOnlyFromMs(ts);
           final bool switchedSender =
               (prevSender.isNotEmpty && prevSender != sender);
 
-          final double sameSenderGap = s(18);
-          final double switchedSenderGap = s(28);
+          final double sameSenderGap = s(22);
+          final double switchedSenderGap = s(34);
 
           final double bottomGap =
               switchedSender ? switchedSenderGap : sameSenderGap;
@@ -1128,17 +1128,26 @@ class _DmMessageRow extends StatelessWidget {
                       s(14),
                       s(10),
                     ),
-child: Text(
-  text,
-  style: TextStyle(
-    fontFamily: 'NanumGothic',
-    color: textColor,
-    fontSize: s(20),
-    fontWeight: FontWeight.w600,
-    height: 1.3,
-    letterSpacing: -0.3, // ✅ מקטין רווח בין אותיות
-  ),
+child: Builder(
+  builder: (context) {
+    final bool isRtl = RegExp(r'[\u0590-\u05FF]').hasMatch(text);
+
+    return Text(
+      text,
+      textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+      textAlign: TextAlign.start, // יתיישר נכון לפי הכיוון
+      style: TextStyle(
+        fontFamily: 'NanumGothic',
+        color: textColor,
+        fontSize: s(20),
+        fontWeight: FontWeight.w600,
+        height: 1.3,
+        letterSpacing: -0.3,
+      ),
+    );
+  },
 ),
+
 
 
 
