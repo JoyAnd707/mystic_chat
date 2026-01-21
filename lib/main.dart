@@ -342,23 +342,24 @@ class ChatModePicker extends StatefulWidget {
 class _ChatModePickerState extends State<ChatModePicker> {
   bool _botStarted = false;
 
-  @override
-  void initState() {
-    super.initState();
+@override
+void initState() {
+  super.initState();
 
-    // run once after first frame (safe + avoids build loops)
-WidgetsBinding.instance.addPostFrameCallback((_) async {
-  if (_botStarted) return;
-  _botStarted = true;
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    if (_botStarted) return;
+    _botStarted = true;
 
-  await DailyFactBotScheduler.I.start();
+    await DailyFactBotScheduler.I.start();
 
-  // ✅ DEBUG ONLY (leave commented out unless actively testing)
-  // await DailyFactBotScheduler.I.debugSendIn10Seconds();
-});
+    // ✅ Home BGM (also used for DMs)
+    await Bgm.I.playHomeDm();
 
+    // ✅ DEBUG ONLY
+    // await DailyFactBotScheduler.I.debugSendIn10Seconds();
+  });
+}
 
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -392,19 +393,25 @@ WidgetsBinding.instance.addPostFrameCallback((_) async {
 
 ElevatedButton(
   onPressed: () {
-    Navigator.of(context).push(
+    Navigator.of(context)
+        .push(
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           currentUserId: widget.currentUserId,
           roomId: 'group_main',
           title: 'Group Chat',
-          enableBgm: true, // ✅ turn BGM back on
+          enableBgm: true,
         ),
       ),
-    );
+    )
+        .then((_) async {
+      // ✅ leaving group: resume Home/DMs BGM so it doesn't "leak"
+      await Bgm.I.leaveGroupAndResumeHomeDm();
+    });
   },
   child: const Text('Group Chat'),
 ),
+
 
 
                   const SizedBox(height: 12),

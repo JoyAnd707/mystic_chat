@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
+enum _BgmScope { homeDm, group }
+
 class Bgm {
   Bgm._();
   static final Bgm I = Bgm._();
@@ -17,14 +19,20 @@ class Bgm {
 
   bool _overrideActive = false;
 
+  // Easter egg state
   String? _preEggAsset;
   bool _preEggOverrideActive = false;
   Duration? _preEggPosition;
   StreamSubscription<void>? _eggCompleteSub;
   bool _eggPlaying = false;
 
+  // ✅ NEW: scope
+  _BgmScope _scope = _BgmScope.homeDm;
+
+  // ✅ Home + DMs use the same track
+  static const String _homeDmAsset = 'bgm/MenuAndDmsMusic.mp3';
+
   Future<void> init() async {
-    // ✅ BGM: don't steal focus, allow mixing
     final bgmContext = AudioContext(
       android: AudioContextAndroid(
         isSpeakerphoneOn: false,
@@ -46,78 +54,88 @@ class Bgm {
     await _player.setVolume(0.45);
   }
 
-String assetForHour(int hour) {
-  // 🌅 Morning
-  if (hour >= 6 && hour <= 11) {
-    return 'bgm/MorningBGM.mp3';
+  // ==========================
+  // HOME + DMs
+  // ==========================
+  Future<void> playHomeDm() async {
+    if (!enabled) return;
+    if (_eggPlaying) return;
+
+    _scope = _BgmScope.homeDm;
+
+    // leaving group should cancel hourly lock
+    _overrideActive = false;
+
+    await _playLoopingAsset(_homeDmAsset);
   }
 
-  // ☀️ Noon
-  if (hour >= 12 && hour <= 16) {
-    return 'bgm/NoonBGM.mp3';
-  }
-
-  // 🌆 Evening
-  if (hour >= 17 && hour <= 21) {
-    return 'bgm/EveningBGM.mp3';
-  }
-
-  // 🌙 Night part 1
-  if (hour >= 22 && hour <= 23) {
+  // ==========================
+  // GROUP (hourly)
+  // ==========================
+  String assetForHour(int hour) {
+    if (hour >= 6 && hour <= 11) return 'bgm/MorningBGM.mp3';
+    if (hour >= 12 && hour <= 16) return 'bgm/NoonBGM.mp3';
+    if (hour >= 17 && hour <= 21) return 'bgm/EveningBGM.mp3';
+    if (hour >= 22 && hour <= 23) return 'bgm/NightBGM.mp3';
+    if (hour == 0) return 'bgm/MidnightBGM.mp3';
     return 'bgm/NightBGM.mp3';
   }
-
-  // 🌑 Midnight
-  if (hour == 0) {
-    return 'bgm/MidnightBGM.mp3';
-  }
-
-  // 🌌 Night part 2 (01:00–05:59)
-  return 'bgm/NightBGM.mp3';
-}
-
 
   Future<void> playForHour(int hour) async {
     if (!enabled) return;
     if (_overrideActive || _eggPlaying) return;
 
+    _scope = _BgmScope.group;
+
     final next = assetForHour(hour);
     await _playLoopingAsset(next);
   }
 
-Future<void> _playLoopingAsset(String asset) async {
-  if (!enabled) return;
-  if (_currentAsset == asset) return;
+  // ✅ call when exiting group UI to prevent "leak"
+  Future<void> leaveGroupAndResumeHomeDm() async {
+    if (!enabled) return;
+    if (_eggPlaying) return;
 
-  final resumePos =
-      (_lastStoppedAsset == asset) ? _lastStoppedPosition : null;
-
-  _currentAsset = asset;
-
-  try {
-    debugPrint('🎵 BGM set source: $asset');
-
-    await _player.setReleaseMode(ReleaseMode.loop);
-
-    // ✅ Important: set the source first, then resume
-    await _player.stop();
-    await _player.setSource(AssetSource(asset));
-
-    if (resumePos != null) {
-      await _player.seek(resumePos);
-
-      _lastStoppedAsset = null;
-      _lastStoppedPosition = null;
-    }
-
-    await _player.resume();
-  } catch (e, s) {
-    debugPrint('❌ BGM failed: $e');
-    debugPrint('$s');
+    if (_scope != _BgmScope.group) return;
+    await playHomeDm();
   }
-}
 
+  // ==========================
+  // Core play logic
+  // ==========================
+  Future<void> _playLoopingAsset(String asset) async {
+    if (!enabled) return;
+    if (_currentAsset == asset) return;
 
+    final resumePos =
+        (_lastStoppedAsset == asset) ? _lastStoppedPosition : null;
+
+    _currentAsset = asset;
+
+    try {
+      debugPrint('🎵 BGM set source: $asset');
+
+      await _player.setReleaseMode(ReleaseMode.loop);
+
+      await _player.stop();
+      await _player.setSource(AssetSource(asset));
+
+      if (resumePos != null) {
+        await _player.seek(resumePos);
+        _lastStoppedAsset = null;
+        _lastStoppedPosition = null;
+      }
+
+      await _player.resume();
+    } catch (e, s) {
+      debugPrint('❌ BGM failed: $e');
+      debugPrint('$s');
+    }
+  }
+
+  // ==========================
+  // Easter egg
+  // ==========================
   Future<void> playEasterEgg(String asset) async {
     if (!enabled) return;
     if (_eggPlaying) return;
@@ -130,21 +148,16 @@ Future<void> _playLoopingAsset(String asset) async {
     try {
       _preEggAsset = _currentAsset;
       _preEggOverrideActive = _overrideActive;
-
-     _preEggPosition = await _player.getCurrentPosition();
-
-
+      _preEggPosition = await _player.getCurrentPosition();
 
       await _player.pause();
 
       _currentAsset = asset;
 
-      // play once
-await _player.setReleaseMode(ReleaseMode.stop);
-await _player.stop();
-await _player.setSource(AssetSource(asset));
-await _player.resume();
-
+      await _player.setReleaseMode(ReleaseMode.stop);
+      await _player.stop();
+      await _player.setSource(AssetSource(asset));
+      await _player.resume();
 
       _eggCompleteSub = _player.onPlayerComplete.listen((_) async {
         await _restoreAfterEgg();
@@ -154,33 +167,35 @@ await _player.resume();
     }
   }
 
-Future<void> _restoreAfterEgg() async {
-  if (!_eggPlaying) return;
-  _eggPlaying = false;
+  Future<void> _restoreAfterEgg() async {
+    if (!_eggPlaying) return;
+    _eggPlaying = false;
 
-  await _eggCompleteSub?.cancel();
-  _eggCompleteSub = null;
+    await _eggCompleteSub?.cancel();
+    _eggCompleteSub = null;
 
-  _overrideActive = _preEggOverrideActive;
+    _overrideActive = _preEggOverrideActive;
 
-  final prev = _preEggAsset;
-  if (prev == null) return;
+    final prev = _preEggAsset;
+    if (prev == null) return;
 
-  try {
-    await _player.setReleaseMode(ReleaseMode.loop);
-    await _player.stop();
-    await _player.setSource(AssetSource(prev));
+    try {
+      await _player.setReleaseMode(ReleaseMode.loop);
+      await _player.stop();
+      await _player.setSource(AssetSource(prev));
 
-    if (_preEggPosition != null) {
-      await _player.seek(_preEggPosition!);
-    }
+      if (_preEggPosition != null) {
+        await _player.seek(_preEggPosition!);
+      }
 
-    await _player.resume();
-    _currentAsset = prev;
-  } catch (_) {}
-}
+      await _player.resume();
+      _currentAsset = prev;
+    } catch (_) {}
+  }
 
-
+  // ==========================
+  // Manual override (kept)
+  // ==========================
   Future<void> playAssetPermanentOverride(String asset) async {
     if (!enabled) return;
     _overrideActive = true;
@@ -189,61 +204,63 @@ Future<void> _restoreAfterEgg() async {
 
   Future<void> clearOverrideAndResume(int hour) async {
     _overrideActive = false;
-    await playForHour(hour);
+
+    if (_scope == _BgmScope.group) {
+      await playForHour(hour);
+    } else {
+      await playHomeDm();
+    }
   }
 
-Future<void> stop() async {
-  try {
-    await _eggCompleteSub?.cancel();
-    _eggCompleteSub = null;
+  // ==========================
+  // Lifecycle controls (kept)
+  // ==========================
+  Future<void> stop() async {
+    try {
+      await _eggCompleteSub?.cancel();
+      _eggCompleteSub = null;
 
-    _eggPlaying = false;
-    _overrideActive = false;
+      _eggPlaying = false;
+      _overrideActive = false;
 
-    _lastStoppedAsset = _currentAsset;
-    _lastStoppedPosition = await _player.getCurrentPosition();
+      _lastStoppedAsset = _currentAsset;
+      _lastStoppedPosition = await _player.getCurrentPosition();
 
-    await _player.stop();
-    _currentAsset = null;
-  } catch (_) {}
-}
-
-
-
-Future<void> pause() async {
-  try {
-    // keep current asset + position so we can resume cleanly
-    _lastStoppedAsset = _currentAsset;
-    _lastStoppedPosition = await _player.getCurrentPosition();
-    await _player.pause();
-  } catch (_) {}
-}
-
-Future<void> resumeIfPossible() async {
-  try {
-    if (!enabled) return;
-    if (_overrideActive || _eggPlaying) return;
-
-    // If we already have a current asset loaded, just resume.
-    if (_currentAsset != null) {
-      await _player.resume();
-      return;
-    }
-
-    // If we paused earlier and cleared nothing, restore same track+pos.
-    if (_lastStoppedAsset != null) {
-      final asset = _lastStoppedAsset!;
-      final pos = _lastStoppedPosition;
-
-      await _player.setReleaseMode(ReleaseMode.loop);
       await _player.stop();
-      await _player.setSource(AssetSource(asset));
-      if (pos != null) await _player.seek(pos);
-      await _player.resume();
+      _currentAsset = null;
+    } catch (_) {}
+  }
 
-      _currentAsset = asset;
-    }
-  } catch (_) {}
-}
+  Future<void> pause() async {
+    try {
+      _lastStoppedAsset = _currentAsset;
+      _lastStoppedPosition = await _player.getCurrentPosition();
+      await _player.pause();
+    } catch (_) {}
+  }
 
+  Future<void> resumeIfPossible() async {
+    try {
+      if (!enabled) return;
+      if (_overrideActive || _eggPlaying) return;
+
+      if (_currentAsset != null) {
+        await _player.resume();
+        return;
+      }
+
+      if (_lastStoppedAsset != null) {
+        final asset = _lastStoppedAsset!;
+        final pos = _lastStoppedPosition;
+
+        await _player.setReleaseMode(ReleaseMode.loop);
+        await _player.stop();
+        await _player.setSource(AssetSource(asset));
+        if (pos != null) await _player.seek(pos);
+        await _player.resume();
+
+        _currentAsset = asset;
+      }
+    } catch (_) {}
+  }
 }

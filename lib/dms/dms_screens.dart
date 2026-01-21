@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../audio/bgm.dart';
 double mysticUiScale(BuildContext context) {
   // ✅ never upscale above design (prevents overflow on wide devices)
   const double designWidth = 393.0;       // baseline you already tuned
@@ -121,15 +122,21 @@ class _DmsListScreenState extends State<DmsListScreen>
   String _lastReadKeyFor(String roomId) =>
       'lastReadMs__${widget.currentUserId}__$roomId';
 
-  @override
-  void initState() {
-    super.initState();
-_twinkleController = AnimationController(
-  vsync: this,
-  duration: const Duration(seconds: 6),
-)..repeat();
+@override
+void initState() {
+  super.initState();
 
-  }
+  // ✅ DMs use same Home BGM
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await Bgm.I.playHomeDm();
+  });
+
+  _twinkleController = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 6),
+  )..repeat();
+}
+
 
   @override
   void dispose() {
@@ -770,6 +777,10 @@ _messages.add({
   @override
   void initState() {
     super.initState();
+      // ✅ DM screen uses same Home/DMs BGM
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await Bgm.I.playHomeDm();
+  });
 
     // ✅ Twinkle animation controller (same as DMs list)
     _twinkleController = AnimationController(
