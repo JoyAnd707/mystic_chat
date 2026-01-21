@@ -7,15 +7,13 @@ class HeartReactionFlyLayer extends StatefulWidget {
   const HeartReactionFlyLayer({super.key, required this.child});
 
   static _HeartReactionFlyLayerState of(BuildContext context) {
-    final state =
-        context.findAncestorStateOfType<_HeartReactionFlyLayerState>();
+    final state = context.findAncestorStateOfType<_HeartReactionFlyLayerState>();
     assert(state != null, 'HeartReactionFlyLayer not found in tree');
     return state!;
   }
 
   @override
-  State<HeartReactionFlyLayer> createState() =>
-      _HeartReactionFlyLayerState();
+  State<HeartReactionFlyLayer> createState() => _HeartReactionFlyLayerState();
 }
 
 class _HeartReactionFlyLayerState extends State<HeartReactionFlyLayer>
@@ -25,7 +23,8 @@ class _HeartReactionFlyLayerState extends State<HeartReactionFlyLayer>
   void spawnHeart({required Color color}) {
     final controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 650),
+
     );
 
     final heart = _FlyingHeart(
@@ -36,7 +35,7 @@ class _HeartReactionFlyLayerState extends State<HeartReactionFlyLayer>
     setState(() => _hearts.add(heart));
 
     controller.forward().whenComplete(() {
-      setState(() => _hearts.remove(heart));
+      if (mounted) setState(() => _hearts.remove(heart));
       controller.dispose();
     });
   }
@@ -56,35 +55,44 @@ class _HeartReactionFlyLayerState extends State<HeartReactionFlyLayer>
                 builder: (_, __) {
                   final t = h.controller.value;
 
-                  // 🔵 חצי עיגול
-                  final radius = size.width * 0.35;
-                  final angle = pi * t;
+                  // ✅ בדיוק באמצע המסך
+                  final cx = size.width / 2;
+                  final cy = size.height / 2;
 
-                  final startX = size.width / 2;
-                  final startY = size.height / 2;
+                  // ✅ חצי סיבוב קטן מאוד (רדיוס קטן)
+                  final minDim = min(size.width, size.height);
+                 final radius = minDim * 0.20;
 
-                  final dx = cos(angle) * radius;
-                  final dy = sin(angle) * radius;
 
-                  final x = startX + dx;
-                  final y = startY + dy + (t * size.height * 0.25);
+            // ✅ מתחיל למעלה (במקום במרכז)
+final angle = (-pi / 2) + (pi * t);
 
-                  final opacity = t < 0.7
-                      ? 1.0
-                      : (1.0 - ((t - 0.7) / 0.3)).clamp(0.0, 1.0);
+// ✅ חצי סיבוב קטן סביב המרכז
+final x = cx + cos(angle) * radius;
+final y = cy + sin(angle) * radius;
+
+
+                  // ✅ נהיה פחות faded לאורך הזמן (עולה בהדרגה)
+                  final fadeInEnd = 0.85; // עד מתי הוא ממשיך להתחזק
+                  final opacity = (t / fadeInEnd).clamp(0.0, 1.0);
+
+                  // ✅ "נעלם בבום" בפריים האחרון
+                  final finalOpacity = (t >= 0.98) ? 0.0 : opacity;
+
+                  const double iconSize = 140.0;
 
                   return Positioned(
-                    left: x,
-                    top: y,
+                    left: x - iconSize / 2, // ✅ מרכז התמונה על הנקודה
+                    top: y - iconSize / 2,
                     child: Opacity(
-                      opacity: opacity,
+                      opacity: finalOpacity,
                       child: ColorFiltered(
-                        colorFilter:
-                            ColorFilter.mode(h.color, BlendMode.srcIn),
+                        colorFilter: ColorFilter.mode(h.color, BlendMode.srcIn),
                         child: Image.asset(
                           'assets/reactions/HeartReaction.png',
-                          width: 28,
-                          height: 28,
+                          width: iconSize,
+                          height: iconSize,
+                          filterQuality: FilterQuality.high,
                         ),
                       ),
                     ),
