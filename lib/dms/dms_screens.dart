@@ -397,8 +397,9 @@ class _MysticNewBadge extends StatelessWidget {
           ),
           style: TextStyle(
             color: Colors.white,
-            fontSize: 7.8, // ✅ smaller
-            fontWeight: FontWeight.w800,
+           fontSize: 6.0,              // ⬅️ קטן יותר
+fontWeight: FontWeight.w900, // ⬅️ יותר בולד
+
             height: 1.0,
             letterSpacing: 0.12,
           ),
@@ -475,48 +476,53 @@ class _DmRowTile extends StatelessWidget {
         height: tileHeight,
         child: Container(
           decoration: BoxDecoration(
-            border: Border.all(color: frameColor, width: outerFrameThickness),
+border: Border.all(color: frameColor, width: outerFrameThickness),
+),
+child: Container(
+  decoration: BoxDecoration(
+    border: Border.all(
+      color: Colors.black.withValues(alpha: 0.65),
+      width: innerDarkStroke,
+    ),
+    color: const Color(0x80555555),
+  ),
+
+  // 👇 עטיפת הפונט – כאן זה נכון
+  child: DefaultTextStyle(
+    style: const TextStyle(fontFamily: 'NanumGothic'),
+    child: Stack(
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            innerLeftPadding,
+            0,
+            rightInset,
+            0,
           ),
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: Colors.black.withValues(alpha: 0.65),
-                width: innerDarkStroke,
-              ),
-              color: const Color(0x80555555),
-            ),
-            child: Stack(
-              children: [
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    innerLeftPadding,
-                    0,
-                    rightInset,
-                    0,
+          child: Stack(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: avatarSize,
+                    height: avatarSize,
+                    child: Container(
+                      color: Colors.black,
+                      alignment: Alignment.center,
+                      child: Text(
+                        user.name.characters.first.toUpperCase(),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: s(22),
+                          fontWeight: FontWeight.w700,
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
                   ),
-                  child: Stack(
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: avatarSize,
-                            height: avatarSize,
-                            child: Container(
-                              color: Colors.black,
-                              alignment: Alignment.center,
-                              child: Text(
-                                user.name.characters.first.toUpperCase(),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: s(22),
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.0,
-                                ),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: gapAfterAvatar),
+                  SizedBox(width: gapAfterAvatar),
+
                           Expanded(
                             child: Padding(
                               padding: EdgeInsets.only(
@@ -535,8 +541,9 @@ class _DmRowTile extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: s(18.5),
-                                      fontWeight: FontWeight.w600,
+                                     fontSize: s(16.0),        // ⬅️ קצת יותר קטן
+fontWeight: FontWeight.w600,
+
                                       height: 1.0,
                                     ),
                                   ),
@@ -552,8 +559,8 @@ class _DmRowTile extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: Colors.white.withValues(alpha: 0.70),
-                                      fontSize: s(15.2),
-                                      fontWeight: FontWeight.w400,
+                                      fontSize: s(14),
+                                      fontWeight: FontWeight.w600,
                                       height: 1.0,
                                     ),
                                   ),
@@ -610,11 +617,13 @@ class _DmRowTile extends StatelessWidget {
                     top: s(6),
                     right: s(6),
                     child: Text(
-                      ts,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.78),
-                        fontSize: s(12.0),
-                        fontWeight: FontWeight.w500,
+  ts,
+  style: TextStyle(
+    color: Colors.white.withValues(alpha: 0.78),
+    fontSize: s(11.0),          // ⬅️ קטן יותר
+    fontWeight: FontWeight.w700, // ⬅️ יותר בולד
+
+
                         height: 1.0,
                         letterSpacing: 0.1,
                       ),
@@ -625,7 +634,9 @@ class _DmRowTile extends StatelessWidget {
           ),
         ),
       ),
-    );
+    )
+     );
+
   }
 }
 
@@ -1123,7 +1134,7 @@ child: Text(
     fontFamily: 'NanumGothic',
     color: textColor,
     fontSize: s(20),
-    fontWeight: FontWeight.w500,
+    fontWeight: FontWeight.w600,
     height: 1.3,
     letterSpacing: -0.3, // ✅ מקטין רווח בין אותיות
   ),
