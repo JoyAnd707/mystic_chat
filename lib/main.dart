@@ -72,14 +72,9 @@ await session.configure(AudioSessionConfiguration(
   } catch (e) {
     debugPrint('Sfx.init failed: $e');
   }
+runApp(const MysticChatApp());
 
-  runApp(
-    DevicePreview(
-      enabled: true,
-      defaultDevice: Devices.ios.iPhone15ProMax,
-      builder: (context) => const MysticChatApp(),
-    ),
-  );
+
 }
 
 
@@ -152,17 +147,6 @@ class _MysticChatAppState extends State<MysticChatApp>
   @override
   Widget build(BuildContext context) {
 return MaterialApp(
-  useInheritedMediaQuery: true,
-  locale: DevicePreview.locale(context),
-builder: (context, child) {
-  final built = DevicePreview.appBuilder(context, child);
-
-  return TapSparkleLayer(
-    debugScale: 0.7,
-    child: built,
-  );
-},
-
   debugShowCheckedModeBanner: false,
   theme: ThemeData(
     pageTransitionsTheme: PageTransitionsTheme(
@@ -172,6 +156,12 @@ builder: (context, child) {
       },
     ),
   ),
+  builder: (context, child) {
+    return TapSparkleLayer(
+      debugScale: 0.7,
+      child: child ?? const SizedBox.shrink(),
+    );
+  },
   home: FutureBuilder<String?>(
     future: _loadSavedUserId(),
     builder: (context, snapshot) {
@@ -183,6 +173,7 @@ builder: (context, child) {
     },
   ),
 );
+
 
   }
 }
