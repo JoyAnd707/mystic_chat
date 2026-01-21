@@ -53,6 +53,7 @@ Color usernameColorForHour(int hour) {
 /// =======================
 /// USERS
 /// =======================
+const bool kEnableDebugIncomingPreview = false;
 
 const ChatUser joy =
     ChatUser(id: 'joy', name: 'Joy', bubbleColor: Color(0xFFDACFFF));
@@ -69,6 +70,7 @@ const ChatUser lihi =
 const ChatUser tal =
     ChatUser(id: 'tal', name: 'Tal', bubbleColor: Color(0xFFD7FFCF));
 const ChatUser gacktoFacto = ChatUser(
+  
   id: 'gackto_facto',
   name: 'Gackto Facto of the Day',
   bubbleColor: Color(0xFFCFFFEE),
@@ -1463,10 +1465,13 @@ Widget build(BuildContext context) {
   debugPrint('HOUR=$hour  usernameColor=$usernameColor  bg=$bg  uiScale=$uiScale');
 return Scaffold(
   backgroundColor: Colors.black,
-  floatingActionButton: FloatingActionButton(
-    onPressed: _debugSimulateIncomingMessage,
-    child: const Icon(Icons.bug_report),
-  ),
+floatingActionButton: kEnableDebugIncomingPreview
+    ? FloatingActionButton(
+        onPressed: _debugSimulateIncomingMessage,
+        child: const Icon(Icons.bug_report),
+      )
+    : null,
+
   body: Column(
     children: [
 

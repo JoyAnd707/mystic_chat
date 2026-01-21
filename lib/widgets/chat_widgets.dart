@@ -686,14 +686,16 @@ final bubbleInner = Padding(
         applyHeightToFirstAscent: false,
         applyHeightToLastDescent: false,
       ),
-      style: TextStyle(
-        fontFamily: fontFamily,
-        fontSize: 16 * uiScale,
-        height: 1.2,
-        color: Colors.black,
-        fontWeight: FontWeight.w400,
-        leadingDistribution: TextLeadingDistribution.even,
-      ),
+style: TextStyle(
+  fontFamily: fontFamily,
+  fontSize: 16 * uiScale,
+  height: 1.2,
+  color: Colors.black,
+  fontWeight: FontWeight.w400,
+  letterSpacing: -0.15 * uiScale, // ✅ tighter message text
+  leadingDistribution: TextLeadingDistribution.even,
+),
+
     ),
   ),
 );
