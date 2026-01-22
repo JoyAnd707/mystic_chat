@@ -141,6 +141,10 @@ class _DmsListScreenState extends State<DmsListScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _twinkleController;
 
+// ✅ prevents double back sound when we pop manually (top bar back)
+bool _suppressNextPopSound = false;
+
+
   static const String _boxName = 'mystic_chat_storage';
   String _roomKey(String roomId) => 'room_messages__$roomId';
   String _metaKey(String roomId) => 'room_meta__$roomId';
@@ -239,9 +243,23 @@ void initState() {
     return entries;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
+@override
+Widget build(BuildContext context) {
+  return PopScope(
+    canPop: true,
+    onPopInvoked: (didPop) {
+      // ✅ if we already played back sound manually (top bar back), skip once
+      if (_suppressNextPopSound) {
+        _suppressNextPopSound = false;
+        return;
+      }
+
+      // ✅ system back (Android back / iOS swipe)
+      try {
+        Sfx.I.playBack();
+      } catch (_) {}
+    },
+    child: Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
@@ -266,63 +284,114 @@ void initState() {
           SafeArea(
             child: Column(
               children: [
-                const _DmTopBar(),
+_DmTopBar(
+  onBack: () async {
+    // 🔊 Back SFX (do NOT await — navigate immediately)
+    try {
+      Sfx.I.playBack();
+    } catch (_) {}
 
-Expanded(
-  child: Builder(
-    builder: (context) {
-      final double uiScale = mysticUiScale(context);
-      double s(double v) => v * uiScale;
+    // ✅ tell PopScope to NOT play sound again
+    _suppressNextPopSound = true;
 
-      return FutureBuilder<List<_DmEntry>>(
-        future: _loadDmEntries(),
-        builder: (context, snap) {
-          final items = snap.data ?? const <_DmEntry>[];
-
-          return ListView.separated(
-            padding: EdgeInsets.symmetric(
-              horizontal: s(14),
-              vertical: s(12),
-            ),
-            itemCount: items.length,
-            separatorBuilder: (_, __) => SizedBox(height: s(12)), // יותר אוויר
-itemBuilder: (context, index) {
-  final e = items[index];
-  final double uiScale = mysticUiScale(context);
-
-  return _DmRowTile(
-    user: e.user,
-    previewText: e.preview,
-    unread: e.unread,
-    lastUpdatedMs: e.lastUpdatedMs,
-    uiScale: uiScale,
-    onTap: () async {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => DmChatScreen(
-            currentUserId: widget.currentUserId,
-            otherUserId: e.user.id,
-            otherName: e.user.name,
-            roomId: e.roomId,
-          ),
-        ),
-      );
-      if (mounted) setState(() {});
-    },
-  );
-},
-
-          );
-        },
-      );
-    },
-  ),
+    if (context.mounted) {
+      Navigator.of(context).pop();
+    }
+  },
 ),
 
+                Expanded(
+                  child: Builder(
+                    builder: (context) {
+                      final double uiScale = mysticUiScale(context);
+                      double s(double v) => v * uiScale;
+
+                      return FutureBuilder<List<_DmEntry>>(
+                        future: _loadDmEntries(),
+                        builder: (context, snap) {
+                          final items = snap.data ?? const <_DmEntry>[];
+
+                          return ListView.separated(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: s(14),
+                              vertical: s(12),
+                            ),
+                            itemCount: items.length,
+                            separatorBuilder: (_, __) => SizedBox(height: s(12)),
+                            itemBuilder: (context, index) {
+                              final e = items[index];
+                              final double uiScale = mysticUiScale(context);
+
+                              return _DmRowTile(
+                                user: e.user,
+                                previewText: e.preview,
+                                unread: e.unread,
+                                lastUpdatedMs: e.lastUpdatedMs,
+                                uiScale: uiScale,
+          onTap: () async {
+  // 🔊 SFX — DM room selected (do NOT await)
+  try {
+    Sfx.I.playSelectDm();
+  } catch (_) {}
+
+  await Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => DmChatScreen(
+        currentUserId: widget.currentUserId,
+        otherUserId: e.user.id,
+        otherName: e.user.name,
+        roomId: e.roomId,
+      ),
+    ),
+  );
+
+  if (mounted) setState(() {});
+},
+
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
               ],
             ),
           ),
         ],
+      ),
+    ),
+  );
+}
+
+
+}
+
+class _MysticNewBadge extends StatelessWidget {
+  const _MysticNewBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(1.1),
+      child: Container(
+        color: const Color(0xFFFF6769), // #ff6769
+        padding: const EdgeInsets.symmetric(horizontal: 0.7, vertical: 0.15),
+        child: const Text(
+          'NEW',
+          textHeightBehavior: TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
+          ),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 6.0,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+            letterSpacing: 0.12,
+          ),
+        ),
       ),
     );
   }
@@ -332,7 +401,9 @@ itemBuilder: (context, index) {
 /// DM TOP BAR (your PNG)
 /// =======================================
 class _DmTopBar extends StatelessWidget {
-  const _DmTopBar();
+  final Future<void> Function()? onBack;
+
+  const _DmTopBar({this.onBack});
 
   static const double _resourceBarHeight = 34;
   static const double _barAspect = 2048 / 212;
@@ -344,7 +415,6 @@ class _DmTopBar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // “status bar” spacer like Mystic
           SizedBox(
             height: _resourceBarHeight,
             width: double.infinity,
@@ -369,7 +439,6 @@ class _DmTopBar extends StatelessWidget {
                       ),
                     ),
 
-                    // ✅ Title: "Text Message"
                     Align(
                       alignment: Alignment.center,
                       child: Text(
@@ -385,14 +454,23 @@ class _DmTopBar extends StatelessWidget {
                       ),
                     ),
 
-                    // back tap area (left)
                     Positioned(
                       left: 0,
                       top: 0,
                       bottom: 0,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onTap: () => Navigator.of(context).pop(),
+                        onTap: () async {
+                          if (onBack != null) {
+                            await onBack!.call();
+                            return;
+                          }
+
+                          // fallback: just pop (NO SFX here)
+                          if (context.mounted) {
+                            Navigator.of(context).pop();
+                          }
+                        },
                         child: const SizedBox(
                           width: 72,
                           height: double.infinity,
@@ -410,36 +488,6 @@ class _DmTopBar extends StatelessWidget {
   }
 }
 
-class _MysticNewBadge extends StatelessWidget {
-  const _MysticNewBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(1.1),
-      child: Container(
-        color: const Color(0xFFFF6769), // #ff6769
-
-        padding: const EdgeInsets.symmetric(horizontal: 0.7, vertical: 0.15),
-        child: const Text(
-          'NEW',
-          textHeightBehavior: TextHeightBehavior(
-            applyHeightToFirstAscent: false,
-            applyHeightToLastDescent: false,
-          ),
-          style: TextStyle(
-            color: Colors.white,
-           fontSize: 6.0,              // ⬅️ קטן יותר
-fontWeight: FontWeight.w900, // ⬅️ יותר בולד
-
-            height: 1.0,
-            letterSpacing: 0.12,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 
 
@@ -639,6 +687,7 @@ fontWeight: FontWeight.w600,
                           top: envelopeTop + s(2), // ⬅️ אותו offset כמו המעטפה, נשאר מיושר
 
                           child: const _MysticNewBadge(),
+
                         ),
                     ],
                   ),
@@ -782,9 +831,9 @@ void _send() async {
   final text = _c.text.trim();
   if (text.isEmpty) return;
 
-  // 🔊 SFX — רק מי ששולחת שומעת
+  // 🔊 SFX — do NOT await (send immediately)
   try {
-    await Sfx.I.playSend();
+    Sfx.I.playSend();
   } catch (_) {}
 
   setState(() {
@@ -803,6 +852,7 @@ void _send() async {
 
   _scrollToBottom(keepFocus: true);
 }
+
 
 
 @override
@@ -910,74 +960,85 @@ return MediaQuery(
                     return SizedBox(
                       width: w,
                       height: barH,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: Image.asset(
-                              'assets/ui/DMSroomNameBar.png',
-                              fit: BoxFit.fitWidth,
-                              alignment: Alignment.center,
-                              errorBuilder: (_, __, ___) =>
-                                  Container(color: Colors.black),
-                            ),
-                          ),
-
-// ✅ Center title (character name) + small envelope icon
-Align(
-  alignment: Alignment.center,
-  child: Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 80),
-    child: Row(
-  mainAxisSize: MainAxisSize.min,
-  crossAxisAlignment: CrossAxisAlignment.center,
+child: Stack(
   children: [
-    Transform.translate(
-      offset: const Offset(-2, 1),
+    // ✅ THE BAR IMAGE (this was missing)
+    Positioned.fill(
       child: Image.asset(
-        'assets/ui/DMSlittleLetterIcon.png',
-        width: 25,
-        height: 25,
-        fit: BoxFit.contain,
+        'assets/ui/DMSroomNameBar.png',
+        fit: BoxFit.fitWidth,
+        alignment: Alignment.center,
         filterQuality: FilterQuality.high,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
       ),
     ),
-    const SizedBox(width: 6),
-    Flexible(
-      child: Text(
-        widget.otherName,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 22,
-          fontWeight: FontWeight.w200,
-          height: 1.0,
+
+    // ✅ Back tap area (ONE only) + sound
+    Positioned(
+      left: 0,
+      top: 0,
+      bottom: 0,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+onTap: () async {
+  // 🔊 Back SFX (do NOT await)
+  try {
+    Sfx.I.playBack();
+  } catch (_) {}
+
+  if (context.mounted) {
+    Navigator.of(context).pop();
+  }
+},
+
+        child: const SizedBox(
+          width: 72,
+          height: double.infinity,
+        ),
+      ),
+    ),
+
+    // ✅ Center title (character name) + small envelope icon
+    Align(
+      alignment: Alignment.center,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 80),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Transform.translate(
+              offset: const Offset(-2, 1),
+              child: Image.asset(
+                'assets/ui/DMSlittleLetterIcon.png',
+                width: 25,
+                height: 25,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                widget.otherName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w200,
+                  height: 1.0,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     ),
   ],
 ),
 
-  ),
-),
-
-
-                          // ✅ Back tap area
-                          Positioned(
-                            left: 0,
-                            top: 0,
-                            bottom: 0,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () => Navigator.of(context).pop(),
-                              child: const SizedBox(
-                                width: 72,
-                                height: double.infinity,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
                     );
                   },
                 ),
@@ -1271,8 +1332,9 @@ child: Builder(
           ),
         );
 
-        final leftAvatar = _Avatar(letter: 'A', size: avatarSize);
-        final rightAvatar = _Avatar(letter: 'J', size: avatarSize);
+       final leftAvatar = _Avatar(letter: otherLetter, size: avatarSize);
+final rightAvatar = _Avatar(letter: meLetter, size: avatarSize);
+
 
         final timeWidget = (time.isEmpty)
             ? const SizedBox.shrink()
@@ -2293,8 +2355,10 @@ final double stemYNudge;
         old.tipYFactor != tipYFactor ||
         old.tipYInset != tipYInset ||
         old.tipYOutset != tipYOutset ||
-        old.stemXNudge != stemXNudge;
+        old.stemXNudge != stemXNudge ||
+        old.stemYNudge != stemYNudge;
   }
+
 }
 
 

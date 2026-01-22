@@ -44,8 +44,12 @@ class Sfx {
   }
 
   Future<void> playSend() => _playOne('assets/fx/send.mp3', volume: 0.8);
+  Future<void> playSelectDm() => _playOne('assets/fx/SelectDMsfx.mp3', volume: 0.9);
+  
+
 
   Future<void> playBack() => _playOne('assets/fx/back.mp3', volume: 0.8);
+  
 
   Future<void> play707VoiceLine() =>
       _playOne('assets/fx/707VoiceLine.mp3', volume: 0.95);
