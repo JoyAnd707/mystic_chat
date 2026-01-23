@@ -934,252 +934,226 @@ return MediaQuery(
   ),
   child: Scaffold(
     backgroundColor: Colors.black,
-    body: Column(
-      children: [
-
-          // ✅ DM room name bar (PNG) + title overlay + back tap area
-          // ✅ DM room name bar (PNG) scaled like the DMs list
-          SafeArea(
-            bottom: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // same “status bar” spacer height
-                const SizedBox(
-                  height: 34,
-                  width: double.infinity,
-                ),
-
-                LayoutBuilder(
-                  builder: (context, c) {
-                    // IMPORTANT: match the same aspect logic style as the list bar
-                    const double barAspect = 2048 / 212; // adjust if your PNG differs
-                    final w = c.maxWidth;
-                    final barH = w / barAspect;
-
-                    return SizedBox(
-                      width: w,
-                      height: barH,
-child: Stack(
+body: Column(
   children: [
-    // ✅ THE BAR IMAGE (this was missing)
-    Positioned.fill(
-      child: Image.asset(
-        'assets/ui/DMSroomNameBar.png',
-        fit: BoxFit.fitWidth,
-        alignment: Alignment.center,
-        filterQuality: FilterQuality.high,
-        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+    // ✅ DM room name bar (PNG) + title overlay + back tap area
+    SafeArea(
+      bottom: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            height: 34,
+            width: double.infinity,
+          ),
+          LayoutBuilder(
+            builder: (context, c) {
+              const double barAspect = 2048 / 212;
+              final w = c.maxWidth;
+              final barH = w / barAspect;
+
+              return SizedBox(
+                width: w,
+                height: barH,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Image.asset(
+                        'assets/ui/DMSroomNameBar.png',
+                        fit: BoxFit.fitWidth,
+                        alignment: Alignment.center,
+                        filterQuality: FilterQuality.high,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () async {
+                          try {
+                            Sfx.I.playBack();
+                          } catch (_) {}
+
+                          if (context.mounted) {
+                            Navigator.of(context).pop();
+                          }
+                        },
+                        child: const SizedBox(
+                          width: 72,
+                          height: double.infinity,
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.center,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 80),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Transform.translate(
+                              offset: const Offset(-2, 1),
+                              child: Image.asset(
+                                'assets/ui/DMSlittleLetterIcon.png',
+                                width: 25,
+                                height: 25,
+                                fit: BoxFit.contain,
+                                filterQuality: FilterQuality.high,
+                                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                widget.otherName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w200,
+                                  height: 1.0,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
       ),
     ),
 
-    // ✅ Back tap area (ONE only) + sound
-    Positioned(
-      left: 0,
-      top: 0,
-      bottom: 0,
+    Expanded(
       child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-onTap: () async {
-  // 🔊 Back SFX (do NOT await)
-  try {
-    Sfx.I.playBack();
-  } catch (_) {}
-
-  if (context.mounted) {
-    Navigator.of(context).pop();
-  }
-},
-
-        child: const SizedBox(
-          width: 72,
-          height: double.infinity,
-        ),
-      ),
-    ),
-
-    // ✅ Center title (character name) + small envelope icon
-    Align(
-      alignment: Alignment.center,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 80),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: Stack(
           children: [
-            Transform.translate(
-              offset: const Offset(-2, 1),
+            Positioned.fill(
               child: Image.asset(
-                'assets/ui/DMSlittleLetterIcon.png',
-                width: 25,
-                height: 25,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
+                'assets/backgrounds/StarsBG.png',
+                fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => const SizedBox.shrink(),
               ),
             ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                widget.otherName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w200,
-                  height: 1.0,
-                ),
+            Positioned.fill(
+              child: MysticStarTwinkleOverlay(
+                animation: _twinkleController,
+                starCount: 58,
+                sizeMultiplier: 1.0,
               ),
             ),
+ListView.builder(
+  controller: _scroll,
+  padding: EdgeInsets.only(
+    left: s(14),
+    right: s(14),
+    top: s(10),
+    bottom: s(90), // אם צריך עוד מקום בגלל השורה החדשה למטה – נגביר אחרי זה
+  ),
+  itemCount: _messages.length,
+  itemBuilder: (context, i) {
+    final m = _messages[i];
+    if ((m['type'] ?? 'text') != 'text') {
+      return const SizedBox.shrink();
+    }
+
+    final sender = (m['senderId'] ?? '').toString();
+    final isMe = sender == widget.currentUserId;
+    final text = (m['text'] ?? '').toString();
+    final int ts = (m['ts'] is int) ? m['ts'] as int : 0;
+    final String timeLabel = mysticTimeOnlyFromMs(ts);
+
+    // ✅ Date Divider logic
+    int prevTs = 0;
+    if (i > 0) {
+      final prev = _messages[i - 1];
+      if ((prev['type'] ?? 'text') == 'text') {
+        prevTs = (prev['ts'] is int) ? prev['ts'] as int : 0;
+      }
+    }
+
+    final bool showDateDivider =
+        (i == 0 && ts > 0) ||
+        (i > 0 && ts > 0 && !mysticIsSameDayMs(prevTs, ts));
+
+    final String dateHeader = mysticDmDateHeaderFromMs(ts);
+
+    // ✅ spacing logic
+    String prevSender = '';
+    if (i > 0) {
+      final prev = _messages[i - 1];
+      if ((prev['type'] ?? 'text') == 'text') {
+        prevSender = (prev['senderId'] ?? '').toString();
+      }
+    }
+
+    final bool switchedSender = (prevSender.isNotEmpty && prevSender != sender);
+
+    final double sameSenderGap = s(22);
+    final double switchedSenderGap = s(34);
+    final double bottomGap = switchedSender ? switchedSenderGap : sameSenderGap;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomGap),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showDateDivider)
+            _DmDateDivider(
+              text: dateHeader,
+              uiScale: uiScale,
+            ),
+          _DmMessageRow(
+            isMe: isMe,
+            text: text,
+            time: timeLabel,
+            uiScale: uiScale,
+            meLetter: (dmUsers[widget.currentUserId]?.name.characters.first ?? ' ')
+                .toUpperCase(),
+            otherLetter: (dmUsers[widget.otherUserId]?.name.characters.first ?? ' ')
+                .toUpperCase(),
+          ),
+        ],
+      ),
+    );
+  },
+),
+
           ],
         ),
       ),
     ),
+
+    // ✅ Bottom corner line: tighter to the bottom bar (closer like reference)
+    Padding(
+      padding: EdgeInsets.only(bottom: s(0)),
+      child: _DmBottomCornerLine(uiScale: uiScale),
+    ),
+
+    _DmBottomBar(
+      height: s(80),
+      isTyping: _isTyping,
+      onTapTypeMessage: _onTapType,
+      controller: _c,
+      focusNode: _focus,
+      onSend: _send,
+      uiScale: uiScale,
+    ),
+
   ],
 ),
 
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-
-
-
-Expanded(
-  child: GestureDetector(
-    behavior: HitTestBehavior.translucent,
-    onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-    child: Stack(
-      children: [
-        // ✅ Same star background as DMs list
-        Positioned.fill(
-          child: Image.asset(
-            'assets/backgrounds/StarsBG.png',
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-          ),
-        ),
-
-        // ✅ Same twinkle overlay as DMs list
-        Positioned.fill(
-          child: MysticStarTwinkleOverlay(
-            animation: _twinkleController,
-            starCount: 58,
-            sizeMultiplier: 1.0,
-          ),
-        ),
-
-        // ✅ Messages on top
-        ListView.builder(
-          controller: _scroll,
-          padding: EdgeInsets.only(
-            left: s(14),
-            right: s(14),
-            top: s(10),
-            bottom: s(90),
-          ),
-          itemCount: _messages.length,
-          itemBuilder: (context, i) {
-            final m = _messages[i];
-            if ((m['type'] ?? 'text') != 'text') {
-              return const SizedBox.shrink();
-            }
-
-            final sender = (m['senderId'] ?? '').toString();
-            final isMe = sender == widget.currentUserId;
-            final text = (m['text'] ?? '').toString();
-            final int ts = (m['ts'] is int) ? m['ts'] as int : 0;
-            final String timeLabel = mysticTimeOnlyFromMs(ts);
-
-            // ✅ Date Divider logic
-            int prevTs = 0;
-            if (i > 0) {
-              final prev = _messages[i - 1];
-              if ((prev['type'] ?? 'text') == 'text') {
-                prevTs = (prev['ts'] is int) ? prev['ts'] as int : 0;
-              }
-            }
-
-            final bool showDateDivider =
-                (i == 0 && ts > 0) ||
-                (i > 0 && ts > 0 && !mysticIsSameDayMs(prevTs, ts));
-
-            final String dateHeader = mysticDmDateHeaderFromMs(ts);
-
-            // ✅ spacing logic (your existing vibe)
-            String prevSender = '';
-            if (i > 0) {
-              final prev = _messages[i - 1];
-              if ((prev['type'] ?? 'text') == 'text') {
-                prevSender = (prev['senderId'] ?? '').toString();
-              }
-            }
-
-            final bool switchedSender =
-                (prevSender.isNotEmpty && prevSender != sender);
-
-            final double sameSenderGap = s(22);
-            final double switchedSenderGap = s(34);
-
-            final double bottomGap =
-                switchedSender ? switchedSenderGap : sameSenderGap;
-
-            return Padding(
-              padding: EdgeInsets.only(bottom: bottomGap),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (showDateDivider)
-                    _DmDateDivider(
-                      text: dateHeader,
-                      uiScale: uiScale,
-                    ),
-                  _DmMessageRow(
-                    isMe: isMe,
-                    text: text,
-                    time: timeLabel,
-                    uiScale: uiScale,
-                    meLetter: (dmUsers[widget.currentUserId]
-                                ?.name
-                                .characters
-                                .first ??
-                            ' ')
-                        .toUpperCase(),
-                    otherLetter: (dmUsers[widget.otherUserId]
-                                ?.name
-                                .characters
-                                .first ??
-                            ' ')
-                        .toUpperCase(),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
-    ),
-  ),
-),
-
-
-
-
-
-          _DmBottomBar(
-            height: s(80),
-            isTyping: _isTyping,
-            onTapTypeMessage: _onTapType,
-            controller: _c,
-            focusNode: _focus,
-            onSend: _send,
-            uiScale: uiScale,
-        ),
-      ],
-    ), // Column
   ), // Scaffold
 ); // MediaQuery
 
@@ -1887,7 +1861,7 @@ class _DmBottomBar extends StatelessWidget {
       height: height,
       width: double.infinity,
       color: Colors.black,
-      padding: EdgeInsets.only(bottom: s(10)),
+      padding: EdgeInsets.only(bottom: s(0)),
       child: isTyping ? _typingBar(s) : _answerButtonBar(s),
     );
   }
@@ -2474,3 +2448,68 @@ class _DmDateDivider extends StatelessWidget {
     );
   }
 }
+
+class _DmBottomCornerLine extends StatelessWidget {
+  final double uiScale;
+
+  const _DmBottomCornerLine({
+    required this.uiScale,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * uiScale;
+
+    // 🔧 TUNING
+    final double starSize = s(22);         // size of the corner diamonds
+    final double edgeInset = s(0);         // ✅ touch the screen edge
+    final double lineH = s(1.2);
+    final Color lineColor = Colors.white.withValues(alpha: 0.60);
+
+    Widget star() {
+      return Image.asset(
+        'assets/ui/DmsBottomTwoStars.png',
+        width: starSize,
+        height: starSize,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (_, __, ___) =>
+            SizedBox(width: starSize, height: starSize),
+      );
+    }
+
+    return SizedBox(
+      height: starSize,
+      width: double.infinity,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // ✅ line runs UNDER the diamonds (connected look)
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.center,
+              child: Container(
+                height: lineH,
+                // ✅ let the line reach almost the full width
+                // (keep 0 so it "touches" visually; if your PNG has transparent padding, bump to s(1)-s(2))
+                margin: EdgeInsets.symmetric(horizontal: s(2)),
+                color: lineColor,
+              ),
+            ),
+          ),
+
+          // ✅ corner diamonds - flush to edges
+          Positioned(
+            left: edgeInset,
+            child: star(),
+          ),
+          Positioned(
+            right: edgeInset,
+            child: star(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
