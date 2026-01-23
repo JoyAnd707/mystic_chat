@@ -2352,14 +2352,15 @@ class _DmDateDivider extends StatelessWidget {
 
     if (text.trim().isEmpty) return const SizedBox.shrink();
 
-    // ⭐ size already good
     final double starSize = s(24);
     final double lineH = s(1.2);
     final Color lineColor = Colors.white.withValues(alpha: 0.72);
 
-    // ListView horizontal padding in your DM screen:
-    // left/right: s(14)
-    final double listHPad = s(14);
+    // ✅ Use real screen width (stable), optionally respecting safe-area
+    final mq = MediaQuery.of(context);
+    final double safeL = mq.padding.left;
+    final double safeR = mq.padding.right;
+    final double fullW = mq.size.width - safeL - safeR;
 
     Widget star() {
       return Image.asset(
@@ -2377,73 +2378,56 @@ class _DmDateDivider extends StatelessWidget {
       return Container(height: lineH, color: lineColor);
     }
 
-    // ✅ One side = line underneath + 2 stars on top (forces “connected” look)
-    Widget sideStarsAndLine() {
-      return SizedBox(
-        height: starSize, // so we can vertically center the line
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // line behind
-            Positioned.fill(
-              child: Align(
-                alignment: Alignment.center,
-                child: line(),
-              ),
-            ),
-
-            // stars on top, tight to edges
-            Positioned(
-              left: 0,
-              child: star(),
-            ),
-            Positioned(
-              right: 0,
-              child: star(),
-            ),
-          ],
+Widget sideStarsAndLine() {
+  return SizedBox(
+    height: starSize,
+    child: Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        // line behind
+        Positioned.fill(
+          child: Align(
+            alignment: Alignment.center,
+            child: line(),
+          ),
         ),
-      );
-    }
+
+        // ✅ stars flush to edges (touch screen edge)
+        Positioned(left: -s(2), child: star()),
+Positioned(right: -s(2), child: star()),
+
+      ],
+    ),
+  );
+}
+
 
     return Padding(
       padding: EdgeInsets.symmetric(vertical: s(14)),
-      child: LayoutBuilder(
-        builder: (context, c) {
-          // ✅ expand to full width by canceling ListView padding
-          // and push outer stars almost to screen edges
-          return Transform.translate(
-            offset: Offset(-listHPad, 0),
-            child: SizedBox(
-              width: c.maxWidth + (listHPad * 2),
-              child: Row(
-                children: [
-                  // left side (outer+inner) with line truly connected
-                  Expanded(child: sideStarsAndLine()),
-
-                  SizedBox(width: s(12)),
-
-                  // date text
-                  Text(
-                    text,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.95),
-                      fontSize: s(18),
-                      fontWeight: FontWeight.w400,
-                      height: 1.0,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-
-                  SizedBox(width: s(12)),
-
-                  // right side (inner+outer) with line truly connected
-                  Expanded(child: sideStarsAndLine()),
-                ],
+      child: Align(
+        alignment: Alignment.center,
+        child: SizedBox(
+          width: fullW, // ✅ always centered, no drifting
+          child: Row(
+            children: [
+              Expanded(child: sideStarsAndLine()),
+              SizedBox(width: s(12)),
+              Text(
+                text,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.95),
+                  fontSize: s(18),
+                  fontWeight: FontWeight.w400,
+                  height: 1.0,
+                  letterSpacing: 0.2,
+                ),
               ),
-            ),
-          );
-        },
+              SizedBox(width: s(12)),
+              Expanded(child: sideStarsAndLine()),
+            ],
+          ),
+        ),
       ),
     );
   }
