@@ -622,7 +622,7 @@ child: Container(
                                     style: TextStyle(
                                       color: Colors.white,
                                      fontSize: s(16.0),        // ⬅️ קצת יותר קטן
-fontWeight: FontWeight.w600,
+fontWeight: FontWeight.w900,
 
                                       height: 1.0,
                                     ),
@@ -640,7 +640,7 @@ fontWeight: FontWeight.w600,
                                     style: TextStyle(
                                       color: Colors.white.withValues(alpha: 0.70),
                                       fontSize: s(14),
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w400,
                                       height: 1.0,
                                     ),
                                   ),
@@ -1274,7 +1274,7 @@ child: Builder(
         fontFamily: 'NanumGothic',
         color: textColor,
         fontSize: s(20),
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w400,
         height: 1.3,
         letterSpacing: -0.3,
       ),
@@ -1363,7 +1363,7 @@ final row = Padding(
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.65),
                   fontSize: s(14),
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.w500,
                   height: 1.0,
                 ),
               ),
@@ -1388,7 +1388,7 @@ final row = Padding(
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.65),
                   fontSize: s(14),
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.w500,
                   height: 1.0,
                 ),
               ),
