@@ -277,7 +277,8 @@ Widget build(BuildContext context) {
             child: MysticStarTwinkleOverlay(
               animation: _twinkleController,
               starCount: 58,
-              sizeMultiplier: 1.0,
+              sizeMultiplier: 1.25,
+
             ),
           ),
 
@@ -1050,7 +1051,8 @@ body: Column(
               child: MysticStarTwinkleOverlay(
                 animation: _twinkleController,
                 starCount: 58,
-                sizeMultiplier: 1.0,
+                sizeMultiplier: 1.25,
+
               ),
             ),
 ListView.builder(
@@ -2084,6 +2086,7 @@ class _StarTwinklePainter extends CustomPainter {
     _stars = List<_TwinkleStar>.generate(starCount, (i) {
       final tier = rng.nextDouble();
       final double baseR;
+
       if (tier < 0.78) {
         baseR = 0.9 + rng.nextDouble() * 0.6;
       } else if (tier < 0.96) {
@@ -2104,7 +2107,11 @@ class _StarTwinklePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
+    final core = Paint()..style = PaintingStyle.fill;
+
+    // soft rim paint (we set blur + color per-star)
+    final soft = Paint()..style = PaintingStyle.fill;
+
     final tt = t * pi * 2;
 
     for (final s in _stars) {
@@ -2114,11 +2121,16 @@ class _StarTwinklePainter extends CustomPainter {
       final wave = sin(tt * s.speed + s.phase);
       final alpha = (0.35 + 0.65 * (wave * 0.5 + 0.5)).clamp(0.12, 1.0);
 
-      paint.color = Colors.white.withValues(alpha: alpha);
+      final r = (s.baseR * sizeMultiplier).clamp(0.9, 14.0);
 
+      final blurSigma = (r * 0.55).clamp(0.9, 3.2);
+      soft.maskFilter = MaskFilter.blur(BlurStyle.normal, blurSigma);
 
-      final r = (s.baseR * sizeMultiplier).clamp(0.8, 12.0);
-      canvas.drawCircle(Offset(x, y), r, paint);
+      soft.color = Colors.white.withOpacity((alpha * 0.22).clamp(0.04, 0.22));
+      canvas.drawCircle(Offset(x, y), r * 1.25, soft);
+
+      core.color = Colors.white.withOpacity(alpha);
+      canvas.drawCircle(Offset(x, y), r, core);
     }
   }
 
@@ -2129,6 +2141,7 @@ class _StarTwinklePainter extends CustomPainter {
         old.sizeMultiplier != sizeMultiplier;
   }
 }
+
 
 
 

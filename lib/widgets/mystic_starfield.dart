@@ -22,7 +22,8 @@ class MysticStarfield extends StatefulWidget {
     this.starCount = 120,
     this.speed = 1.0,
     this.driftPx = 0.0,
-    this.sizeMultiplier = 60.0, // ✅ THIS is the main “make it bigger” knob
+    this.sizeMultiplier = 70.0, // היה 60.0
+
     this.enableGlow = true,
   });
 
@@ -272,29 +273,52 @@ class _MysticStarfieldPainter extends CustomPainter {
       final scale = (1.20 + 0.12 * tw + 0.32 * glint).clamp(1.0, 1.90);
 
       // ✅ THIS is the real final size
-      final rr = (s.radius * scale * 60.0).clamp(0.8, 9999.0);
+// ✅ THIS is the real final size (now uses sizeMultiplier)
+final rr = (s.radius * scale * sizeMultiplier).clamp(0.8, 9999.0);
 
+// --- subtle edge blur (soft rim) ---
+final soft = Paint()
+  ..isAntiAlias = true
+  ..color = Colors.white.withOpacity((opacity * 0.28).clamp(0.04, 0.28))
+  ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.6);
 
-      // ✅ Mystic glow: big soft halo behind the core
-      if (enableGlow) {
-        final glowOpacity = (opacity * 0.22).clamp(0.03, 0.22);
-        paint.color = Colors.white.withOpacity(glowOpacity);
-        canvas.drawCircle(Offset(cx, cy), rr * 2.2, paint);
-      }
+// ✅ Mystic glow: big soft halo behind the core (keep, but slightly calmer)
+if (enableGlow) {
+  final glowOpacity = (opacity * 0.18).clamp(0.03, 0.18);
+  paint
+    ..color = Colors.white.withOpacity(glowOpacity)
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0);
+  canvas.drawCircle(Offset(cx, cy), rr * 2.0, paint);
+}
 
-      // ✅ Core star
-      paint.color = Colors.white.withOpacity(opacity);
+// ✅ Soft rim (gives “blur edge” even when glow is off)
+if (s.isSquare) {
+  final rectSoft = Rect.fromCenter(
+    center: Offset(cx, cy),
+    width: rr * 1.35,
+    height: rr * 1.35,
+  );
+  canvas.drawRect(rectSoft, soft);
+} else {
+  canvas.drawCircle(Offset(cx, cy), rr * 1.18, soft);
+}
 
-      if (s.isSquare) {
-        final rect = Rect.fromCenter(
-          center: Offset(cx, cy),
-          width: rr * 1.15,
-          height: rr * 1.15,
-        );
-        canvas.drawRect(rect, paint);
-      } else {
-        canvas.drawCircle(Offset(cx, cy), rr, paint);
-      }
+// ✅ Core star (crisp)
+paint
+  ..maskFilter = null
+  ..color = Colors.white.withOpacity(opacity);
+
+if (s.isSquare) {
+  final rect = Rect.fromCenter(
+    center: Offset(cx, cy),
+    width: rr * 1.15,
+    height: rr * 1.15,
+  );
+  canvas.drawRect(rect, paint);
+} else {
+  canvas.drawCircle(Offset(cx, cy), rr, paint);
+}
+
     }
   }
 
