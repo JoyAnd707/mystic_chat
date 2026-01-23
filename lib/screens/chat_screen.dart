@@ -38,19 +38,35 @@ class _TemplateMenuResult {
 }
 
 String backgroundForHour(int hour) {
+  // 00:00–00:59
   if (hour == 0) return 'assets/backgrounds/MidnightBG.png';
-  if (hour >= 1 && hour <= 6) return 'assets/backgrounds/NightBG.png';
+
+  // Night split:
+  // 21:00–23:59  AND  01:00–06:59
+  if ((hour >= 21 && hour <= 23) || (hour >= 1 && hour <= 6)) {
+    return 'assets/backgrounds/NightBG.png';
+  }
+
+  // 07:00–11:59
   if (hour >= 7 && hour <= 11) return 'assets/backgrounds/MorningBG.png';
+
+  // 12:00–16:59
   if (hour >= 12 && hour <= 16) return 'assets/backgrounds/NoonBG.png';
+
+  // 17:00–20:59
   return 'assets/backgrounds/EveningBG.png';
 }
-Color usernameColorForHour(int hour) {
-  // Midnight + Night (00:00–06:00) => WHITE
-  if (hour >= 0 && hour <= 6) return Colors.white;
 
-  // All other hours => BLACK
-  return Colors.black;
+Color usernameColorForHour(int hour) {
+  // Morning + Noon => BLACK
+  if (hour >= 7 && hour <= 16) {
+    return Colors.black;
+  }
+
+  // Evening + Night + Midnight => WHITE
+  return Colors.white;
 }
+
 
 /// =======================
 /// USERS

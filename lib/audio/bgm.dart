@@ -126,14 +126,25 @@ class Bgm {
   // ==========================
   // GROUP (hourly)
   // ==========================
-  String assetForHour(int hour) {
-    if (hour >= 6 && hour <= 11) return 'bgm/MorningBGM.mp3';
-    if (hour >= 12 && hour <= 16) return 'bgm/NoonBGM.mp3';
-    if (hour >= 17 && hour <= 21) return 'bgm/EveningBGM.mp3';
-    if (hour >= 22 && hour <= 23) return 'bgm/NightBGM.mp3';
-    if (hour == 0) return 'bgm/MidnightBGM.mp3';
+String assetForHour(int hour) {
+  // Morning: 07:00–11:59
+  if (hour >= 7 && hour <= 11) return 'bgm/MorningBGM.mp3';
+
+  // Noon: 12:00–16:59
+  if (hour >= 12 && hour <= 16) return 'bgm/NoonBGM.mp3';
+
+  // Evening: 17:00–20:59
+  if (hour >= 17 && hour <= 20) return 'bgm/EveningBGM.mp3';
+
+  // Night: 21:00–23:59  AND  01:00–06:59
+  if ((hour >= 21 && hour <= 23) || (hour >= 1 && hour <= 6)) {
     return 'bgm/NightBGM.mp3';
   }
+
+  // Midnight: 00:00–00:59
+  return 'bgm/MidnightBGM.mp3';
+}
+
 
   Future<void> playForHour(int hour) async {
     if (!enabled) return;
