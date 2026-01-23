@@ -281,25 +281,32 @@ Future<void> _ensureNextSendScheduled() async {
 
     final fact = facts[Random().nextInt(facts.length)].trim();
 
-    if (fact.isNotEmpty) {
-      list.add({
-        'type': 'text',
-        'senderId': botUserId,
-        'text': fact,
-        'bubbleTemplate': 'normal',
-        'decor': 'none',
-        'fontFamily': null,
-      });
-    }
+final nowMs = DateTime.now().millisecondsSinceEpoch;
 
-    list.add({
-      'type': 'text',
-      'senderId': botUserId,
-      'text': 'Gackto Facto Out',
-      'bubbleTemplate': 'normal',
-      'decor': 'none',
-      'fontFamily': null,
-    });
+if (fact.isNotEmpty) {
+  list.add({
+    'type': 'text',
+    'senderId': botUserId,
+    'text': fact,
+    'ts': nowMs,
+    'bubbleTemplate': 'normal',
+    'decor': 'none',
+    'fontFamily': null,
+    'heartReactorIds': <String>[],
+  });
+}
+
+list.add({
+  'type': 'text',
+  'senderId': botUserId,
+  'text': 'Gackto Facto Out',
+  'ts': nowMs + 1,
+  'bubbleTemplate': 'normal',
+  'decor': 'none',
+  'fontFamily': null,
+  'heartReactorIds': <String>[],
+});
+
 
     await box.put(key, list);
 

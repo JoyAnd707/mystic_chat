@@ -1572,6 +1572,10 @@ for (final m in _messages) {
     }
   }
 }
+if (widget.roomId == 'group_main') {
+  await DailyFactBotScheduler.I.pingPresence(roomId: 'group_main');
+  await DailyFactBotScheduler.I.debugSendIn10Seconds();
+}
 
   }
 
