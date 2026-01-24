@@ -9,7 +9,8 @@ import '../audio/bgm.dart';
 import '../bots/daily_fact_bot.dart';
 import '../fx/heart_reaction_fly_layer.dart';
 import 'dart:ui';
-
+import '../firebase/firestore_chat_service.dart';
+import '../firebase/auth_service.dart';
 
 double mysticUiScale(BuildContext context) {
   // ✅ UI scale tuned for your Mystic layout.
@@ -117,32 +118,22 @@ const Map<String, ChatUser> users = {
 enum ChatMessageType { text, system }
 
 class ChatMessage {
+  /// Firestore doc id (we use ts.toString())
+  final String id;
+
   final ChatMessageType type;
-
-  /// For `text` messages this is the sender's userId.
-  /// For `system` messages this can be an empty string.
   final String senderId;
-
-  /// For `system` messages this is the system line (e.g. "Joy has entered...").
   final String text;
-
-  /// ✅ unix ms timestamp (used for NEW badge + ordering)
   final int ts;
 
-  /// ✅ Which bubble template this message uses (normal/glow...)
   final BubbleTemplate bubbleTemplate;
-
-  /// ✅ Which decor is applied to this message
   final BubbleDecor decor;
-
-  /// ✅ Optional per-message font family (English random fonts)
   final String? fontFamily;
 
-  /// ✅ NEW: userIds that heart-reacted to THIS message
-  /// Persisted in Hive as a List<String>
   final Set<String> heartReactorIds;
 
   ChatMessage({
+    required this.id,
     required this.type,
     required this.senderId,
     required this.text,
@@ -154,6 +145,7 @@ class ChatMessage {
   }) : heartReactorIds = heartReactorIds ?? <String>{};
 
   ChatMessage copyWith({
+    String? id,
     ChatMessageType? type,
     String? senderId,
     String? text,
@@ -164,6 +156,7 @@ class ChatMessage {
     Set<String>? heartReactorIds,
   }) {
     return ChatMessage(
+      id: id ?? this.id,
       type: type ?? this.type,
       senderId: senderId ?? this.senderId,
       text: text ?? this.text,
@@ -176,6 +169,7 @@ class ChatMessage {
   }
 
   Map<String, dynamic> toMap() => <String, dynamic>{
+        'id': id,
         'type': type.name,
         'senderId': senderId,
         'text': text,
@@ -214,7 +208,10 @@ class ChatMessage {
     final rawReactors = (m['heartReactorIds'] as List?) ?? const [];
     final reactors = rawReactors.map((e) => e.toString()).toSet();
 
+    final id = (m['id'] ?? ts.toString()).toString();
+
     return ChatMessage(
+      id: id,
       type: type,
       senderId: (m['senderId'] ?? '').toString(),
       text: (m['text'] ?? '').toString(),
@@ -226,6 +223,8 @@ class ChatMessage {
     );
   }
 }
+
+
 
 
 
@@ -259,7 +258,8 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   static const double _topBarHeight = 0;
   static const double _bottomBarHeight = 80;
   static const double _redFrameTopGap = 0;
-  StreamSubscription? _roomSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _roomSub;
+
 VoidCallback? _onlineListener;
 
 // =======================
@@ -471,39 +471,26 @@ Widget _nameWithHeartsHeader({
 
 
 Future<void> _toggleHeartForMessage(ChatMessage msg) async {
-  // ריאקשנים רק לטקסט (לא system)
   if (msg.type != ChatMessageType.text) return;
 
   final me = widget.currentUserId;
   final isAdding = !msg.heartReactorIds.contains(me);
 
-  final next = msg.heartReactorIds.toSet();
-  if (isAdding) {
-    next.add(me);
-  } else {
-    next.remove(me);
-  }
-
-  final updated = msg.copyWith(heartReactorIds: next);
-
-  setState(() {
-    final i = _messages.indexWhere((m) => m.ts == msg.ts);
-    if (i != -1) _messages[i] = updated;
-  });
-
-  // משתמשים אצלך כבר שומרים את החדר להייב באותה פונקציה ששומרת הכל
-  // אל תשני אותה — רק תקראי לה.
-  await _saveMessagesForRoom(updateMeta: false);
-
+  // Update in Firestore (ALL devices will update via stream)
+  await FirestoreChatService.toggleHeart(
+    roomId: widget.roomId,
+    messageId: msg.id, // ✅ docId
+    reactorId: me,
+    isAdding: isAdding,
+  );
 
   // 🎬 אנימציה: לפי הספציפיקציה — רק מי שכתבה את ההודעה “מקבלת” את הלב.
-  // ברגע שיהיה multi-device אמיתי, זה יעבוד מושלם.
-if (isAdding && msg.senderId == widget.currentUserId) {
-  final reactorColor = _heartColorForUserId(me);
-  HeartReactionFlyLayer.of(context).spawnHeart(color: reactorColor);
+  if (isAdding && msg.senderId == widget.currentUserId && mounted) {
+    final reactorColor = _heartColorForUserId(me);
+    HeartReactionFlyLayer.of(context).spawnHeart(color: reactorColor);
+  }
 }
 
-}
 
 
 
@@ -1438,25 +1425,16 @@ Future<void> _emitSystemLine(
   bool showInUi = true,
   bool scroll = true,
 }) async {
-  // ✅ Persist system lines to Hive (but do NOT update DM meta / unread)
-final msg = ChatMessage(
-  type: ChatMessageType.system,
-  senderId: '',
-  text: line,
-  ts: DateTime.now().millisecondsSinceEpoch,
-);
+  final ts = DateTime.now().millisecondsSinceEpoch;
 
-  // Add to memory
-  _messages.add(msg);
+  // Send to Firestore so ALL devices see it
+  await FirestoreChatService.sendSystemLine(
+    roomId: widget.roomId,
+    line: line,
+    ts: ts,
+  );
 
-  // Update UI only if requested + we're still mounted
-  if (showInUi && mounted) {
-    setState(() {});
-  }
-
-  // ✅ Save to Hive so other users / future opens can see it
-  await _saveMessagesForRoom(updateMeta: false);
-
+  // UI will update via stream; optional scroll
   if (scroll && mounted) {
     _scrollToBottom();
   }
@@ -1528,6 +1506,8 @@ Future<void> _emitLeft({bool showInUi = true}) async {
 @override
 void initState() {
   super.initState();
+  AuthService.ensureSignedIn(currentUserId: widget.currentUserId);
+
   _messages = <ChatMessage>[];
 
   _bgFxCtrl = AnimationController(
@@ -1580,111 +1560,13 @@ void initState() {
   // ✅ load bubble style for this user (saved locally)
   _loadBubbleStyle();
 
-  _loadMessagesForRoom().then((_) async {
-    await _markRoomReadNow(); // ✅ mark as read when opening
-    await _emitEntered();
-  });
+_startFirestoreSubscription();
 
-  _box().then((box) {
-    _roomSub = box.watch(key: _roomKey(widget.roomId)).listen((event) async {
-      // snapshot "seen" BEFORE reload
-      final oldSeen = Set<int>.from(_seenMessageTs);
+WidgetsBinding.instance.addPostFrameCallback((_) async {
+  await _markRoomReadNow();
+  await _emitEntered();
+});
 
-      // ✅ snapshot heart reactors BEFORE reload (so we can detect NEW likes)
-      final Map<int, Set<String>> oldReactorsByTs = <int, Set<String>>{};
-      for (final m in _messages) {
-        if (m.ts > 0) {
-          oldReactorsByTs[m.ts] = Set<String>.from(m.heartReactorIds);
-        }
-      }
-
-      await _loadMessagesForRoom();
-      if (!mounted) return;
-
-      // seed seen on first loads (so history won't flash NEW)
-      if (_seenMessageTs.isEmpty) {
-        for (final m in _messages) {
-          if (m.ts > 0) _seenMessageTs.add(m.ts);
-        }
-      } else {
-        // detect truly new messages
-        for (final m in _messages) {
-          final int ts = m.ts;
-          if (ts > 0 && !oldSeen.contains(ts)) {
-            _seenMessageTs.add(ts);
-
-            // ✅ NEW badge ONLY in GROUP CHAT
-            if (widget.roomId == 'group_main') {
-              final bool isMe = m.senderId == widget.currentUserId;
-              if (!isMe && m.type == ChatMessageType.text) {
-                _triggerNewBadgeForTs(ts);
-              }
-            }
-          }
-        }
-
-        if (widget.roomId == 'group_main') {
-          await DailyFactBotScheduler.I.pingPresence(roomId: 'group_main');
-          await DailyFactBotScheduler.I.debugSendIn10Seconds();
-        }
-      }
-
-      // =========================
-      // ✅ LIVE HEART ANIMATION for RECEIVER
-      // =========================
-      if (!_heartsSnapshotInitialized) {
-        // First time: seed snapshot so history won't spam animations
-        _lastReactorSnapshotByTs.clear();
-        for (final m in _messages) {
-          if (m.ts > 0) {
-            _lastReactorSnapshotByTs[m.ts] =
-                Set<String>.from(m.heartReactorIds);
-          }
-        }
-        _heartsSnapshotInitialized = true;
-      } else {
-        final List<String> reactorsToAnimate = <String>[];
-
-        for (final m in _messages) {
-          if (m.type != ChatMessageType.text) continue;
-          if (m.ts <= 0) continue;
-
-          // ✅ receiver condition: I am the author of the message that got liked
-          if (m.senderId != widget.currentUserId) continue;
-
-          final Set<String> prev = oldReactorsByTs[m.ts] ??
-              _lastReactorSnapshotByTs[m.ts] ??
-              <String>{};
-          final Set<String> now = Set<String>.from(m.heartReactorIds);
-
-          // who was added?
-          final added = now.difference(prev);
-
-          // ✅ avoid double-animating my own local like
-          added.remove(widget.currentUserId);
-
-          if (added.isNotEmpty) {
-            reactorsToAnimate.addAll(added.toList()..sort());
-          }
-
-          // update snapshot
-          _lastReactorSnapshotByTs[m.ts] = now;
-        }
-
-        if (reactorsToAnimate.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            if (!mounted) return;
-            await _spawnHeartsForReactors(reactorsToAnimate);
-          });
-        }
-      }
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _scrollToBottom();
-      });
-    });
-  });
 }
 
 @override
@@ -1720,6 +1602,107 @@ void dispose() {
 
 
 
+void _startFirestoreSubscription() {
+  _roomSub?.cancel();
+
+  _roomSub = FirestoreChatService.messagesStreamMaps(widget.roomId).listen(
+    (rows) async {
+      // snapshot "seen" BEFORE reload
+      final oldSeen = Set<int>.from(_seenMessageTs);
+
+      // snapshot heart reactors BEFORE reload
+      final Map<int, Set<String>> oldReactorsByTs = <int, Set<String>>{};
+      for (final m in _messages) {
+        if (m.ts > 0) {
+          oldReactorsByTs[m.ts] = Set<String>.from(m.heartReactorIds);
+        }
+      }
+
+      // Convert maps -> ChatMessage
+      final next = rows.map((m) => ChatMessage.fromMap(m)).toList();
+
+      _messages = next;
+
+      if (!mounted) return;
+      setState(() {});
+
+      // seed seen on first load
+      if (_seenMessageTs.isEmpty) {
+        for (final m in _messages) {
+          if (m.ts > 0) _seenMessageTs.add(m.ts);
+        }
+      } else {
+        // detect truly new messages
+        for (final m in _messages) {
+          final int ts = m.ts;
+          if (ts > 0 && !oldSeen.contains(ts)) {
+            _seenMessageTs.add(ts);
+
+            // NEW badge ONLY in GROUP CHAT
+            if (widget.roomId == 'group_main') {
+              final bool isMe = m.senderId == widget.currentUserId;
+              if (!isMe && m.type == ChatMessageType.text) {
+                _triggerNewBadgeForTs(ts);
+              }
+            }
+          }
+        }
+
+        if (widget.roomId == 'group_main') {
+          await DailyFactBotScheduler.I.pingPresence(roomId: 'group_main');
+        }
+      }
+
+      // LIVE HEART ANIMATION for RECEIVER
+      if (!_heartsSnapshotInitialized) {
+        _lastReactorSnapshotByTs.clear();
+        for (final m in _messages) {
+          if (m.ts > 0) {
+            _lastReactorSnapshotByTs[m.ts] = Set<String>.from(m.heartReactorIds);
+          }
+        }
+        _heartsSnapshotInitialized = true;
+      } else {
+        final List<String> reactorsToAnimate = <String>[];
+
+        for (final m in _messages) {
+          if (m.type != ChatMessageType.text) continue;
+          if (m.ts <= 0) continue;
+
+          // receiver condition: I am the author of the message that got liked
+          if (m.senderId != widget.currentUserId) continue;
+
+          final Set<String> prev = oldReactorsByTs[m.ts] ??
+              _lastReactorSnapshotByTs[m.ts] ??
+              <String>{};
+
+          final Set<String> now = Set<String>.from(m.heartReactorIds);
+
+          final added = now.difference(prev);
+          added.remove(widget.currentUserId);
+
+          if (added.isNotEmpty) {
+            reactorsToAnimate.addAll(added.toList()..sort());
+          }
+
+          _lastReactorSnapshotByTs[m.ts] = now;
+        }
+
+        if (reactorsToAnimate.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!mounted) return;
+            await _spawnHeartsForReactors(reactorsToAnimate);
+          });
+        }
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _scrollToBottom();
+      });
+    },
+  );
+}
 
 
 
@@ -1750,12 +1733,14 @@ Future<void> _debugSimulateIncomingMessage() async {
 
   setState(() {
     _messages.add(
-      ChatMessage(
-        type: ChatMessageType.text,
-        senderId: 'adi', // כאילו עדי שלחה
-        text: 'Incoming test from Adi ✨',
-        ts: ts,
-      ),
+ChatMessage(
+  id: ts.toString(), // ✅ NEW
+  type: ChatMessageType.text,
+  senderId: 'adi',
+  text: 'Incoming test from Adi ✨',
+  ts: ts,
+),
+
     );
   });
 
@@ -1765,7 +1750,7 @@ Future<void> _debugSimulateIncomingMessage() async {
   );
 }
 
-void _sendMessage() {
+Future<void> _sendMessage() async {
   final text = _controller.text.trim();
   final bool triggerCreepy = _shouldTriggerCreepyEgg(text);
 
@@ -1776,46 +1761,37 @@ void _sendMessage() {
   final BubbleTemplate templateForThisMessage = _selectedTemplate;
   final BubbleDecor decorForThisMessage = _selectedDecor;
 
-  // ✅ Pick a random font only if there's English in the message
   final String? fontFamilyForThisMessage = _containsEnglishLetters(text)
       ? _englishFonts[_rng.nextInt(_englishFonts.length)]
       : null;
 
-  setState(() {
-    _messages.add(
-      ChatMessage(
-        type: ChatMessageType.text,
-        senderId: widget.currentUserId,
-        text: text,
-        ts: DateTime.now().millisecondsSinceEpoch,
-        bubbleTemplate: templateForThisMessage,
-        decor: decorForThisMessage,
-        fontFamily: fontFamilyForThisMessage,
-      ),
-    );
+  final ts = DateTime.now().millisecondsSinceEpoch;
 
+  // Clear input immediately (feels instant)
+  setState(() {
     _controller.clear();
     _isTyping = true;
 
-    // ✅ Auto reset: next message goes back to normal + no decor
     _selectedTemplate = BubbleTemplate.normal;
     _selectedDecor = BubbleDecor.none;
   });
 
-  _saveMessagesForRoom(
-    updateMeta: true,
-    lastSenderId: widget.currentUserId,
+  await FirestoreChatService.sendTextMessage(
+    roomId: widget.roomId,
+    senderId: widget.currentUserId,
+    text: text,
+    ts: ts,
+    bubbleTemplate: templateForThisMessage.name,
+    decor: decorForThisMessage.name,
+    fontFamily: fontFamilyForThisMessage,
   );
 
-  // ✅ SEND SFX (only when a real message was sent)
   Sfx.I.playSend();
 
-  // ✅ 707 Easter Egg voice line (SFX only)
   if (triggerEgg) {
     Sfx.I.play707VoiceLine();
   }
 
-  // ✅ Creepy background + glitch + music (Easter Egg)
   if (triggerCreepy) {
     _playCreepyEggFx();
   }
@@ -1831,6 +1807,7 @@ void _sendMessage() {
     }
   });
 }
+
 
 
 

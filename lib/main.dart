@@ -5,7 +5,7 @@ import 'dms/dms_screens.dart';
 import 'screens/chat_screen.dart';
 import '../fx/heart_reaction_fly_layer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
+import 'firebase/auth_service.dart';
 import '../fx/tap_sparkle_layer.dart';
 import 'audio/sfx.dart';
 import 'audio/bgm.dart';
@@ -280,6 +280,7 @@ Navigator.of(context).pushReplacement(
     builder: (_) => ChatModePicker(currentUserId: userId),
   ),
 );
+await AuthService.ensureSignedIn(currentUserId: userId);
 
 
   }

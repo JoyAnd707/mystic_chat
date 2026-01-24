@@ -1,9 +1,10 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../audio/bgm.dart';
 import '../audio/sfx.dart';
+
 double mysticUiScale(BuildContext context) {
   // ✅ never upscale above design (prevents overflow on wide devices)
   const double designWidth = 393.0;       // baseline you already tuned
@@ -178,8 +179,27 @@ void initState() {
     return 'dm_${pair[0]}_${pair[1]}';
   }
 
+  static const String _roomsCol = 'dm_rooms';
+
+  Future<void> _ensureDmRoomExists({
+    required String roomId,
+    required String me,
+    required String other,
+  }) async {
+    final ref = FirebaseFirestore.instance.collection(_roomsCol).doc(roomId);
+    final snap = await ref.get();
+    if (snap.exists) return;
+
+    await ref.set({
+      'participants': [me, other]..sort(),
+      'lastUpdatedMs': 0,
+      'lastSenderId': '',
+      'lastText': '',
+      'createdMs': DateTime.now().millisecondsSinceEpoch,
+    }, SetOptions(merge: true));
+  }
+
   Future<List<_DmEntry>> _loadDmEntries() async {
-    final box = await Hive.openBox(_boxName);
     final prefs = await SharedPreferences.getInstance();
 
     final others = dmUsers.values
@@ -191,36 +211,35 @@ void initState() {
     for (final u in others) {
       final roomId = _dmRoomId(widget.currentUserId, u.id);
 
-      final meta = box.get(_metaKey(roomId));
-      int lastUpdatedMs = 0;
-      String lastSenderId = '';
+      // ✅ create room doc once (so list always has something to open)
+      await _ensureDmRoomExists(
+        roomId: roomId,
+        me: widget.currentUserId,
+        other: u.id,
+      );
 
-      if (meta is Map) {
-        if (meta['lastUpdatedMs'] is int) {
-          lastUpdatedMs = meta['lastUpdatedMs'] as int;
-        }
-        final rawSender = meta['lastSenderId'];
-        if (rawSender != null) lastSenderId = rawSender.toString();
-      }
+      final doc = await FirebaseFirestore.instance
+          .collection(_roomsCol)
+          .doc(roomId)
+          .get();
 
-      // preview: last text message
-      String preview = 'Tap to open chat';
-      final raw = box.get(_roomKey(roomId));
-      if (raw is List) {
-        for (int i = raw.length - 1; i >= 0; i--) {
-          final m = raw[i];
-          if (m is Map && (m['type'] ?? 'text').toString() == 'text') {
-            final t = (m['text'] ?? '').toString().trim();
-            if (t.isNotEmpty) {
-              preview = t;
-              break;
-            }
-          }
-        }
-      }
+      final data = (doc.data() ?? <String, dynamic>{});
+
+      final int lastUpdatedMs =
+          (data['lastUpdatedMs'] is int) ? data['lastUpdatedMs'] as int : 0;
+
+      final String lastSenderId =
+          (data['lastSenderId'] ?? '').toString();
+
+      final String previewRaw =
+          (data['lastText'] ?? '').toString().trim();
+
+      final String preview =
+          previewRaw.isEmpty ? 'Tap to open chat' : previewRaw;
 
       final lastReadMs = prefs.getInt(_lastReadKeyFor(roomId)) ?? 0;
-      final unread =
+
+      final bool unread =
           (lastUpdatedMs > lastReadMs) && (lastSenderId != widget.currentUserId);
 
       entries.add(
@@ -242,6 +261,7 @@ void initState() {
 
     return entries;
   }
+
 
 @override
 Widget build(BuildContext context) {
@@ -751,60 +771,46 @@ class DmChatScreen extends StatefulWidget {
 class _DmChatScreenState extends State<DmChatScreen>
     with SingleTickerProviderStateMixin {
 
-  static const String _boxName = 'mystic_chat_storage';
+  static const String _roomsCol = 'dm_rooms';
+  static const String _msgsSub = 'messages';
 
   final ScrollController _scroll = ScrollController();
   final TextEditingController _c = TextEditingController();
   final FocusNode _focus = FocusNode();
-late final AnimationController _twinkleController;
+  late final AnimationController _twinkleController;
 
   bool _isTyping = false;
 
-  List<Map<String, dynamic>> _messages = [];
-
-  String _roomKey() => 'room_messages__${widget.roomId}';
-  String _metaKey() => 'room_meta__${widget.roomId}';
   String _lastReadKey() =>
       'lastReadMs__${widget.currentUserId}__${widget.roomId}';
 
-  Future<Box> _box() => Hive.openBox(_boxName);
+  DocumentReference<Map<String, dynamic>> get _roomRef =>
+      FirebaseFirestore.instance.collection(_roomsCol).doc(widget.roomId);
+
+  CollectionReference<Map<String, dynamic>> get _msgsRef =>
+      _roomRef.collection(_msgsSub);
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> get _msgsStream =>
+      _msgsRef.orderBy('tsMs', descending: false).snapshots();
 
   Future<void> _markReadNow() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_lastReadKey(), DateTime.now().millisecondsSinceEpoch);
   }
 
-  Future<void> _load() async {
-    final box = await _box();
-    final raw = box.get(_roomKey());
+  Future<void> _ensureRoomExists() async {
+    final snap = await _roomRef.get();
+    if (snap.exists) return;
 
-    if (raw is List) {
-      _messages = raw.whereType<Map>().map((m) {
-        final mm = Map<String, dynamic>.from(m);
-        // normalize
-        mm['type'] = (mm['type'] ?? 'text').toString();
-        mm['senderId'] = (mm['senderId'] ?? '').toString();
-        mm['text'] = (mm['text'] ?? '').toString();
-        return mm;
-      }).toList();
-    } else {
-      _messages = <Map<String, dynamic>>[];
-      await _save(updateMeta: false);
-    }
+    final pair = [widget.currentUserId, widget.otherUserId]..sort();
 
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _save({required bool updateMeta, String? lastSenderId}) async {
-    final box = await _box();
-    await box.put(_roomKey(), _messages);
-
-    if (updateMeta) {
-      await box.put(_metaKey(), <String, dynamic>{
-        'lastUpdatedMs': DateTime.now().millisecondsSinceEpoch,
-        'lastSenderId': (lastSenderId ?? '').toString(),
-      });
-    }
+    await _roomRef.set({
+      'participants': pair,
+      'lastUpdatedMs': 0,
+      'lastSenderId': '',
+      'lastText': '',
+      'createdMs': DateTime.now().millisecondsSinceEpoch,
+    }, SetOptions(merge: true));
   }
 
   void _scrollToBottom({bool keepFocus = false}) {
@@ -828,87 +834,76 @@ late final AnimationController _twinkleController;
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
   }
 
-void _send() async {
-  final text = _c.text.trim();
-  if (text.isEmpty) return;
+  Future<void> _send() async {
+    final text = _c.text.trim();
+    if (text.isEmpty) return;
 
-  // 🔊 SFX — do NOT await (send immediately)
-  try {
-    Sfx.I.playSend();
-  } catch (_) {}
+    // 🔊 SFX — do NOT await
+    try {
+      Sfx.I.playSend();
+    } catch (_) {}
 
-  setState(() {
-    _messages.add({
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+
+    _c.clear();
+    setState(() => _isTyping = true);
+
+    // ✅ write message
+    await _msgsRef.add({
       'type': 'text',
       'senderId': widget.currentUserId,
       'text': text,
-      'ts': DateTime.now().millisecondsSinceEpoch,
+      'tsMs': nowMs,
     });
 
-    _c.clear();
-    _isTyping = true;
-  });
+    // ✅ update room meta for list + unread
+    await _roomRef.set({
+      'lastUpdatedMs': nowMs,
+      'lastSenderId': widget.currentUserId,
+      'lastText': text,
+    }, SetOptions(merge: true));
 
-  await _save(updateMeta: true, lastSenderId: widget.currentUserId);
+    _scrollToBottom(keepFocus: true);
+  }
 
-  _scrollToBottom(keepFocus: true);
-}
+  @override
+  void initState() {
+    super.initState();
 
-
-
-@override
-void initState() {
-  super.initState();
-
-  // ✅ DM screen uses same Home/DMs BGM
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
-    await Bgm.I.playHomeDm();
-  });
-
-  // ✅ Twinkle animation controller (same as DMs list)
-  _twinkleController = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 6),
-  )..repeat();
-
-  // ✅ KEY: when keyboard closes (focus lost) -> back to ANSWER button
-  _focus.addListener(() {
-    if (!_focus.hasFocus) {
-      if (mounted) {
-        setState(() {
-          _isTyping = false;
-        });
-      }
-    }
-  });
-
-  // ✅ Optional: if user taps the field and starts typing, keep typing mode.
-  // But DO NOT force typing mode to stay on when keyboard is closed.
-  _c.addListener(() {
-    // אם יש פוקוס (מקלדת פתוחה) – להשאיר typing mode
-    if (_focus.hasFocus && !_isTyping) {
-      if (mounted) {
-        setState(() {
-          _isTyping = true;
-        });
-      }
-    }
-  });
-
-  _load().then((_) async {
-    await _markReadNow();
-    if (mounted) _scrollToBottom();
-  });
-
-  _box().then((box) {
-    box.watch(key: _roomKey()).listen((_) async {
-      await _load();
-      if (!mounted) return;
-      _scrollToBottom();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Bgm.I.playHomeDm();
     });
-  });
-}
 
+    _twinkleController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    )..repeat();
+
+    _focus.addListener(() {
+      if (!_focus.hasFocus) {
+        if (mounted) {
+          setState(() {
+            _isTyping = false;
+          });
+        }
+      }
+    });
+
+    _c.addListener(() {
+      if (_focus.hasFocus && !_isTyping) {
+        if (mounted) {
+          setState(() {
+            _isTyping = true;
+          });
+        }
+      }
+    });
+
+    // ✅ ensure room exists + mark read
+    _ensureRoomExists().then((_) async {
+      await _markReadNow();
+    });
+  }
 
   @override
   void dispose() {
@@ -919,247 +914,271 @@ void initState() {
     super.dispose();
   }
 
-
   @override
   Widget build(BuildContext context) {
     final double uiScale = mysticUiScale(context);
     double s(double v) => v * uiScale;
 
+    final mq = MediaQuery.of(context);
 
+    return MediaQuery(
+      data: mq.copyWith(
+        textScaler: const TextScaler.linear(1.0),
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Column(
+          children: [
+            // ✅ TOP BAR שלך נשאר בדיוק כמו שיש לך
+            SafeArea(
+              bottom: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 34, width: double.infinity),
+                  LayoutBuilder(
+                    builder: (context, c) {
+                      const double barAspect = 2048 / 212;
+                      final w = c.maxWidth;
+                      final barH = w / barAspect;
 
-final mq = MediaQuery.of(context);
-
-return MediaQuery(
-  data: mq.copyWith(
-    textScaler: const TextScaler.linear(1.0), // ✅ נועל טקסט שלא יתפוצץ במכשירים
-  ),
-  child: Scaffold(
-    backgroundColor: Colors.black,
-body: Column(
-  children: [
-    // ✅ DM room name bar (PNG) + title overlay + back tap area
-    SafeArea(
-      bottom: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(
-            height: 34,
-            width: double.infinity,
-          ),
-          LayoutBuilder(
-            builder: (context, c) {
-              const double barAspect = 2048 / 212;
-              final w = c.maxWidth;
-              final barH = w / barAspect;
-
-              return SizedBox(
-                width: w,
-                height: barH,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: Image.asset(
-                        'assets/ui/DMSroomNameBar.png',
-                        fit: BoxFit.fitWidth,
-                        alignment: Alignment.center,
-                        filterQuality: FilterQuality.high,
-                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                      ),
-                    ),
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () async {
-                          try {
-                            Sfx.I.playBack();
-                          } catch (_) {}
-
-                          if (context.mounted) {
-                            Navigator.of(context).pop();
-                          }
-                        },
-                        child: const SizedBox(
-                          width: 72,
-                          height: double.infinity,
-                        ),
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.center,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 80),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
+                      return SizedBox(
+                        width: w,
+                        height: barH,
+                        child: Stack(
                           children: [
-                            Transform.translate(
-                              offset: const Offset(-2, 1),
+                            Positioned.fill(
                               child: Image.asset(
-                                'assets/ui/DMSlittleLetterIcon.png',
-                                width: 25,
-                                height: 25,
-                                fit: BoxFit.contain,
+                                'assets/ui/DMSroomNameBar.png',
+                                fit: BoxFit.fitWidth,
+                                alignment: Alignment.center,
                                 filterQuality: FilterQuality.high,
-                                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                                errorBuilder: (_, __, ___) =>
+                                    const SizedBox.shrink(),
                               ),
                             ),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                widget.otherName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w200,
-                                  height: 1.0,
+                            Positioned(
+                              left: 0,
+                              top: 0,
+                              bottom: 0,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () async {
+                                  try {
+                                    Sfx.I.playBack();
+                                  } catch (_) {}
+                                  if (context.mounted) {
+                                    Navigator.of(context).pop();
+                                  }
+                                },
+                                child: const SizedBox(
+                                  width: 72,
+                                  height: double.infinity,
+                                ),
+                              ),
+                            ),
+                            Align(
+                              alignment: Alignment.center,
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 80),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Transform.translate(
+                                      offset: const Offset(-2, 1),
+                                      child: Image.asset(
+                                        'assets/ui/DMSlittleLetterIcon.png',
+                                        width: 25,
+                                        height: 25,
+                                        fit: BoxFit.contain,
+                                        filterQuality: FilterQuality.high,
+                                        errorBuilder: (_, __, ___) =>
+                                            const SizedBox.shrink(),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        widget.otherName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w200,
+                                          height: 1.0,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
                           ],
                         ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Image.asset(
+                        'assets/backgrounds/StarsBG.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                       ),
+                    ),
+                    Positioned.fill(
+                      child: MysticStarTwinkleOverlay(
+                        animation: _twinkleController,
+                        starCount: 58,
+                        sizeMultiplier: 1.25,
+                      ),
+                    ),
+
+                    // ✅ במקום ListView על _messages — StreamBuilder
+                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: _msgsStream,
+                      builder: (context, snap) {
+                        final docs = snap.data?.docs ?? const [];
+
+                        // ✅ mark read when we receive new snapshot (lightweight)
+                        if (snap.hasData) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) async {
+                            await _markReadNow();
+                          });
+                        }
+
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (snap.hasData) _scrollToBottom();
+                        });
+
+                        return ListView.builder(
+                          controller: _scroll,
+                          padding: EdgeInsets.only(
+                            left: s(14),
+                            right: s(14),
+                            top: s(10),
+                            bottom: s(90),
+                          ),
+                          itemCount: docs.length,
+                          itemBuilder: (context, i) {
+                            final m = docs[i].data();
+
+                            if ((m['type'] ?? 'text') != 'text') {
+                              return const SizedBox.shrink();
+                            }
+
+                            final sender = (m['senderId'] ?? '').toString();
+                            final isMe = sender == widget.currentUserId;
+                            final text = (m['text'] ?? '').toString();
+                            final int ts =
+                                (m['tsMs'] is int) ? m['tsMs'] as int : 0;
+                            final String timeLabel = mysticTimeOnlyFromMs(ts);
+
+                            int prevTs = 0;
+                            if (i > 0) {
+                              final prev = docs[i - 1].data();
+                              if ((prev['type'] ?? 'text') == 'text') {
+                                prevTs = (prev['tsMs'] is int)
+                                    ? prev['tsMs'] as int
+                                    : 0;
+                              }
+                            }
+
+                            final bool showDateDivider =
+                                (i == 0 && ts > 0) ||
+                                    (i > 0 &&
+                                        ts > 0 &&
+                                        !mysticIsSameDayMs(prevTs, ts));
+
+                            final String dateHeader =
+                                mysticDmDateHeaderFromMs(ts);
+
+                            String prevSender = '';
+                            if (i > 0) {
+                              final prev = docs[i - 1].data();
+                              if ((prev['type'] ?? 'text') == 'text') {
+                                prevSender = (prev['senderId'] ?? '').toString();
+                              }
+                            }
+
+                            final bool switchedSender =
+                                (prevSender.isNotEmpty && prevSender != sender);
+
+                            final double sameSenderGap = s(22);
+                            final double switchedSenderGap = s(34);
+                            final double bottomGap =
+                                switchedSender ? switchedSenderGap : sameSenderGap;
+
+                            return Padding(
+                              padding: EdgeInsets.only(bottom: bottomGap),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (showDateDivider)
+                                    _DmDateDivider(
+                                      text: dateHeader,
+                                      uiScale: uiScale,
+                                    ),
+                                  _DmMessageRow(
+                                    isMe: isMe,
+                                    text: text,
+                                    time: timeLabel,
+                                    uiScale: uiScale,
+                                    meLetter: (dmUsers[widget.currentUserId]
+                                                ?.name
+                                                .characters
+                                                .first ??
+                                            ' ')
+                                        .toUpperCase(),
+                                    otherLetter: (dmUsers[widget.otherUserId]
+                                                ?.name
+                                                .characters
+                                                .first ??
+                                            ' ')
+                                        .toUpperCase(),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
                     ),
                   ],
                 ),
-              );
-            },
-          ),
-        ],
-      ),
-    ),
-
-    Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Image.asset(
-                'assets/backgrounds/StarsBG.png',
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
               ),
             ),
-            Positioned.fill(
-              child: MysticStarTwinkleOverlay(
-                animation: _twinkleController,
-                starCount: 58,
-                sizeMultiplier: 1.25,
 
-              ),
+            Padding(
+              padding: EdgeInsets.only(bottom: s(0)),
+              child: _DmBottomCornerLine(uiScale: uiScale),
             ),
-ListView.builder(
-  controller: _scroll,
-  padding: EdgeInsets.only(
-    left: s(14),
-    right: s(14),
-    top: s(10),
-    bottom: s(90), // אם צריך עוד מקום בגלל השורה החדשה למטה – נגביר אחרי זה
-  ),
-  itemCount: _messages.length,
-  itemBuilder: (context, i) {
-    final m = _messages[i];
-    if ((m['type'] ?? 'text') != 'text') {
-      return const SizedBox.shrink();
-    }
 
-    final sender = (m['senderId'] ?? '').toString();
-    final isMe = sender == widget.currentUserId;
-    final text = (m['text'] ?? '').toString();
-    final int ts = (m['ts'] is int) ? m['ts'] as int : 0;
-    final String timeLabel = mysticTimeOnlyFromMs(ts);
-
-    // ✅ Date Divider logic
-    int prevTs = 0;
-    if (i > 0) {
-      final prev = _messages[i - 1];
-      if ((prev['type'] ?? 'text') == 'text') {
-        prevTs = (prev['ts'] is int) ? prev['ts'] as int : 0;
-      }
-    }
-
-    final bool showDateDivider =
-        (i == 0 && ts > 0) ||
-        (i > 0 && ts > 0 && !mysticIsSameDayMs(prevTs, ts));
-
-    final String dateHeader = mysticDmDateHeaderFromMs(ts);
-
-    // ✅ spacing logic
-    String prevSender = '';
-    if (i > 0) {
-      final prev = _messages[i - 1];
-      if ((prev['type'] ?? 'text') == 'text') {
-        prevSender = (prev['senderId'] ?? '').toString();
-      }
-    }
-
-    final bool switchedSender = (prevSender.isNotEmpty && prevSender != sender);
-
-    final double sameSenderGap = s(22);
-    final double switchedSenderGap = s(34);
-    final double bottomGap = switchedSender ? switchedSenderGap : sameSenderGap;
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomGap),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showDateDivider)
-            _DmDateDivider(
-              text: dateHeader,
+            _DmBottomBar(
+              height: s(80),
+              isTyping: _isTyping,
+              onTapTypeMessage: _onTapType,
+              controller: _c,
+              focusNode: _focus,
+              onSend: _send,
               uiScale: uiScale,
             ),
-          _DmMessageRow(
-            isMe: isMe,
-            text: text,
-            time: timeLabel,
-            uiScale: uiScale,
-            meLetter: (dmUsers[widget.currentUserId]?.name.characters.first ?? ' ')
-                .toUpperCase(),
-            otherLetter: (dmUsers[widget.otherUserId]?.name.characters.first ?? ' ')
-                .toUpperCase(),
-          ),
-        ],
-      ),
-    );
-  },
-),
-
           ],
         ),
       ),
-    ),
-
-    // ✅ Bottom corner line: tighter to the bottom bar (closer like reference)
-    Padding(
-      padding: EdgeInsets.only(bottom: s(0)),
-      child: _DmBottomCornerLine(uiScale: uiScale),
-    ),
-
-    _DmBottomBar(
-      height: s(80),
-      isTyping: _isTyping,
-      onTapTypeMessage: _onTapType,
-      controller: _c,
-      focusNode: _focus,
-      onSend: _send,
-      uiScale: uiScale,
-    ),
-
-  ],
-),
-
-  ), // Scaffold
-); // MediaQuery
-
-    
+    );
   }
 }
 
@@ -1824,7 +1843,8 @@ class _DmBottomBar extends StatelessWidget {
   final double height;
   final bool isTyping;
   final VoidCallback onTapTypeMessage;
-  final VoidCallback onSend;
+  final Future<void> Function() onSend;
+
   final TextEditingController controller;
   final FocusNode focusNode;
   final double uiScale;
@@ -1978,7 +1998,8 @@ class _DmBottomBar extends StatelessWidget {
                       focusNode.unfocus();
                     },
 
-                    onSubmitted: (_) => onSend(),
+                    onSubmitted: (_) async => await onSend(),
+
                   ),
                 ),
               ),
@@ -2000,7 +2021,8 @@ class _DmBottomBar extends StatelessWidget {
       child: Transform.translate(
         offset: Offset(0, s(_sendDown)),
         child: GestureDetector(
-          onTap: onSend,
+          onTap: () async => await onSend(),
+
           behavior: HitTestBehavior.opaque,
           child: SizedBox(
             width: s(_sendBoxSize),
