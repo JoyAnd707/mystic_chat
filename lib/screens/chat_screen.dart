@@ -296,8 +296,19 @@ static const List<String> _creepyTriggers = <String>[
 
 static const String _heartAsset = 'assets/reactions/HeartReaction.png';
 
-Color _bubbleColorForUserId(String userId) {
-  return users[userId]?.bubbleColor ?? Colors.white;
+/// ✅ Heart colors per user (THIS is the palette you gave)
+static const Map<String, Color> _heartColorByUserId = <String, Color>{
+  'joy': Color(0xFFA69BEE),
+  'adi': Color(0xFFEE9BEA),
+  'lian': Color(0xFFFF2020),
+  'danielle': Color(0xFF5098BE),
+  'lera': Color(0xFFD2CD3F),
+  'lihi': Color(0xFFD2703F),
+  'tal': Color(0xFF46D23F),
+};
+
+Color _heartColorForUserId(String userId) {
+  return _heartColorByUserId[userId] ?? Colors.white;
 }
 
 List<Widget> _buildHeartIcons(Set<String> reactorIds, double uiScale) {
@@ -312,16 +323,15 @@ List<Widget> _buildHeartIcons(Set<String> reactorIds, double uiScale) {
   final ids = reactorIds.toList()..sort();
 
   return ids.map((rid) {
-    final tint = _bubbleColorForUserId(rid);
+    // ✅ each heart color == the user who reacted (liked)
+    final tint = _heartColorForUserId(rid);
 
     return Padding(
       padding: EdgeInsets.only(left: baseHeartGap * uiScale),
       child: SizedBox(
-        // ✅ הלייאאוט תופס רק גובה של שורת טקסט
         height: lineHeight,
-        width: baseHeartSize * uiScale, // מספיק מקום ללב
+        width: baseHeartSize * uiScale,
         child: OverflowBox(
-          // ✅ מאפשר לצייר את הלב "מחוץ" לגובה השורה בלי להגדיל את השורה
           alignment: Alignment.topCenter,
           minHeight: 0,
           maxHeight: baseHeartSize * uiScale,
@@ -330,7 +340,7 @@ List<Widget> _buildHeartIcons(Set<String> reactorIds, double uiScale) {
           child: ColorFiltered(
             colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
             child: Transform.translate(
-              offset: Offset(0, -16 * uiScale), // להזיז למעלה בלי להשפיע על לייאאוט
+              offset: Offset(0, -16 * uiScale),
               child: Image.asset(
                 _heartAsset,
                 width: baseHeartSize * uiScale,
@@ -344,6 +354,8 @@ List<Widget> _buildHeartIcons(Set<String> reactorIds, double uiScale) {
     );
   }).toList();
 }
+
+
 
 
 
@@ -486,11 +498,11 @@ Future<void> _toggleHeartForMessage(ChatMessage msg) async {
 
   // 🎬 אנימציה: לפי הספציפיקציה — רק מי שכתבה את ההודעה “מקבלת” את הלב.
   // ברגע שיהיה multi-device אמיתי, זה יעבוד מושלם.
-  if (isAdding && msg.senderId == widget.currentUserId) {
-    final reactorColor = _bubbleColorForUserId(me);
-HeartReactionFlyLayer.of(context).spawnHeart(color: reactorColor);
+if (isAdding && msg.senderId == widget.currentUserId) {
+  final reactorColor = _heartColorForUserId(me);
+  HeartReactionFlyLayer.of(context).spawnHeart(color: reactorColor);
+}
 
-  }
 }
 
 
@@ -657,6 +669,20 @@ void _triggerNewBadgeForTs(int ts) {
   });
 }
 
+// =======================
+// LIVE Heart reactions (receiver sees fly animation)
+// =======================
+final Map<int, Set<String>> _lastReactorSnapshotByTs = <int, Set<String>>{};
+bool _heartsSnapshotInitialized = false;
+
+Future<void> _spawnHeartsForReactors(List<String> reactorIds) async {
+  for (final rid in reactorIds) {
+    if (!mounted) return;
+    HeartReactionFlyLayer.of(context).spawnHeart(color: _heartColorForUserId(rid));
+    // tiny stagger so multiple likes feel nice
+    await Future.delayed(const Duration(milliseconds: 120));
+  }
+}
 
 
   // ✅ Currently selected bubble template for the NEXT message
@@ -1503,10 +1529,11 @@ Future<void> _emitLeft({bool showInUi = true}) async {
 void initState() {
   super.initState();
   _messages = <ChatMessage>[];
-_bgFxCtrl = AnimationController(
-  vsync: this,
-  duration: const Duration(milliseconds: 900),
-);
+
+  _bgFxCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
 
   // ✅ initialize hour for live UI updates
   _uiHour = DateTime.now().hour;
@@ -1559,57 +1586,110 @@ _bgFxCtrl = AnimationController(
   });
 
   _box().then((box) {
-_roomSub = box.watch(key: _roomKey(widget.roomId)).listen((event) async {
-  // snapshot "seen" BEFORE reload
-  final oldSeen = Set<int>.from(_seenMessageTs);
+    _roomSub = box.watch(key: _roomKey(widget.roomId)).listen((event) async {
+      // snapshot "seen" BEFORE reload
+      final oldSeen = Set<int>.from(_seenMessageTs);
 
-  await _loadMessagesForRoom();
-  if (!mounted) return;
-
-  // seed seen on first loads (so history won't flash NEW)
-  if (_seenMessageTs.isEmpty) {
-    for (final m in _messages) {
-      if (m.ts > 0) _seenMessageTs.add(m.ts);
-    }
-  } else {
-// detect truly new messages
-for (final m in _messages) {
-  final int ts = m.ts;
-  if (ts > 0 && !oldSeen.contains(ts)) {
-    _seenMessageTs.add(ts);
-
-    // ✅ NEW badge ONLY in GROUP CHAT
-    if (widget.roomId == 'group_main') {
-      // show NEW only for messages from others (live vibe)
-      final bool isMe = m.senderId == widget.currentUserId;
-      if (!isMe && m.type == ChatMessageType.text) {
-        _triggerNewBadgeForTs(ts);
+      // ✅ snapshot heart reactors BEFORE reload (so we can detect NEW likes)
+      final Map<int, Set<String>> oldReactorsByTs = <int, Set<String>>{};
+      for (final m in _messages) {
+        if (m.ts > 0) {
+          oldReactorsByTs[m.ts] = Set<String>.from(m.heartReactorIds);
+        }
       }
-    }
-  }
-}
-if (widget.roomId == 'group_main') {
-  await DailyFactBotScheduler.I.pingPresence(roomId: 'group_main');
-  await DailyFactBotScheduler.I.debugSendIn10Seconds();
-}
 
-  }
+      await _loadMessagesForRoom();
+      if (!mounted) return;
 
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (!mounted) return;
-    _scrollToBottom();
+      // seed seen on first loads (so history won't flash NEW)
+      if (_seenMessageTs.isEmpty) {
+        for (final m in _messages) {
+          if (m.ts > 0) _seenMessageTs.add(m.ts);
+        }
+      } else {
+        // detect truly new messages
+        for (final m in _messages) {
+          final int ts = m.ts;
+          if (ts > 0 && !oldSeen.contains(ts)) {
+            _seenMessageTs.add(ts);
+
+            // ✅ NEW badge ONLY in GROUP CHAT
+            if (widget.roomId == 'group_main') {
+              final bool isMe = m.senderId == widget.currentUserId;
+              if (!isMe && m.type == ChatMessageType.text) {
+                _triggerNewBadgeForTs(ts);
+              }
+            }
+          }
+        }
+
+        if (widget.roomId == 'group_main') {
+          await DailyFactBotScheduler.I.pingPresence(roomId: 'group_main');
+          await DailyFactBotScheduler.I.debugSendIn10Seconds();
+        }
+      }
+
+      // =========================
+      // ✅ LIVE HEART ANIMATION for RECEIVER
+      // =========================
+      if (!_heartsSnapshotInitialized) {
+        // First time: seed snapshot so history won't spam animations
+        _lastReactorSnapshotByTs.clear();
+        for (final m in _messages) {
+          if (m.ts > 0) {
+            _lastReactorSnapshotByTs[m.ts] =
+                Set<String>.from(m.heartReactorIds);
+          }
+        }
+        _heartsSnapshotInitialized = true;
+      } else {
+        final List<String> reactorsToAnimate = <String>[];
+
+        for (final m in _messages) {
+          if (m.type != ChatMessageType.text) continue;
+          if (m.ts <= 0) continue;
+
+          // ✅ receiver condition: I am the author of the message that got liked
+          if (m.senderId != widget.currentUserId) continue;
+
+          final Set<String> prev = oldReactorsByTs[m.ts] ??
+              _lastReactorSnapshotByTs[m.ts] ??
+              <String>{};
+          final Set<String> now = Set<String>.from(m.heartReactorIds);
+
+          // who was added?
+          final added = now.difference(prev);
+
+          // ✅ avoid double-animating my own local like
+          added.remove(widget.currentUserId);
+
+          if (added.isNotEmpty) {
+            reactorsToAnimate.addAll(added.toList()..sort());
+          }
+
+          // update snapshot
+          _lastReactorSnapshotByTs[m.ts] = now;
+        }
+
+        if (reactorsToAnimate.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!mounted) return;
+            await _spawnHeartsForReactors(reactorsToAnimate);
+          });
+        }
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _scrollToBottom();
+      });
+    });
   });
-});
-
-  });
 }
-
-
 
 @override
 void dispose() {
   // ✅ Write "left" line even in dispose:
-  // showInUi=false => no setState, but it WILL be saved to Hive now.
   _emitLeft(showInUi: false);
 
   _roomSub?.cancel();
@@ -1631,10 +1711,11 @@ void dispose() {
     _onlineNotifier.removeListener(_onlineListener!);
     _onlineListener = null;
   }
-_bgFxCtrl.dispose();
 
+  _bgFxCtrl.dispose();
   super.dispose();
 }
+
 
 
 

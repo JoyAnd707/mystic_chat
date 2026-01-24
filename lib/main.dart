@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'dms/dms_screens.dart';
 import 'screens/chat_screen.dart';
 import '../fx/heart_reaction_fly_layer.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../fx/tap_sparkle_layer.dart';
 import 'audio/sfx.dart';
@@ -11,11 +12,14 @@ import 'audio/bgm.dart';
 import 'bots/daily_fact_bot.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+
 class _NoTransitionsBuilder extends PageTransitionsBuilder {
   const _NoTransitionsBuilder();
 
   @override
   Widget buildTransitions<T>(
+  
     PageRoute<T> route,
     BuildContext context,
     Animation<double> animation,
@@ -45,6 +49,23 @@ Future<void> _enableImmersiveSticky() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ✅ Firebase (required before any Firestore usage)
+  await Firebase.initializeApp();
+try {
+  await FirebaseFirestore.instance
+      .collection('debug')
+      .doc('ping')
+      .set({
+    'ok': true,
+    'ts': DateTime.now().millisecondsSinceEpoch,
+  });
+} catch (e) {
+  debugPrint('Firestore ping failed: $e');
+}
+
+
+
   await Hive.initFlutter();
 
   await SystemChrome.setPreferredOrientations([
@@ -65,6 +86,7 @@ Future<void> main() async {
         usage: AndroidAudioUsage.media,
       ),
       androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransientMayDuck,
+
       androidWillPauseWhenDucked: false,
     ));
   } catch (e) {
@@ -86,6 +108,7 @@ Future<void> main() async {
 
   runApp(const MysticChatApp());
 }
+
 
 
 
