@@ -638,6 +638,55 @@ class MessageRow extends StatelessWidget {
     String two(int x) => x.toString().padLeft(2, '0');
     return '${two(dt.hour)}:${two(dt.minute)}';
   }
+// ✅ Allows clean wrapping for long URLs / long tokens (AliExpress etc.)
+String _softWrapLongTokens(String s) {
+  const zwsp = '\u200B'; // zero-width space (invisible)
+
+  final hasVeryLongToken = RegExp(r'\S{22,}').hasMatch(s);
+  final looksLikeUrl =
+      s.contains('http://') || s.contains('https://') || s.contains('www.');
+
+  if (!hasVeryLongToken && !looksLikeUrl) return s;
+
+  // Add break opportunities after common URL/token separators
+  return s.replaceAllMapped(
+    RegExp(r'([\/\.\?\&\=\-\_\:\#])'),
+    (m) => '${m.group(1)}$zwsp',
+  );
+}
+
+// ✅ NEW: force wrap by WORD COUNT (max N words per line)
+String _wrapByWordCount(String s, {int maxWordsPerLine = 5}) {
+  if (maxWordsPerLine <= 0) return s;
+
+  // Keep existing manual newlines
+  final originalLines = s.split('\n');
+  final outLines = <String>[];
+
+  for (final line in originalLines) {
+    final words = line.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) {
+      outLines.add('');
+      continue;
+    }
+
+    final buf = <String>[];
+    for (int i = 0; i < words.length; i++) {
+      buf.add(words[i]);
+      final isEndOfLine = (i == words.length - 1);
+      final hitLimit = ((i + 1) % maxWordsPerLine == 0);
+
+      if (!isEndOfLine && hitLimit) {
+        outLines.add(buf.join(' '));
+        buf.clear();
+      }
+    }
+
+    if (buf.isNotEmpty) outLines.add(buf.join(' '));
+  }
+
+  return outLines.join('\n');
+}
 
   @override
   Widget build(BuildContext context) {
@@ -676,62 +725,95 @@ class MessageRow extends StatelessWidget {
     const String cornerStarsRightAsset =
         'assets/decors/TextBubble4CornerStarsRightpng.png';
 
-    final bubbleInner = Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: 10 * uiScale,
-        vertical: 6 * uiScale,
-      ),
-      child: Directionality(
-        textDirection: _isProbablyRtl(text) ? TextDirection.rtl : TextDirection.ltr,
-        child: Text(
-          _bidiIsolate(text),
-          textAlign: _isProbablyRtl(text) ? TextAlign.right : TextAlign.left,
-          strutStyle: StrutStyle(
-            fontSize: 16 * uiScale,
-            height: 1.2,
-            forceStrutHeight: true,
-          ),
-          textHeightBehavior: const TextHeightBehavior(
-            applyHeightToFirstAscent: false,
-            applyHeightToLastDescent: false,
-          ),
-          style: TextStyle(
-            fontFamily: fontFamily,
-            fontSize: 16 * uiScale,
-            height: 1.2,
-            color: Colors.black,
-            fontWeight: FontWeight.w400,
-            letterSpacing: -0.15 * uiScale,
-            leadingDistribution: TextLeadingDistribution.even,
-          ),
-        ),
-      ),
-    );
+final String displayText =
+    _wrapByWordCount(_softWrapLongTokens(text), maxWordsPerLine: 5);
 
-    final double screenW = MediaQuery.of(context).size.width;
-    final double sidePadding = 16 * uiScale;
-    final double availableForBubble =
-        screenW - (sidePadding * 2) - (avatarSize + gap);
 
-    final double groupMax = availableForBubble * 0.75;
-    final double legacyMax = 260 * uiScale;
-    final double maxBubbleWidth = math.min(legacyMax, groupMax);
+final bubbleInner = Padding(
+  padding: EdgeInsets.symmetric(
+    horizontal: 10 * uiScale,
+    vertical: 6 * uiScale,
+  ),
+  child: Directionality(
+    textDirection:
+        _isProbablyRtl(displayText) ? TextDirection.rtl : TextDirection.ltr,
+    child: Text(
+      _bidiIsolate(displayText),
 
-    final bubbleWidget = ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-      child: BubbleWithTail(
-        color: bubbleFill,
-        isMe: isMe,
-        radius: 6 * uiScale,
-        tailWidth: 10 * uiScale,
-        tailHeight: 6 * uiScale,
-        tailTop: 12 * uiScale,
-        glowEnabled: (effectiveTemplate == BubbleTemplate.glow),
-        glowInnerColor: innerDarkGlow,
-        glowOuterColor: outerBrightGlow,
-        child: bubbleInner,
+      textAlign: _isProbablyRtl(displayText) ? TextAlign.right : TextAlign.left,
+
+      // ✅ IMPORTANT: allow natural wrapping
+      softWrap: true,
+      maxLines: null,
+      overflow: TextOverflow.visible,
+
+      // ✅ keeps line height consistent like Mystic
+      strutStyle: StrutStyle(
+        fontSize: 16 * uiScale,
+        height: 1.2,
+        forceStrutHeight: true,
       ),
-    );
+      textHeightBehavior: const TextHeightBehavior(
+        applyHeightToFirstAscent: false,
+        applyHeightToLastDescent: false,
+      ),
+      style: TextStyle(
+        fontFamily: fontFamily,
+        fontSize: 16 * uiScale,
+        height: 1.2,
+        color: Colors.black,
+        fontWeight: FontWeight.w400,
+        letterSpacing: -0.15 * uiScale,
+        leadingDistribution: TextLeadingDistribution.even,
+      ),
+    ),
+  ),
+);
+
+
+
+
+final double screenW = MediaQuery.of(context).size.width;
+
+// ✅ keep screen padding stable (don’t over-scale it)
+final double sidePadding = 16;
+
+final double availableForBubble =
+    screenW - (sidePadding * 2) - (avatarSize + gap);
+
+// ✅ Mystic-like: bubble can be fairly wide, but not full screen
+final double mysticMax = availableForBubble * 0.86;
+
+// ✅ hard cap so it doesn’t become a giant rectangle on tablets
+final double hardCap = 360 * uiScale;
+
+final double maxBubbleWidth = math.min(hardCap, mysticMax);
+
+
+
+// ✅ Mystic-like minimum width so short messages don't wrap weirdly
+final double minBubbleWidth = 18 * uiScale; // רוחב של אות אחת בערך
+
+final bubbleWidget = ConstrainedBox(
+  constraints: BoxConstraints(
+    minWidth: minBubbleWidth,
+    maxWidth: maxBubbleWidth,
+  ),
+  child: BubbleWithTail(
+    color: bubbleFill,
+    isMe: isMe,
+    radius: 6 * uiScale,
+    tailWidth: 10 * uiScale,
+    tailHeight: 6 * uiScale,
+    tailTop: 12 * uiScale,
+    glowEnabled: (effectiveTemplate == BubbleTemplate.glow),
+    glowInnerColor: innerDarkGlow,
+    glowOuterColor: outerBrightGlow,
+    child: bubbleInner,
+  ),
+);
+
+
 
     final bubbleStack = Stack(
       clipBehavior: Clip.none,
@@ -1137,6 +1219,10 @@ if (decor == BubbleDecor.cornerStarsGlow) ...[
     );
 
     final String tLabel = showTime ? _timeLabel(timeMs) : '';
+    // ✅ Reserve vertical space so the list spacing stays like the old "time-under-bubble" layout.
+// This compensates for the fact that Positioned() does NOT affect Stack height.
+final double _reservedTimeHeight =
+    (showTime && tLabel.isNotEmpty) ? (22 * uiScale) : 0.0;
 
 final bubbleWithName = Column(
   mainAxisSize: MainAxisSize.min,
@@ -1147,65 +1233,25 @@ final bubbleWithName = Column(
         padding: EdgeInsets.only(bottom: 2 * uiScale),
         child: Align(
           alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isMe) ...nameHearts,
-              if (isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
-              Text(
-                user.name,
-                style: TextStyle(
-                  color: usernameColor,
-                  fontSize: 13.5 * uiScale,
-                  fontWeight: FontWeight.w400,
-                  height: 1.0,
-                  letterSpacing: 0.2 * uiScale,
-                ),
-              ),
-              if (!isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
-              if (!isMe) ...nameHearts,
-            ],
+          child: Text(
+            user.name,
+            style: TextStyle(
+              color: usernameColor,
+              fontSize: 13.5 * uiScale,
+              fontWeight: FontWeight.w400,
+              height: 1.0,
+              letterSpacing: 0.2 * uiScale,
+            ),
           ),
         ),
       ),
 
-    // ✅ THIS is the key: shrink-wrap to the *actual bubble width*
-    IntrinsicWidth(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Align(
-              alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-              child: bubbleStack,
-            ),
-
-            if (showTime && tLabel.isNotEmpty)
-              Padding(
-                padding: EdgeInsets.only(top: 6 * uiScale),
-                child: Align(
-                  // ✅ keep your “opposite side” behavior, but now within the real bubble width
-                  alignment: isMe ? Alignment.centerLeft : Alignment.centerRight,
-                  child: Text(
-                    tLabel,
-                    textHeightBehavior: const TextHeightBehavior(
-                      applyHeightToFirstAscent: false,
-                      applyHeightToLastDescent: false,
-                    ),
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.55),
-                      fontSize: 12 * uiScale,
-                      fontWeight: FontWeight.w600,
-                      height: 1.0,
-                      letterSpacing: 0.2 * uiScale,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
+    // ✅ Bubble only (time moved under avatar)
+    ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+      child: Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: bubbleStack,
       ),
     ),
   ],
@@ -1213,44 +1259,83 @@ final bubbleWithName = Column(
 
 
 
-    // ✅ אחרים (isMe=false): האווטאר חייב להיות שכבה מעל המדבקה התחתונה
-    if (!isMe) {
-      return Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Padding(
-            padding: EdgeInsets.only(left: avatarSize + gap),
-            child: bubbleWithName,
+
+// ✅ Time label once (used under avatar)
+
+
+// ✅ Avatar + Time block (locked position, never depends on bubble size)
+Widget avatarWithTime({required bool rightSide}) {
+  return Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: rightSide ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+    children: [
+      avatar,
+      if (showTime && tLabel.isNotEmpty) ...[
+        SizedBox(height: 6 * uiScale),
+        Text(
+          tLabel,
+          textHeightBehavior: const TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
           ),
-
-
-          Positioned(
-            left: 0,
-            top: 0,
-            child: avatar,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.55),
+            fontSize: 12 * uiScale,
+            fontWeight: FontWeight.w600,
+            height: 1.0,
+            letterSpacing: 0.2 * uiScale,
           ),
-        ],
-      );
-    }
+        ),
+      ],
+    ],
+  );
+}
+// ✅ אחרים (isMe=false): avatar + time on the LEFT, bubble on the RIGHT
+if (!isMe) {
+  return Padding(
+    padding: EdgeInsets.only(bottom: _reservedTimeHeight + 6 * uiScale),
 
-    // ✅ אני (isMe=true)
-    return Stack(
+    child: Stack(
       clipBehavior: Clip.none,
       children: [
         Padding(
-          padding: EdgeInsets.only(right: avatarSize + gap),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: bubbleWithName,
-          ),
+          padding: EdgeInsets.only(left: avatarSize + gap),
+          child: bubbleWithName,
         ),
         Positioned(
-          right: 0,
+          left: 0,
           top: 0,
-          child: avatar,
+          child: avatarWithTime(rightSide: false), // ✅ USE IT
         ),
       ],
-    );
+    ),
+  );
+}
+
+// ✅ אני (isMe=true): avatar + time on the RIGHT, bubble on the LEFT
+return Padding(
+  padding: EdgeInsets.only(bottom: _reservedTimeHeight + 6 * uiScale),
+
+  child: Stack(
+    clipBehavior: Clip.none,
+    children: [
+      Padding(
+        padding: EdgeInsets.only(right: avatarSize + gap),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: bubbleWithName,
+        ),
+      ),
+      Positioned(
+        right: 0,
+        top: 0,
+        child: avatarWithTime(rightSide: true), // ✅ USE IT
+      ),
+    ],
+  ),
+);
+
+
   }
 }
 
@@ -1278,6 +1363,8 @@ class TypingBubbleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
+
     final double avatarSlot = 56 * uiScale;
 
     final bubbleFill = user.bubbleColor;
