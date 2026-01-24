@@ -1113,48 +1113,65 @@ class MessageRow extends StatelessWidget {
 
     final String tLabel = showTime ? _timeLabel(timeMs) : '';
 
-    final bubbleWithName = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-      children: [
-        if (showName)
-          Padding(
-            padding: EdgeInsets.only(bottom: 2 * uiScale),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isMe) ...nameHearts,
-                if (isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
-                Text(
-                  user.name,
-                  style: TextStyle(
-                    color: usernameColor,
-                    fontSize: 13.5 * uiScale,
-                    fontWeight: FontWeight.w400,
-                    height: 1.0,
-                    letterSpacing: 0.2 * uiScale,
-                  ),
+final bubbleWithName = Column(
+  mainAxisSize: MainAxisSize.min,
+  crossAxisAlignment: CrossAxisAlignment.stretch, // ✅ חשוב! נותן לנו רוחב
+  children: [
+    if (showName)
+      Padding(
+        padding: EdgeInsets.only(bottom: 2 * uiScale),
+        child: Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isMe) ...nameHearts,
+              if (isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
+              Text(
+                user.name,
+                style: TextStyle(
+                  color: usernameColor,
+                  fontSize: 13.5 * uiScale,
+                  fontWeight: FontWeight.w400,
+                  height: 1.0,
+                  letterSpacing: 0.2 * uiScale,
                 ),
-                if (!isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
-                if (!isMe) ...nameHearts,
-              ],
-            ),
+              ),
+              if (!isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
+              if (!isMe) ...nameHearts,
+            ],
           ),
+        ),
+      ),
 
-        bubbleStack,
+    // ✅ "Bubble area" with fixed width so alignment works
+    Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: SizedBox(
+        width: maxBubbleWidth,
+        child: Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: bubbleStack,
+        ),
+      ),
+    ),
 
-        // ✅ NEW: time under the bubble (like DMs)
-        if (showTime && tLabel.isNotEmpty)
-          Padding(
-            padding: EdgeInsets.only(
-              top: 6 * uiScale,
-              left: isMe ? 0 : 2 * uiScale,
-              right: isMe ? 2 * uiScale : 0,
-            ),
+    // ✅ Time under bubble — OPPOSITE SIDE
+    if (showTime && tLabel.isNotEmpty)
+      Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: SizedBox(
+          width: maxBubbleWidth,
+          child: Padding(
+            padding: EdgeInsets.only(top: 6 * uiScale),
             child: Align(
-              alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+              alignment: isMe ? Alignment.centerLeft : Alignment.centerRight, // ✅ flipped
               child: Text(
                 tLabel,
+                textHeightBehavior: const TextHeightBehavior(
+                  applyHeightToFirstAscent: false,
+                  applyHeightToLastDescent: false,
+                ),
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.55),
                   fontSize: 12 * uiScale,
@@ -1165,8 +1182,11 @@ class MessageRow extends StatelessWidget {
               ),
             ),
           ),
-      ],
-    );
+        ),
+      ),
+  ],
+);
+
 
     // ✅ אחרים (isMe=false): האווטאר חייב להיות שכבה מעל המדבקה התחתונה
     if (!isMe) {
