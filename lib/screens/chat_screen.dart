@@ -1963,18 +1963,19 @@ if (index < _messages.length) {
     }
   }
 
-  double topSpacing;
-  if (msg.type == ChatMessageType.system) {
-    topSpacing = 18;
-  } else if (prev == null) {
-    topSpacing = 14;
-  } else if (prev.type == ChatMessageType.system) {
-    topSpacing = 16;
-  } else if (prev.senderId == msg.senderId) {
-    topSpacing = 40;
-  } else {
-    topSpacing = 20;
-  }
+double topSpacing;
+if (msg.type == ChatMessageType.system) {
+  topSpacing = 14;
+} else if (prev == null) {
+  topSpacing = 10;
+} else if (prev.type == ChatMessageType.system) {
+  topSpacing = 12;
+} else if (prev.senderId == msg.senderId) {
+  topSpacing = 18; // היה 40
+} else {
+  topSpacing = 12; // היה 20
+}
+
 
   // ✅ We return a Column so we can inject the divider ABOVE the message
   final List<Widget> pieces = <Widget>[];

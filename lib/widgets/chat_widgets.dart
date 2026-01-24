@@ -761,139 +761,145 @@ class MessageRow extends StatelessWidget {
           ),
         ),
 
-        // ✅ DECOR: Hearts
-        if (decor == BubbleDecor.hearts) ...[
-          if (isMe) ...[
-            Positioned(
-              top: s(-22),
-              left: s(-28),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Image.asset(
-                  'assets/decors/TextBubbleLeftHearts.png',
-                  width: s(46),
-                  height: s(46),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: s(-8),
-              right: s(-20),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Image.asset(
-                  'assets/decors/TextBubbleRightHearts.png',
-                  width: s(48),
-                  height: s(48),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          ] else ...[
-            Positioned(
-              top: s(-22),
-              right: s(-28),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Transform.flip(
-                  flipX: true,
-                  child: Image.asset(
-                    'assets/decors/TextBubbleLeftHearts.png',
-                    width: s(46),
-                    height: s(46),
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
+// ✅ DECOR: Hearts
+if (decor == BubbleDecor.hearts) ...[
+  if (isMe) ...[
+    // TOP-LEFT
+    Positioned(
+      top: s(-22),
+      left: s(-28),
+      child: IgnorePointer(
+        ignoring: true,
+        child: Image.asset(
+          'assets/decors/TextBubbleLeftHearts.png',
+          width: s(46),
+          height: s(46),
+          fit: BoxFit.contain,
+        ),
+      ),
+    ),
+    // BOTTOM-RIGHT
+    Positioned(
+      bottom: s(-8),
+      right: s(-20),
+      child: IgnorePointer(
+        ignoring: true,
+        child: Image.asset(
+          'assets/decors/TextBubbleRightHearts.png',
+          width: s(48),
+          height: s(48),
+          fit: BoxFit.contain,
+        ),
+      ),
+    ),
+  ] else ...[
+    // TOP-RIGHT (mirror of TOP-LEFT)
+    Positioned(
+      top: s(-22),
+      right: s(-28),
+      child: IgnorePointer(
+        ignoring: true,
+        child: Transform.flip(
+          flipX: true,
+          child: Image.asset(
+            'assets/decors/TextBubbleLeftHearts.png',
+            width: s(46),
+            height: s(46),
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    ),
+    // ✅ BOTTOM-LEFT (mirror of BOTTOM-RIGHT) — זה החיבור שחסר לך
+    Positioned(
+      bottom: s(-8),
+      left: s(-20),
+      child: IgnorePointer(
+        ignoring: true,
+        child: Transform.flip(
+          flipX: true,
+          child: Image.asset(
+            'assets/decors/TextBubbleRightHearts.png',
+            width: s(48),
+            height: s(48),
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    ),
+  ],
+],
 
-        // ✅ DECOR: Pink Hearts
-        if (decor == BubbleDecor.pinkHearts) ...[
-          if (isMe) ...[
-            Positioned(
-              top: s(-22),
-              left: s(-28),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Image.asset(
-                  'assets/decors/TextBubblePinkHeartsLeft.png',
-                  width: s(46),
-                  height: s(46),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: s(-8),
-              right: s(-20),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Image.asset(
-                  'assets/decors/TextBubblePinkHeartsRight.png',
-                  width: s(48),
-                  height: s(48),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          ] else ...[
-            Positioned(
-              top: s(-22),
-              right: s(-28),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Transform.flip(
-                  flipX: true,
-                  child: Image.asset(
-                    'assets/decors/TextBubblePinkHeartsLeft.png',
-                    width: s(46),
-                    height: s(46),
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
 
-        // ✅ DECOR: Flowers + Ribbon
-        if (decor == BubbleDecor.flowersRibbon) ...[
-          if (isMe) ...[
-            Positioned(
-              bottom: s(-20),
-              left: s(-45),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Image.asset(
-                  'assets/decors/TextBubbleFlowersAndRibbon.png',
-                  width: s(74),
-                  height: s(74),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          ] else ...[
-            Positioned(
-              bottom: s(-20),
-              right: s(-45),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Transform.flip(
-                  flipX: true,
-                  child: Image.asset(
-                    'assets/decors/TextBubbleFlowersAndRibbon.png',
-                    width: s(74),
-                    height: s(74),
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
+// ✅ DECOR: Pink Hearts
+if (decor == BubbleDecor.pinkHearts) ...[
+  if (isMe) ...[
+    // TOP-LEFT
+    Positioned(
+      top: s(-22),
+      left: s(-28),
+      child: IgnorePointer(
+        ignoring: true,
+        child: Image.asset(
+          'assets/decors/TextBubblePinkHeartsLeft.png',
+          width: s(46),
+          height: s(46),
+          fit: BoxFit.contain,
+        ),
+      ),
+    ),
+    // BOTTOM-RIGHT
+    Positioned(
+      bottom: s(-8),
+      right: s(-20),
+      child: IgnorePointer(
+        ignoring: true,
+        child: Image.asset(
+          'assets/decors/TextBubblePinkHeartsRight.png',
+          width: s(48),
+          height: s(48),
+          fit: BoxFit.contain,
+        ),
+      ),
+    ),
+  ] else ...[
+    // TOP-RIGHT (mirror)
+    Positioned(
+      top: s(-22),
+      right: s(-28),
+      child: IgnorePointer(
+        ignoring: true,
+        child: Transform.flip(
+          flipX: true,
+          child: Image.asset(
+            'assets/decors/TextBubblePinkHeartsLeft.png',
+            width: s(46),
+            height: s(46),
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    ),
+    // ✅ BOTTOM-LEFT (mirror) — גם פה היה חסר
+    Positioned(
+      bottom: s(-8),
+      left: s(-20),
+      child: IgnorePointer(
+        ignoring: true,
+        child: Transform.flip(
+          flipX: true,
+          child: Image.asset(
+            'assets/decors/TextBubblePinkHeartsRight.png',
+            width: s(48),
+            height: s(48),
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    ),
+  ],
+],
+
 
         // ✅ DECOR: Stars
         if (decor == BubbleDecor.stars) ...[
@@ -1022,48 +1028,67 @@ class MessageRow extends StatelessWidget {
           ),
         ],
 
-        // ✅ DECOR: Corner Stars Glow
-        if (decor == BubbleDecor.cornerStarsGlow) ...[
-          if (isMe) ...[
-            Positioned(
-              top: s(-18),
-              left: s(-22),
-              child: _decorWithGlow(
-                asset: cornerStarsLeftAsset,
-                w: s(46),
-                h: s(46),
-                baseTint: cornerStarsBaseTint,
-                glowTint: cornerStarsGlowTint,
-              ),
-            ),
-            Positioned(
-              bottom: s(-8),
-              right: s(-20),
-              child: _decorWithGlow(
-                asset: cornerStarsRightAsset,
-                w: s(48),
-                h: s(48),
-                baseTint: cornerStarsBaseTint,
-                glowTint: cornerStarsGlowTint,
-              ),
-            ),
-          ] else ...[
-            Positioned(
-              top: s(-18),
-              right: s(-22),
-              child: Transform.flip(
-                flipX: true,
-                child: _decorWithGlow(
-                  asset: cornerStarsLeftAsset,
-                  w: s(46),
-                  h: s(46),
-                  baseTint: cornerStarsBaseTint,
-                  glowTint: cornerStarsGlowTint,
-                ),
-              ),
-            ),
-          ],
-        ],
+// ✅ DECOR: Corner Stars Glow
+if (decor == BubbleDecor.cornerStarsGlow) ...[
+  if (isMe) ...[
+    // TOP-LEFT
+    Positioned(
+      top: s(-18),
+      left: s(-22),
+      child: _decorWithGlow(
+        asset: cornerStarsLeftAsset,
+        w: s(46),
+        h: s(46),
+        baseTint: cornerStarsBaseTint,
+        glowTint: cornerStarsGlowTint,
+      ),
+    ),
+    // BOTTOM-RIGHT
+    Positioned(
+      bottom: s(-8),
+      right: s(-20),
+      child: _decorWithGlow(
+        asset: cornerStarsRightAsset,
+        w: s(48),
+        h: s(48),
+        baseTint: cornerStarsBaseTint,
+        glowTint: cornerStarsGlowTint,
+      ),
+    ),
+  ] else ...[
+    // TOP-RIGHT (mirror)
+    Positioned(
+      top: s(-18),
+      right: s(-22),
+      child: Transform.flip(
+        flipX: true,
+        child: _decorWithGlow(
+          asset: cornerStarsLeftAsset,
+          w: s(46),
+          h: s(46),
+          baseTint: cornerStarsBaseTint,
+          glowTint: cornerStarsGlowTint,
+        ),
+      ),
+    ),
+    // ✅ BOTTOM-LEFT (mirror) — זה החיבור שחסר לך בכוכבים
+    Positioned(
+      bottom: s(-8),
+      left: s(-20),
+      child: Transform.flip(
+        flipX: true,
+        child: _decorWithGlow(
+          asset: cornerStarsRightAsset,
+          w: s(48),
+          h: s(48),
+          baseTint: cornerStarsBaseTint,
+          glowTint: cornerStarsGlowTint,
+        ),
+      ),
+    ),
+  ],
+],
+
 
         // ✅ DECOR: Kitty
         if (decor == BubbleDecor.kitty) ...[
@@ -1198,57 +1223,6 @@ final bubbleWithName = Column(
             child: bubbleWithName,
           ),
 
-          if (decor == BubbleDecor.hearts)
-            Positioned(
-              left: (avatarSize + gap) - s(28),
-              bottom: s(-22),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Transform.flip(
-                  flipX: true,
-                  child: Image.asset(
-                    'assets/decors/TextBubbleRightHearts.png',
-                    width: s(48),
-                    height: s(48),
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-
-          if (decor == BubbleDecor.pinkHearts)
-            Positioned(
-              left: (avatarSize + gap) - s(30),
-              bottom: s(-22),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Transform.flip(
-                  flipX: true,
-                  child: Image.asset(
-                    'assets/decors/TextBubblePinkHeartsRight.png',
-                    width: s(48),
-                    height: s(48),
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-
-          if (decor == BubbleDecor.cornerStarsGlow)
-            Positioned(
-              left: (avatarSize + gap) - s(22),
-              bottom: s(-18),
-              child: Transform.flip(
-                flipX: true,
-                child: _decorWithGlow(
-                  asset: 'assets/decors/TextBubble4CornerStarsRightpng.png',
-                  w: s(48),
-                  h: s(48),
-                  baseTint: _decorBaseFromUser(user.bubbleColor),
-                  glowTint: _decorGlowFromUser(user.bubbleColor),
-                ),
-              ),
-            ),
 
           Positioned(
             left: 0,
