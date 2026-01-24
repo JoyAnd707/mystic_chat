@@ -253,7 +253,8 @@ class ChatScreen extends StatefulWidget {
 enum BubbleStyle { normal, glow }
 
 
-class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateMixin {
+class _ChatScreenState extends State<ChatScreen>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
 
   static const double _topBarHeight = 0;
   static const double _bottomBarHeight = 80;
@@ -295,6 +296,26 @@ static const List<String> _creepyTriggers = <String>[
 ];
 
 static const String _heartAsset = 'assets/reactions/HeartReaction.png';
+
+
+// =======================
+// Heart animation gating
+// =======================
+bool _appIsResumed = true;
+bool _initialSnapshotDone = false;
+
+// block heart fly animations briefly after opening the chat
+int _enableHeartAnimsAtMs = 0;
+
+int _nowMs() => DateTime.now().millisecondsSinceEpoch;
+
+bool _canPlayHeartFlyAnims() {
+  return mounted &&
+      _appIsResumed &&
+      _initialSnapshotDone &&
+      _nowMs() >= _enableHeartAnimsAtMs;
+}
+
 
 /// ✅ Heart colors per user (THIS is the palette you gave)
 static const Map<String, Color> _heartColorByUserId = <String, Color>{
@@ -1507,6 +1528,12 @@ Future<void> _emitLeft({bool showInUi = true}) async {
 void initState() {
   super.initState();
   AuthService.ensureSignedIn(currentUserId: widget.currentUserId);
+WidgetsBinding.instance.addObserver(this);
+
+// ✅ block fly anims for a moment after opening chat (prevents “offline” replays)
+_enableHeartAnimsAtMs = _nowMs() + 1600; // tweak: 1200–2000 feels good
+_initialSnapshotDone = false;
+_appIsResumed = true;
 
   _messages = <ChatMessage>[];
 
@@ -1593,6 +1620,7 @@ void dispose() {
     _onlineNotifier.removeListener(_onlineListener!);
     _onlineListener = null;
   }
+WidgetsBinding.instance.removeObserver(this);
 
   _bgFxCtrl.dispose();
   super.dispose();
@@ -1653,48 +1681,55 @@ void _startFirestoreSubscription() {
         }
       }
 
-      // LIVE HEART ANIMATION for RECEIVER
-      if (!_heartsSnapshotInitialized) {
-        _lastReactorSnapshotByTs.clear();
-        for (final m in _messages) {
-          if (m.ts > 0) {
-            _lastReactorSnapshotByTs[m.ts] = Set<String>.from(m.heartReactorIds);
-          }
-        }
-        _heartsSnapshotInitialized = true;
-      } else {
-        final List<String> reactorsToAnimate = <String>[];
+// LIVE HEART ANIMATION for RECEIVER
+if (!_heartsSnapshotInitialized) {
+  _lastReactorSnapshotByTs.clear();
+  for (final m in _messages) {
+    if (m.ts > 0) {
+      _lastReactorSnapshotByTs[m.ts] = Set<String>.from(m.heartReactorIds);
+    }
+  }
+  _heartsSnapshotInitialized = true;
 
-        for (final m in _messages) {
-          if (m.type != ChatMessageType.text) continue;
-          if (m.ts <= 0) continue;
+  // ✅ IMPORTANT: first snapshot is "sync", never animate hearts for it
+  _initialSnapshotDone = true;
+} else {
+  final List<String> reactorsToAnimate = <String>[];
 
-          // receiver condition: I am the author of the message that got liked
-          if (m.senderId != widget.currentUserId) continue;
+  for (final m in _messages) {
+    if (m.type != ChatMessageType.text) continue;
+    if (m.ts <= 0) continue;
 
-          final Set<String> prev = oldReactorsByTs[m.ts] ??
-              _lastReactorSnapshotByTs[m.ts] ??
-              <String>{};
+    // receiver condition: I am the author of the message that got liked
+    if (m.senderId != widget.currentUserId) continue;
 
-          final Set<String> now = Set<String>.from(m.heartReactorIds);
+    final Set<String> prev = oldReactorsByTs[m.ts] ??
+        _lastReactorSnapshotByTs[m.ts] ??
+        <String>{};
 
-          final added = now.difference(prev);
-          added.remove(widget.currentUserId);
+    final Set<String> now = Set<String>.from(m.heartReactorIds);
 
-          if (added.isNotEmpty) {
-            reactorsToAnimate.addAll(added.toList()..sort());
-          }
+    final added = now.difference(prev);
 
-          _lastReactorSnapshotByTs[m.ts] = now;
-        }
+    // never animate my own like
+    added.remove(widget.currentUserId);
 
-        if (reactorsToAnimate.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            if (!mounted) return;
-            await _spawnHeartsForReactors(reactorsToAnimate);
-          });
-        }
-      }
+    if (added.isNotEmpty) {
+      reactorsToAnimate.addAll(added.toList()..sort());
+    }
+
+    _lastReactorSnapshotByTs[m.ts] = now;
+  }
+
+  // ✅ ONLY animate if user is live in the chat
+  if (reactorsToAnimate.isNotEmpty && _canPlayHeartFlyAnims()) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await _spawnHeartsForReactors(reactorsToAnimate);
+    });
+  }
+}
+
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -2085,25 +2120,30 @@ pieces.add(
     child: GestureDetector(
       behavior: HitTestBehavior.translucent,
       onDoubleTap: () => _toggleHeartForMessage(msg),
-      child: MessageRow(
-        user: user,
-        text: msg.text,
-        isMe: isMe,
-        bubbleTemplate: msg.bubbleTemplate,
-        decor: msg.decor,
-        fontFamily: msg.fontFamily,
+child: MessageRow(
+  user: user,
+  text: msg.text,
+  isMe: isMe,
+  bubbleTemplate: msg.bubbleTemplate,
+  decor: msg.decor,
+  fontFamily: msg.fontFamily,
 
-        showName: true,
-        nameHearts: _buildHeartIcons(msg.heartReactorIds, uiScale),
+  // ✅ names + hearts ONLY in group
+  showName: (widget.roomId == 'group_main'),
+  nameHearts: (widget.roomId == 'group_main')
+      ? _buildHeartIcons(msg.heartReactorIds, uiScale)
+      : const <Widget>[],
 
-        // ✅ NEW: show time for group too (DMs already have their own logic elsewhere)
-        showTime: (widget.roomId == 'group_main'),
-        timeMs: msg.ts,
+  // ✅ time only in group (כמו שהיה אצלך)
+  showTime: (widget.roomId == 'group_main'),
+  timeMs: msg.ts,
 
-        showNewBadge: showNew,
-        usernameColor: usernameColor,
-        uiScale: uiScale,
-      ),
+  showNewBadge: showNew,
+  usernameColor: usernameColor,
+  uiScale: uiScale,
+),
+
+
     ),
   ),
 );

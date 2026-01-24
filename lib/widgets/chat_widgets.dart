@@ -1140,7 +1140,7 @@ if (decor == BubbleDecor.cornerStarsGlow) ...[
 
 final bubbleWithName = Column(
   mainAxisSize: MainAxisSize.min,
-  crossAxisAlignment: CrossAxisAlignment.stretch, // ✅ חשוב! נותן לנו רוחב
+  crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
   children: [
     if (showName)
       Padding(
@@ -1169,48 +1169,48 @@ final bubbleWithName = Column(
         ),
       ),
 
-    // ✅ "Bubble area" with fixed width so alignment works
-    Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: SizedBox(
-        width: maxBubbleWidth,
-        child: Align(
-          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-          child: bubbleStack,
+    // ✅ THIS is the key: shrink-wrap to the *actual bubble width*
+    IntrinsicWidth(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Align(
+              alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+              child: bubbleStack,
+            ),
+
+            if (showTime && tLabel.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(top: 6 * uiScale),
+                child: Align(
+                  // ✅ keep your “opposite side” behavior, but now within the real bubble width
+                  alignment: isMe ? Alignment.centerLeft : Alignment.centerRight,
+                  child: Text(
+                    tLabel,
+                    textHeightBehavior: const TextHeightBehavior(
+                      applyHeightToFirstAscent: false,
+                      applyHeightToLastDescent: false,
+                    ),
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.55),
+                      fontSize: 12 * uiScale,
+                      fontWeight: FontWeight.w600,
+                      height: 1.0,
+                      letterSpacing: 0.2 * uiScale,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     ),
-
-    // ✅ Time under bubble — OPPOSITE SIDE
-    if (showTime && tLabel.isNotEmpty)
-      Align(
-        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: SizedBox(
-          width: maxBubbleWidth,
-          child: Padding(
-            padding: EdgeInsets.only(top: 6 * uiScale),
-            child: Align(
-              alignment: isMe ? Alignment.centerLeft : Alignment.centerRight, // ✅ flipped
-              child: Text(
-                tLabel,
-                textHeightBehavior: const TextHeightBehavior(
-                  applyHeightToFirstAscent: false,
-                  applyHeightToLastDescent: false,
-                ),
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.55),
-                  fontSize: 12 * uiScale,
-                  fontWeight: FontWeight.w600,
-                  height: 1.0,
-                  letterSpacing: 0.2 * uiScale,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
   ],
 );
+
 
 
     // ✅ אחרים (isMe=false): האווטאר חייב להיות שכבה מעל המדבקה התחתונה
