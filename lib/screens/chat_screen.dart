@@ -11,6 +11,8 @@ import '../fx/heart_reaction_fly_layer.dart';
 import 'dart:ui';
 import '../firebase/firestore_chat_service.dart';
 import '../firebase/auth_service.dart';
+import '../services/presence_service.dart';
+
 
 double mysticUiScale(BuildContext context) {
   // ✅ UI scale tuned for your Mystic layout.
@@ -262,7 +264,6 @@ class _ChatScreenState extends State<ChatScreen>
   StreamSubscription<List<Map<String, dynamic>>>? _roomSub;
 
 VoidCallback? _onlineListener;
-
 // =======================
 // Creepy BG Easter Egg
 // =======================
@@ -1479,7 +1480,10 @@ Future<void> _emitLeft({bool showInUi = true}) async {
 
 
 
-  /// ===== Local presence (UI-only) =====
+  /// ===== REAL presence (Firestore) =====
+  StreamSubscription<Set<String>>? _presenceSub;
+
+  /// We still store a notifier per-room so the UI can rebuild easily.
   static final Map<String, ValueNotifier<Set<String>>> _roomOnline = {};
   late final ValueNotifier<Set<String>> _onlineNotifier;
 
@@ -1488,13 +1492,16 @@ Future<void> _emitLeft({bool showInUi = true}) async {
   late final ValueNotifier<Set<String>> _typingNotifier;
 
   void _markMeOnline() {
+    // Optional: quick optimistic UI (stream will override)
     _onlineNotifier.value = {..._onlineNotifier.value, widget.currentUserId};
   }
 
   void _markMeOffline() {
-    _onlineNotifier.value = {..._onlineNotifier.value}
-      ..remove(widget.currentUserId);
+    final next = {..._onlineNotifier.value}..remove(widget.currentUserId);
+    _onlineNotifier.value = next;
   }
+
+
 
   void _setMeTyping(bool typing) {
     final current = {..._typingNotifier.value};
@@ -1562,22 +1569,36 @@ _appIsResumed = true;
     () => ValueNotifier<Set<String>>(<String>{}),
   );
 
-  // ✅ I am online in this room (UI-only)
+  // ✅ optimistic: show myself immediately (stream will override)
   _markMeOnline();
 
   // ✅ typing listeners (UI-only)
   _controller.addListener(_handleTypingChange);
   _focusNode.addListener(_handleTypingChange);
 
-  // ✅ Presence-based daily fact bot (GROUP ONLY)
-  _onlineListener = () {
+  // ✅ REAL presence enter
+  final name = _displayNameForId(widget.currentUserId);
+  PresenceService.I.enterRoom(
+    roomId: widget.roomId,
+    userId: widget.currentUserId,
+    displayName: name,
+  );
+
+  // ✅ REAL presence stream -> drives ActiveUsersBar
+  _presenceSub?.cancel();
+  _presenceSub = PresenceService.I
+      .streamOnlineUserIds(roomId: widget.roomId)
+      .listen((ids) {
+    if (!mounted) return;
+
+    // This is what ActiveUsersBar reads in build()
+    _onlineNotifier.value = ids;
+
+    // Group-only: ping daily fact scheduler on real presence changes
     if (widget.roomId == 'group_main') {
       DailyFactBotScheduler.I.pingPresence(roomId: 'group_main');
     }
-  };
-
-  // ✅ Actually attach the listener
-  _onlineNotifier.addListener(_onlineListener!);
+  });
 
   // ✅ initial ping for group
   if (widget.roomId == 'group_main') {
@@ -1587,22 +1608,32 @@ _appIsResumed = true;
   // ✅ load bubble style for this user (saved locally)
   _loadBubbleStyle();
 
-_startFirestoreSubscription();
+  _startFirestoreSubscription();
 
-WidgetsBinding.instance.addPostFrameCallback((_) async {
-  await _markRoomReadNow();
-  await _emitEntered();
-});
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await _markRoomReadNow();
+    await _emitEntered();
+  });
+
 
 }
 
 @override
 void dispose() {
-  // ✅ Write "left" line even in dispose:
+  // ✅ Best-effort: don't await in dispose
   _emitLeft(showInUi: false);
+
+  // ✅ presence leave (correct signature)
+  PresenceService.I.leaveRoom(
+    roomId: widget.roomId,
+    userId: widget.currentUserId,
+  );
 
   _roomSub?.cancel();
   _roomSub = null;
+
+  _presenceSub?.cancel();
+  _presenceSub = null;
 
   _hourTimer?.cancel();
 
@@ -1610,21 +1641,19 @@ void dispose() {
   _controller.removeListener(_handleTypingChange);
   _focusNode.removeListener(_handleTypingChange);
 
-  _markMeOffline();
-
   _scrollController.dispose();
   _controller.dispose();
   _focusNode.dispose();
 
-  if (_onlineListener != null) {
-    _onlineNotifier.removeListener(_onlineListener!);
-    _onlineListener = null;
-  }
-WidgetsBinding.instance.removeObserver(this);
+  WidgetsBinding.instance.removeObserver(this);
 
   _bgFxCtrl.dispose();
+    _markMeOffline();
+
   super.dispose();
 }
+
+
 
 
 

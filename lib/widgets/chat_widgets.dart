@@ -1221,7 +1221,7 @@ if (decor == BubbleDecor.cornerStarsGlow) ...[
     final String tLabel = showTime ? _timeLabel(timeMs) : '';
     // ✅ Reserve vertical space so the list spacing stays like the old "time-under-bubble" layout.
 // This compensates for the fact that Positioned() does NOT affect Stack height.
-final double _reservedTimeHeight =
+final double reservedTimeHeight =
     (showTime && tLabel.isNotEmpty) ? (22 * uiScale) : 0.0;
 
 final bubbleWithName = Column(
@@ -1293,7 +1293,7 @@ Widget avatarWithTime({required bool rightSide}) {
 // ✅ אחרים (isMe=false): avatar + time on the LEFT, bubble on the RIGHT
 if (!isMe) {
   return Padding(
-    padding: EdgeInsets.only(bottom: _reservedTimeHeight + 6 * uiScale),
+    padding: EdgeInsets.only(bottom: reservedTimeHeight + 6 * uiScale),
 
     child: Stack(
       clipBehavior: Clip.none,
@@ -1314,7 +1314,7 @@ if (!isMe) {
 
 // ✅ אני (isMe=true): avatar + time on the RIGHT, bubble on the LEFT
 return Padding(
-  padding: EdgeInsets.only(bottom: _reservedTimeHeight + 6 * uiScale),
+  padding: EdgeInsets.only(bottom: reservedTimeHeight + 6 * uiScale),
 
   child: Stack(
     clipBehavior: Clip.none,
