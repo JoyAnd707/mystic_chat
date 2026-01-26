@@ -298,6 +298,56 @@ static const List<String> _creepyTriggers = <String>[
 
 static const String _heartAsset = 'assets/reactions/HeartReaction.png';
 
+bool _isNearBottom({double threshold = 140}) {
+  if (!_scrollController.hasClients) return true;
+  final pos = _scrollController.position;
+  return (pos.maxScrollExtent - pos.pixels) <= threshold;
+}
+
+
+// =======================
+// Scroll position restore
+// =======================
+bool _didRestoreScroll = false;
+double _savedScrollOffset = 0.0;
+Timer? _scrollSaveDebounce;
+
+String _scrollOffsetPrefsKey() =>
+    'scrollOffset__${widget.currentUserId}__${widget.roomId}';
+
+Future<void> _loadSavedScrollOffset() async {
+  final prefs = await SharedPreferences.getInstance();
+  _savedScrollOffset = prefs.getDouble(_scrollOffsetPrefsKey()) ?? 0.0;
+}
+
+Future<void> _saveScrollOffsetNow() async {
+  if (!_scrollController.hasClients) return;
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setDouble(_scrollOffsetPrefsKey(), _scrollController.offset);
+}
+
+void _onScrollChanged() {
+  // debounce so we don’t write prefs 60 times/sec
+  _scrollSaveDebounce?.cancel();
+  _scrollSaveDebounce = Timer(const Duration(milliseconds: 250), () {
+    _saveScrollOffsetNow();
+  });
+}
+
+void _tryRestoreScrollOnce() {
+  if (_didRestoreScroll) return;
+  if (!_scrollController.hasClients) return;
+
+  final max = _scrollController.position.maxScrollExtent;
+  final target = _savedScrollOffset.clamp(0.0, max);
+
+  // Jump (no animation) so it feels like “where I left off”
+  _scrollController.jumpTo(target);
+
+  _didRestoreScroll = true;
+}
+
+
 
 // =======================
 // Heart animation gating
@@ -1534,6 +1584,9 @@ Future<void> _emitLeft({bool showInUi = true}) async {
 @override
 void initState() {
   super.initState();
+  _loadSavedScrollOffset();
+_scrollController.addListener(_onScrollChanged);
+
   AuthService.ensureSignedIn(currentUserId: widget.currentUserId);
 WidgetsBinding.instance.addObserver(this);
 
@@ -1610,10 +1663,10 @@ _appIsResumed = true;
 
   _startFirestoreSubscription();
 
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
-    await _markRoomReadNow();
-    await _emitEntered();
-  });
+WidgetsBinding.instance.addPostFrameCallback((_) async {
+  await _markRoomReadNow();
+  await _emitSystemLine('${_displayNameForId(widget.currentUserId)} has entered the chatroom.', scroll: false);
+});
 
 
 }
@@ -1649,6 +1702,11 @@ void dispose() {
 
   _bgFxCtrl.dispose();
     _markMeOffline();
+_scrollSaveDebounce?.cancel();
+_scrollController.removeListener(_onScrollChanged);
+
+// ✅ last save (best-effort)
+_saveScrollOffsetNow();
 
   super.dispose();
 }
@@ -1664,6 +1722,8 @@ void _startFirestoreSubscription() {
 
   _roomSub = FirestoreChatService.messagesStreamMaps(widget.roomId).listen(
     (rows) async {
+      final int oldCount = _messages.length;
+final bool wasNearBottomBefore = _isNearBottom();
       // snapshot "seen" BEFORE reload
       final oldSeen = Set<int>.from(_seenMessageTs);
 
@@ -1682,6 +1742,7 @@ void _startFirestoreSubscription() {
 
       if (!mounted) return;
       setState(() {});
+
 
       // seed seen on first load
       if (_seenMessageTs.isEmpty) {
@@ -1760,10 +1821,26 @@ if (!_heartsSnapshotInitialized) {
 }
 
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _scrollToBottom();
-      });
+final bool firstLoad = (oldCount == 0 && !_didRestoreScroll);
+
+// ✅ First load: restore ONLY once, only after we actually have items
+if (firstLoad && next.isNotEmpty) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
+    _tryRestoreScrollOnce();
+  });
+} else {
+  // ✅ Later updates: only scroll if a new message arrived AND user was near bottom
+  if (next.length > oldCount && wasNearBottomBefore) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToBottom();
+    });
+  }
+}
+
+
+
     },
   );
 }

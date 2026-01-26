@@ -1228,12 +1228,20 @@ final bubbleWithName = Column(
   mainAxisSize: MainAxisSize.min,
   crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
   children: [
-    if (showName)
-      Padding(
-        padding: EdgeInsets.only(bottom: 2 * uiScale),
-        child: Align(
-          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-          child: Text(
+if (showName)
+  Padding(
+    padding: EdgeInsets.only(bottom: 2 * uiScale),
+    child: Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // ✅ isMe: hearts BEFORE name (left of name)
+          if (isMe) ...nameHearts,
+          if (isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
+
+          Text(
             user.name,
             style: TextStyle(
               color: usernameColor,
@@ -1243,8 +1251,15 @@ final bubbleWithName = Column(
               letterSpacing: 0.2 * uiScale,
             ),
           ),
-        ),
+
+          // ✅ not isMe: hearts AFTER name (right of name)
+          if (!isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
+          if (!isMe) ...nameHearts,
+        ],
       ),
+    ),
+  ),
+
 
     // ✅ Bubble only (time moved under avatar)
     ConstrainedBox(
