@@ -12,6 +12,7 @@ import 'dart:ui';
 import '../firebase/firestore_chat_service.dart';
 import '../firebase/auth_service.dart';
 import '../services/presence_service.dart';
+import '../widgets/new_messages_badge.dart'; // ✅ ADD THIS
 
 
 double mysticUiScale(BuildContext context) {
@@ -321,19 +322,52 @@ int _lastReadTsCache = 0;
 bool _lastReadLoaded = false;
 bool _hideUnreadDivider = false;
 
+// =======================
+// NEW "messages below" badge (overlay)
+// =======================
+int _newBelowCount = 0;
+
+/// ✅ counts only "real unread-ish" messages:
+// - text only
+// - not me
+int _countAddedUnreadishMessages(List<ChatMessage> oldList, List<ChatMessage> newList) {
+  if (newList.length <= oldList.length) return 0;
+
+  final added = newList.sublist(oldList.length);
+  int c = 0;
+
+  for (final m in added) {
+    if (m.type == ChatMessageType.text && m.senderId != widget.currentUserId) {
+      c++;
+    }
+  }
+
+  return c;
+}
+
+
 bool _hasUnreadNow() {
   if (!_lastReadLoaded) return false;
+
+  // ✅ UNREAD is only for OTHER people's messages
   return _messages.any((m) =>
       m.type == ChatMessageType.text &&
       m.ts > 0 &&
-      m.ts > _lastReadTsCache);
+      m.ts > _lastReadTsCache &&
+      m.senderId != widget.currentUserId);
 }
 
 int _firstUnreadTsOrNull() {
   if (!_lastReadLoaded) return 0;
+
+  // ✅ First unread from OTHER users only
   for (final m in _messages) {
     if (m.type != ChatMessageType.text) continue;
-    if (m.ts > 0 && m.ts > _lastReadTsCache) return m.ts;
+    if (m.ts <= 0) continue;
+
+    if (m.ts > _lastReadTsCache && m.senderId != widget.currentUserId) {
+      return m.ts;
+    }
   }
   return 0;
 }
@@ -351,6 +385,13 @@ Future<void> _markReadIfAtBottom() async {
   if (_nowMs() < _blockAutoMarkReadUntilMs) return;
 
   if (!_isNearBottom()) return;
+
+  // ✅ when user reaches bottom: badge disappears
+  if (_newBelowCount != 0 && mounted) {
+    setState(() {
+      _newBelowCount = 0;
+    });
+  }
 
   final int lastTs = _latestTextTs();
   if (lastTs <= 0) return;
@@ -1756,10 +1797,9 @@ void _handleTypingChange() {
   });
 
   // local UX: when typing turns ON, auto-scroll so you see your own typing row
-final wasTypingLocal = _meTypingRemote; // state we last sent
-if (!wasTypingLocal && shouldType) {
-  _scrollToBottom(keepFocus: true);
-}
+// ✅ Don't auto-scroll when typing starts.
+// We only scroll when sending (or when new messages arrive and we're already at bottom).
+
 
 }
 
@@ -1944,133 +1984,149 @@ super.dispose();
 void _startFirestoreSubscription() {
   _roomSub?.cancel();
 
-  _roomSub = FirestoreChatService.messagesStreamMaps(widget.roomId).listen(
-    (rows) async {
-      final int oldCount = _messages.length;
-final bool wasNearBottomBefore = _isNearBottom();
-      // snapshot "seen" BEFORE reload
-      final oldSeen = Set<int>.from(_seenMessageTs);
+_roomSub = FirestoreChatService.messagesStreamMaps(widget.roomId).listen(
+  (rows) async {
+    final List<ChatMessage> oldMessages = List<ChatMessage>.from(_messages);
+    final int oldCount = oldMessages.length;
+    final bool wasNearBottomBefore = _isNearBottom();
 
-      // snapshot heart reactors BEFORE reload
-      final Map<int, Set<String>> oldReactorsByTs = <int, Set<String>>{};
-      for (final m in _messages) {
-        if (m.ts > 0) {
-          oldReactorsByTs[m.ts] = Set<String>.from(m.heartReactorIds);
-        }
+    // snapshot "seen" BEFORE reload
+    final oldSeen = Set<int>.from(_seenMessageTs);
+
+    // snapshot heart reactors BEFORE reload
+    final Map<int, Set<String>> oldReactorsByTs = <int, Set<String>>{};
+    for (final m in oldMessages) {
+      if (m.ts > 0) {
+        oldReactorsByTs[m.ts] = Set<String>.from(m.heartReactorIds);
       }
+    }
 
-      // Convert maps -> ChatMessage
-      final next = rows.map((m) => ChatMessage.fromMap(m)).toList();
-_messages = next;
+    // Convert maps -> ChatMessage
+    final next = rows.map((m) => ChatMessage.fromMap(m)).toList();
+    _messages = next;
 
-// ✅ Ensure lastRead cache is loaded BEFORE UI builds unread divider
-await _loadLastReadTsOnce();
+    // ✅ IMPORTANT: if new messages arrived and user is NOT near bottom,
+    // increment the "below" counter (only other users, text only)
+    final bool hasNewMessages = next.length > oldCount;
+    if (hasNewMessages && !wasNearBottomBefore) {
+      final int added = _countAddedUnreadishMessages(oldMessages, next);
+      if (added > 0 && mounted) {
+        setState(() {
+          _newBelowCount += added;
+        });
+      }
+    }
 
-if (!mounted) return;
-setState(() {});
+    // ✅ Auto-scroll ONLY if I was already near the bottom before the update.
+    if (hasNewMessages && wasNearBottomBefore) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _scrollToBottom(animated: true);
+      });
+    }
 
+    // ✅ Ensure lastRead cache is loaded BEFORE UI builds unread divider
+    await _loadLastReadTsOnce();
 
+    if (!mounted) return;
+    setState(() {});
 
-      // seed seen on first load
-      if (_seenMessageTs.isEmpty) {
-        for (final m in _messages) {
-          if (m.ts > 0) _seenMessageTs.add(m.ts);
-        }
-      } else {
-        // detect truly new messages
-        for (final m in _messages) {
-          final int ts = m.ts;
-          if (ts > 0 && !oldSeen.contains(ts)) {
-            _seenMessageTs.add(ts);
+    // seed seen on first load
+    if (_seenMessageTs.isEmpty) {
+      for (final m in _messages) {
+        if (m.ts > 0) _seenMessageTs.add(m.ts);
+      }
+    } else {
+      // detect truly new messages
+      for (final m in _messages) {
+        final int ts = m.ts;
+        if (ts > 0 && !oldSeen.contains(ts)) {
+          _seenMessageTs.add(ts);
 
-            // NEW badge ONLY in GROUP CHAT
-            if (widget.roomId == 'group_main') {
-              final bool isMe = m.senderId == widget.currentUserId;
-              if (!isMe && m.type == ChatMessageType.text) {
-                _triggerNewBadgeForTs(ts);
-              }
+          // NEW badge ONLY in GROUP CHAT
+          if (widget.roomId == 'group_main') {
+            final bool isMe = m.senderId == widget.currentUserId;
+            if (!isMe && m.type == ChatMessageType.text) {
+              _triggerNewBadgeForTs(ts);
             }
           }
         }
-
-        if (widget.roomId == 'group_main') {
-          await DailyFactBotScheduler.I.pingPresence(roomId: 'group_main');
-        }
       }
 
-// LIVE HEART ANIMATION for RECEIVER
-if (!_heartsSnapshotInitialized) {
-  _lastReactorSnapshotByTs.clear();
-  for (final m in _messages) {
-    if (m.ts > 0) {
-      _lastReactorSnapshotByTs[m.ts] = Set<String>.from(m.heartReactorIds);
-    }
-  }
-  _heartsSnapshotInitialized = true;
-
-  // ✅ IMPORTANT: first snapshot is "sync", never animate hearts for it
-  _initialSnapshotDone = true;
-} else {
-  final List<String> reactorsToAnimate = <String>[];
-
-  for (final m in _messages) {
-    if (m.type != ChatMessageType.text) continue;
-    if (m.ts <= 0) continue;
-
-    // receiver condition: I am the author of the message that got liked
-    if (m.senderId != widget.currentUserId) continue;
-
-    final Set<String> prev = oldReactorsByTs[m.ts] ??
-        _lastReactorSnapshotByTs[m.ts] ??
-        <String>{};
-
-    final Set<String> now = Set<String>.from(m.heartReactorIds);
-
-    final added = now.difference(prev);
-
-    // never animate my own like
-    added.remove(widget.currentUserId);
-
-    if (added.isNotEmpty) {
-      reactorsToAnimate.addAll(added.toList()..sort());
+      if (widget.roomId == 'group_main') {
+        await DailyFactBotScheduler.I.pingPresence(roomId: 'group_main');
+      }
     }
 
-    _lastReactorSnapshotByTs[m.ts] = now;
-  }
+    // LIVE HEART ANIMATION for RECEIVER
+    if (!_heartsSnapshotInitialized) {
+      _lastReactorSnapshotByTs.clear();
+      for (final m in _messages) {
+        if (m.ts > 0) {
+          _lastReactorSnapshotByTs[m.ts] = Set<String>.from(m.heartReactorIds);
+        }
+      }
+      _heartsSnapshotInitialized = true;
 
-  // ✅ ONLY animate if user is live in the chat
-  if (reactorsToAnimate.isNotEmpty && _canPlayHeartFlyAnims()) {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await _spawnHeartsForReactors(reactorsToAnimate);
-    });
-  }
-}
+      // ✅ IMPORTANT: first snapshot is "sync", never animate hearts for it
+      _initialSnapshotDone = true;
+    } else {
+      final List<String> reactorsToAnimate = <String>[];
 
+      for (final m in _messages) {
+        if (m.type != ChatMessageType.text) continue;
+        if (m.ts <= 0) continue;
 
-final bool firstLoad = (oldCount == 0 && !_didRestoreScroll);
+        // receiver condition: I am the author of the message that got liked
+        if (m.senderId != widget.currentUserId) continue;
 
-if (firstLoad && next.isNotEmpty) {
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
-    if (!mounted) return;
+        final Set<String> prev = oldReactorsByTs[m.ts] ??
+            _lastReactorSnapshotByTs[m.ts] ??
+            <String>{};
 
-    // ✅ Always open at the bottom.
-    _scrollToBottom(animated: false);
-    _didRestoreScroll = true;
+        final Set<String> now = Set<String>.from(m.heartReactorIds);
 
-    // ✅ Keep UNREAD hidden on entry.
-    // It will appear only when the user scrolls up (handled in _onScrollChanged).
-    if (mounted) {
-      setState(() => _hideUnreadDivider = true);
+        final added = now.difference(prev);
+
+        // never animate my own like
+        added.remove(widget.currentUserId);
+
+        if (added.isNotEmpty) {
+          reactorsToAnimate.addAll(added.toList()..sort());
+        }
+
+        _lastReactorSnapshotByTs[m.ts] = now;
+      }
+
+      // ✅ ONLY animate if user is live in the chat
+      if (reactorsToAnimate.isNotEmpty && _canPlayHeartFlyAnims()) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          await _spawnHeartsForReactors(reactorsToAnimate);
+        });
+      }
     }
-  });
-}
 
+    final bool firstLoad = (oldCount == 0 && !_didRestoreScroll);
 
+    if (firstLoad && next.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
 
+        // ✅ Always open at the bottom.
+        _scrollToBottom(animated: false);
+        _didRestoreScroll = true;
 
-    },
-  );
+        // ✅ Keep UNREAD hidden on entry.
+        // It will appear only when the user scrolls up (handled in _onScrollChanged).
+        if (mounted) {
+          setState(() => _hideUnreadDivider = true);
+        }
+      });
+    }
+  },
+);
+
 }
 
 
@@ -2435,174 +2491,221 @@ return GestureDetector(
                             return an.toLowerCase().compareTo(bn.toLowerCase());
                           });
 
-                          final limitedTyping = typingList.take(3).toList();
-                          final totalCount = _messages.length + limitedTyping.length;
+final limitedTyping = typingList.take(3).toList();
 
-                          return ListView.builder(
-                            controller: _scrollController,
-                            padding: EdgeInsets.only(
-                              top: 8 * uiScale,
-                              bottom: 88 * uiScale,
-                            ),
-                            itemCount: totalCount,
-                            itemBuilder: (context, index) {
-                              const double chatSidePadding = 16;
+return ListView.builder(
+  controller: _scrollController,
+  padding: EdgeInsets.only(
+    top: 8 * uiScale,
 
-                              if (index < _messages.length) {
-                                final msg = _messages[index];
-                                final prev = index > 0 ? _messages[index - 1] : null;
+    // ✅ BottomBorderBar is OUTSIDE this Stack, so we only need a small breathing room.
+    bottom: 10 * uiScale,
+  ),
+  itemCount: _messages.length,
+  itemBuilder: (context, index) {
 
-                                bool showDateDivider = false;
-                                String dateLabel = '';
 
-                                if (widget.roomId == 'group_main' && msg.ts > 0) {
-                                  final msgDay = DateTime.fromMillisecondsSinceEpoch(msg.ts);
+    const double chatSidePadding = 16;
 
-                                  if (prev == null || prev.ts <= 0) {
-                                    showDateDivider = true;
-                                    dateLabel = _dayLabel(msgDay);
-                                  } else {
-                                    final prevDay =
-                                        DateTime.fromMillisecondsSinceEpoch(prev.ts);
-                                    if (!_isSameDay(msgDay, prevDay)) {
-                                      showDateDivider = true;
-                                      dateLabel = _dayLabel(msgDay);
-                                    }
-                                  }
-                                }
+    final msg = _messages[index];
+    final prev = index > 0 ? _messages[index - 1] : null;
 
-                                double topSpacing;
-                                if (msg.type == ChatMessageType.system) {
-                                  topSpacing = 14;
-                                } else if (prev == null) {
-                                  topSpacing = 10;
-                                } else if (prev.type == ChatMessageType.system) {
-                                  topSpacing = 12;
-                                } else if (prev.senderId == msg.senderId) {
-                                  topSpacing = 18;
-                                } else {
-                                  topSpacing = 12;
-                                }
+    bool showDateDivider = false;
+    String dateLabel = '';
 
-                                final List<Widget> pieces = <Widget>[];
+    if (widget.roomId == 'group_main' && msg.ts > 0) {
+      final msgDay = DateTime.fromMillisecondsSinceEpoch(msg.ts);
 
-                                if (showDateDivider) {
-                                  pieces.add(_GcDateDivider(label: dateLabel, uiScale: uiScale));
-                                }
+      if (prev == null || prev.ts <= 0) {
+        showDateDivider = true;
+        dateLabel = _dayLabel(msgDay);
+      } else {
+        final prevDay = DateTime.fromMillisecondsSinceEpoch(prev.ts);
+        if (!_isSameDay(msgDay, prevDay)) {
+          showDateDivider = true;
+          dateLabel = _dayLabel(msgDay);
+        }
+      }
+    }
 
-                                final int firstUnreadTs = _firstUnreadTsOrNull();
-                                final bool showUnreadDivider = !_hideUnreadDivider &&
-                                    firstUnreadTs > 0 &&
-                                    msg.type == ChatMessageType.text &&
-                                    msg.ts == firstUnreadTs;
+    double topSpacing;
+    if (msg.type == ChatMessageType.system) {
+      topSpacing = 14;
+    } else if (prev == null) {
+      topSpacing = 10;
+    } else if (prev.type == ChatMessageType.system) {
+      topSpacing = 12;
+    } else if (prev.senderId == msg.senderId) {
+      topSpacing = 18;
+    } else {
+      topSpacing = 12;
+    }
 
-                                if (showUnreadDivider) {
-                                  pieces.add(
-                                    KeyedSubtree(
-                                      key: _unreadDividerKey,
-                                      child: _UnreadDivider(uiScale: uiScale, text: 'UNREAD'),
-                                    ),
-                                  );
-                                }
+    final List<Widget> pieces = <Widget>[];
 
-                                if (msg.type == ChatMessageType.system) {
-                                  const double systemSideInset = 2.0;
-                                  pieces.add(
-                                    Padding(
-                                      padding: EdgeInsets.fromLTRB(
-                                        systemSideInset * uiScale,
-                                        topSpacing * uiScale,
-                                        systemSideInset * uiScale,
-                                        0,
-                                      ),
-                                      child: SystemMessageBar(text: msg.text, uiScale: uiScale),
-                                    ),
-                                  );
+    if (showDateDivider) {
+      pieces.add(_GcDateDivider(label: dateLabel, uiScale: uiScale));
+    }
 
-                                  return Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: pieces,
-                                  );
-                                }
+    final int firstUnreadTs = _firstUnreadTsOrNull();
+    final bool showUnreadDivider = !_hideUnreadDivider &&
+        firstUnreadTs > 0 &&
+        msg.type == ChatMessageType.text &&
+        msg.ts == firstUnreadTs;
 
-                                final user = users[msg.senderId];
-                                if (user == null) return const SizedBox.shrink();
+    if (showUnreadDivider) {
+      pieces.add(
+        KeyedSubtree(
+          key: _unreadDividerKey,
+          child: _UnreadDivider(uiScale: uiScale, text: 'UNREAD'),
+        ),
+      );
+    }
 
-                                final isMe = user.id == widget.currentUserId;
-                                final bool isGroup = widget.roomId == 'group_main';
-                                final bool showNew =
-                                    isGroup ? (_newBadgeVisibleByTs[msg.ts] ?? false) : false;
+    if (msg.type == ChatMessageType.system) {
+      const double systemSideInset = 2.0;
+      pieces.add(
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            systemSideInset * uiScale,
+            topSpacing * uiScale,
+            systemSideInset * uiScale,
+            0,
+          ),
+          child: SystemMessageBar(text: msg.text, uiScale: uiScale),
+        ),
+      );
 
-                                pieces.add(
-                                  KeyedSubtree(
-                                    key: _keyForMsg(msg),
-                                    child: Padding(
-                                      padding: EdgeInsets.fromLTRB(
-                                        chatSidePadding * uiScale,
-                                        topSpacing * uiScale,
-                                        chatSidePadding * uiScale,
-                                        0,
-                                      ),
-                                      child: GestureDetector(
-                                        behavior: HitTestBehavior.translucent,
-                                        onDoubleTap: () => _toggleHeartForMessage(msg),
-                                        child: MessageRow(
-                                          user: user,
-                                          text: msg.text,
-                                          isMe: isMe,
-                                          bubbleTemplate: msg.bubbleTemplate,
-                                          decor: msg.decor,
-                                          fontFamily: msg.fontFamily,
-                                          showName: (widget.roomId == 'group_main'),
-                                          nameHearts: (widget.roomId == 'group_main')
-                                              ? _buildHeartIcons(msg.heartReactorIds, uiScale)
-                                              : const <Widget>[],
-                                          showTime: (widget.roomId == 'group_main'),
-                                          timeMs: msg.ts,
-                                          showNewBadge: showNew,
-                                          usernameColor: usernameColor,
-                                          timeColor: timeColor,
-                                          uiScale: uiScale,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: pieces,
+      );
+    }
 
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: pieces,
-                                );
-                              }
+    final user = users[msg.senderId];
+    if (user == null) return const SizedBox.shrink();
 
-                              final typingIndex = index - _messages.length;
-                              final typingUserId = limitedTyping[typingIndex];
-                              final typingUser = users[typingUserId]!;
-                              final isMeTyping = typingUserId == widget.currentUserId;
+    final isMe = user.id == widget.currentUserId;
+    final bool isGroup = widget.roomId == 'group_main';
+    final bool showNew = isGroup ? (_newBadgeVisibleByTs[msg.ts] ?? false) : false;
 
-                              const double topSpacing = 18;
+    pieces.add(
+      KeyedSubtree(
+        key: _keyForMsg(msg),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            chatSidePadding * uiScale,
+            topSpacing * uiScale,
+            chatSidePadding * uiScale,
+            0,
+          ),
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onDoubleTap: () => _toggleHeartForMessage(msg),
+            child: MessageRow(
+              user: user,
+              text: msg.text,
+              isMe: isMe,
+              bubbleTemplate: msg.bubbleTemplate,
+              decor: msg.decor,
+              fontFamily: msg.fontFamily,
+              showName: (widget.roomId == 'group_main'),
+              nameHearts: (widget.roomId == 'group_main')
+                  ? _buildHeartIcons(msg.heartReactorIds, uiScale)
+                  : const <Widget>[],
+              showTime: (widget.roomId == 'group_main'),
+              timeMs: msg.ts,
+              showNewBadge: showNew,
+              usernameColor: usernameColor,
+              timeColor: timeColor,
+              uiScale: uiScale,
+            ),
+          ),
+        ),
+      ),
+    );
 
-                              return Padding(
-                                padding: EdgeInsets.fromLTRB(
-                                  chatSidePadding * uiScale,
-                                  topSpacing * uiScale,
-                                  chatSidePadding * uiScale,
-                                  0,
-                                ),
-                                child: TypingBubbleRow(
-                                  user: typingUser,
-                                  isMe: isMeTyping,
-                                  uiScale: uiScale,
-                                ),
-                              );
-                            },
-                          );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: pieces,
+    );
+  },
+);
+
                         },
                       ),
                     ),
                   ],
                 ),
               ),
+
+
+
+
+// ✅ Typing overlay (always visible, even when user is scrolled up)
+Positioned(
+  left: 0,
+  right: 0,
+  bottom: 8 * uiScale, // ✅ closer to the bottom of the chat area
+  child: IgnorePointer(
+    ignoring: true,
+    child: ValueListenableBuilder<Set<String>>(
+      valueListenable: _typingNotifier,
+      builder: (context, typingIds, _) {
+        final ids = typingIds.toList()..remove(widget.currentUserId);
+        if (ids.isEmpty) return const SizedBox.shrink();
+
+
+        ids.sort((a, b) {
+          final an = users[a]?.name ?? a;
+          final bn = users[b]?.name ?? b;
+          return an.toLowerCase().compareTo(bn.toLowerCase());
+        });
+
+        final limited = ids.take(3).toList();
+        const double chatSidePadding = 16;
+
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: chatSidePadding * uiScale),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final uid in limited)
+                Padding(
+                  padding: EdgeInsets.only(bottom: 6 * uiScale),
+                  child: TypingBubbleRow(
+                    user: users[uid]!,
+                    isMe: false,
+                    uiScale: uiScale,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    ),
+  ),
+),
+
+// ✅ NEW messages-below badge (single instance)
+if (_newBelowCount > 0 && !_isNearBottom())
+  Positioned(
+    right: 16 * uiScale,
+    bottom: 52 * uiScale, // ✅ lower (still above typing row a bit)
+    child: NewMessagesBadge(
+      count: _newBelowCount,
+      badgeColor: const Color(0xFFEF797E),
+      onTap: () {
+        // optional: Scrollable.ensureVisible(_unreadDividerKey.currentContext!, alignment: 0.0, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+      },
+    ),
+  ),
+
+
+
+
+
 
               // ✅ Mystic red frame
               Positioned(
