@@ -70,6 +70,16 @@ Color usernameColorForHour(int hour) {
   return Colors.white;
 }
 
+Color timeColorForHour(int hour) {
+  // Morning + Noon => BLACK
+  if (hour >= 7 && hour <= 16) {
+    return Colors.black;
+  }
+
+  // Evening + Night + Midnight => WHITE (as before)
+  return Colors.white;
+}
+
 
 /// =======================
 /// USERS
@@ -862,7 +872,10 @@ void _triggerNewBadgeForTs(int ts) {
   });
 
   // stays visible longer
-  Future.delayed(const Duration(milliseconds: 1150), () {
+ Future.delayed(const Duration(milliseconds: 600), () {
+
+
+
 
     if (!mounted) return;
 
@@ -872,7 +885,10 @@ void _triggerNewBadgeForTs(int ts) {
     });
 
     // ✅ keep it in the map a bit longer so fade-out can finish
-    Future.delayed(const Duration(milliseconds: 700), () {
+    Future.delayed(const Duration(milliseconds: 300), () {
+
+
+
       if (!mounted) return;
       _newBadgeVisibleByTs.remove(ts);
     });
@@ -2221,6 +2237,8 @@ Widget build(BuildContext context) {
 final int hour = _uiHour;
 final bg = _bgOverride ?? backgroundForHour(hour);
 final Color usernameColor = usernameColorForHour(hour);
+final Color timeColor = timeColorForHour(hour);
+
 
 
   final double uiScale = mysticUiScale(context);
@@ -2348,19 +2366,7 @@ child: AnimatedBuilder(
 
 
 
-                // ✅ Mystic red frame
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: _redFrameTopGap,
-                  bottom: 0,
-                  child: IgnorePointer(
-                    ignoring: true,
-                    child: CustomPaint(
-                      painter: _MysticRedFramePainter(),
-                    ),
-                  ),
-                ),
+
 
                 // ✅ Messages
                 Positioned(
@@ -2523,6 +2529,7 @@ pieces.add(
           timeMs: msg.ts,
           showNewBadge: showNew,
           usernameColor: usernameColor,
+          timeColor: timeColor,
           uiScale: uiScale,
         ),
       ),
@@ -2573,6 +2580,19 @@ return Padding(
 ),
 
                     ],
+                  ),
+                ),
+                                // ✅ Mystic red frame
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: _redFrameTopGap,
+                  bottom: 0,
+                  child: IgnorePointer(
+                    ignoring: true,
+                    child: CustomPaint(
+                      painter: _MysticRedFramePainter(),
+                    ),
                   ),
                 ),
               ],

@@ -480,6 +480,10 @@ class MessageRow extends StatelessWidget {
 
   final bool showName;
   final Color usernameColor;
+
+  /// ✅ NEW: time color passed from ChatScreen (depends on hour)
+  final Color timeColor;
+
   final double uiScale; // ✅ NEW
   final bool showNewBadge;
 
@@ -497,6 +501,7 @@ class MessageRow extends StatelessWidget {
     this.fontFamily,
     this.showName = true,
     required this.usernameColor,
+    required this.timeColor,
     required this.showNewBadge,
     this.nameHearts = const <Widget>[],
     required this.uiScale,
@@ -815,408 +820,428 @@ final bubbleWidget = ConstrainedBox(
 
 
 
-    final bubbleStack = Stack(
-      clipBehavior: Clip.none,
-      children: [
-        bubbleWidget,
+final bubbleStack = Stack(
+  clipBehavior: Clip.none,
+  children: [
+    bubbleWidget,
 
-        // ✅ NEW badge
+    // ✅ DECOR: Hearts
+    if (decor == BubbleDecor.hearts) ...[
+      if (isMe) ...[
         Positioned(
-          top: s(-10),
-          left: isMe ? s(-14) : null,
-          right: isMe ? null : s(-14),
+          top: s(-22),
+          left: s(-28),
           child: IgnorePointer(
             ignoring: true,
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOut,
-              opacity: showNewBadge ? 1.0 : 0.0,
-              child: AnimatedScale(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutBack,
-                scale: showNewBadge ? 1.08 : 0.92,
-                child: MysticNewBadge(
-                  uiScale: uiScale,
-                ),
+            child: Image.asset(
+              'assets/decors/TextBubbleLeftHearts.png',
+              width: s(46),
+              height: s(46),
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: s(-8),
+          right: s(-20),
+          child: IgnorePointer(
+            ignoring: true,
+            child: Image.asset(
+              'assets/decors/TextBubbleRightHearts.png',
+              width: s(48),
+              height: s(48),
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ] else ...[
+        Positioned(
+          top: s(-22),
+          right: s(-28),
+          child: IgnorePointer(
+            ignoring: true,
+            child: Transform.flip(
+              flipX: true,
+              child: Image.asset(
+                'assets/decors/TextBubbleLeftHearts.png',
+                width: s(46),
+                height: s(46),
+                fit: BoxFit.contain,
               ),
             ),
           ),
         ),
-
-// ✅ DECOR: Hearts
-if (decor == BubbleDecor.hearts) ...[
-  if (isMe) ...[
-    // TOP-LEFT
-    Positioned(
-      top: s(-22),
-      left: s(-28),
-      child: IgnorePointer(
-        ignoring: true,
-        child: Image.asset(
-          'assets/decors/TextBubbleLeftHearts.png',
-          width: s(46),
-          height: s(46),
-          fit: BoxFit.contain,
-        ),
-      ),
-    ),
-    // BOTTOM-RIGHT
-    Positioned(
-      bottom: s(-8),
-      right: s(-20),
-      child: IgnorePointer(
-        ignoring: true,
-        child: Image.asset(
-          'assets/decors/TextBubbleRightHearts.png',
-          width: s(48),
-          height: s(48),
-          fit: BoxFit.contain,
-        ),
-      ),
-    ),
-  ] else ...[
-    // TOP-RIGHT (mirror of TOP-LEFT)
-    Positioned(
-      top: s(-22),
-      right: s(-28),
-      child: IgnorePointer(
-        ignoring: true,
-        child: Transform.flip(
-          flipX: true,
-          child: Image.asset(
-            'assets/decors/TextBubbleLeftHearts.png',
-            width: s(46),
-            height: s(46),
-            fit: BoxFit.contain,
-          ),
-        ),
-      ),
-    ),
-    // ✅ BOTTOM-LEFT (mirror of BOTTOM-RIGHT) — זה החיבור שחסר לך
-    Positioned(
-      bottom: s(-8),
-      left: s(-20),
-      child: IgnorePointer(
-        ignoring: true,
-        child: Transform.flip(
-          flipX: true,
-          child: Image.asset(
-            'assets/decors/TextBubbleRightHearts.png',
-            width: s(48),
-            height: s(48),
-            fit: BoxFit.contain,
-          ),
-        ),
-      ),
-    ),
-  ],
-],
-
-
-// ✅ DECOR: Pink Hearts
-if (decor == BubbleDecor.pinkHearts) ...[
-  if (isMe) ...[
-    // TOP-LEFT
-    Positioned(
-      top: s(-22),
-      left: s(-28),
-      child: IgnorePointer(
-        ignoring: true,
-        child: Image.asset(
-          'assets/decors/TextBubblePinkHeartsLeft.png',
-          width: s(46),
-          height: s(46),
-          fit: BoxFit.contain,
-        ),
-      ),
-    ),
-    // BOTTOM-RIGHT
-    Positioned(
-      bottom: s(-8),
-      right: s(-20),
-      child: IgnorePointer(
-        ignoring: true,
-        child: Image.asset(
-          'assets/decors/TextBubblePinkHeartsRight.png',
-          width: s(48),
-          height: s(48),
-          fit: BoxFit.contain,
-        ),
-      ),
-    ),
-  ] else ...[
-    // TOP-RIGHT (mirror)
-    Positioned(
-      top: s(-22),
-      right: s(-28),
-      child: IgnorePointer(
-        ignoring: true,
-        child: Transform.flip(
-          flipX: true,
-          child: Image.asset(
-            'assets/decors/TextBubblePinkHeartsLeft.png',
-            width: s(46),
-            height: s(46),
-            fit: BoxFit.contain,
-          ),
-        ),
-      ),
-    ),
-    // ✅ BOTTOM-LEFT (mirror) — גם פה היה חסר
-    Positioned(
-      bottom: s(-8),
-      left: s(-20),
-      child: IgnorePointer(
-        ignoring: true,
-        child: Transform.flip(
-          flipX: true,
-          child: Image.asset(
-            'assets/decors/TextBubblePinkHeartsRight.png',
-            width: s(48),
-            height: s(48),
-            fit: BoxFit.contain,
-          ),
-        ),
-      ),
-    ),
-  ],
-],
-
-
-        // ✅ DECOR: Stars
-        if (decor == BubbleDecor.stars) ...[
-          if (isMe)
-            Positioned(
-              bottom: s(-20),
-              left: s(-25),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Image.asset(
-                  'assets/decors/TextBubbleStars.png',
-                  width: s(44),
-                  height: s(44),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            )
-          else
-            Positioned(
-              bottom: s(-20),
-              right: s(-25),
-              child: IgnorePointer(
-                ignoring: true,
-                child: Transform.flip(
-                  flipX: true,
-                  child: Image.asset(
-                    'assets/decors/TextBubbleStars.png',
-                    width: s(44),
-                    height: s(44),
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-        ],
-
-        // ✅ DECOR: DripSad
-        if (decor == BubbleDecor.dripSad) ...[
-          Positioned(
-            bottom: s(-31),
-            right: isMe ? s(6) : null,
-            left: isMe ? null : s(6),
-            child: IgnorePointer(
-              ignoring: true,
-              child: Transform.flip(
-                flipX: isMe,
-                child: ColorFiltered(
-                  colorFilter: ColorFilter.mode(
-                    bubbleFill,
-                    BlendMode.srcIn,
-                  ),
-                  child: Image.asset(
-                    'assets/decors/TextBubbleDrip.png',
-                    width: s(40),
-                    height: s(40),
-                    fit: BoxFit.contain,
-                  ),
-                ),
+        Positioned(
+          bottom: s(-8),
+          left: s(-20),
+          child: IgnorePointer(
+            ignoring: true,
+            child: Transform.flip(
+              flipX: true,
+              child: Image.asset(
+                'assets/decors/TextBubbleRightHearts.png',
+                width: s(48),
+                height: s(48),
+                fit: BoxFit.contain,
               ),
             ),
           ),
-          Positioned(
-            bottom: s(-7),
-            right: isMe ? s(12) : null,
-            left: isMe ? null : s(18),
-            child: IgnorePointer(
-              ignoring: true,
-              child: Transform.flip(
-                flipX: isMe,
-                child: Image.asset(
-                  'assets/decors/TextBubbleSadFace.png',
-                  width: s(22),
-                  height: s(22),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          ),
-        ],
-
-        // ✅ DECOR: Music Notes
-        if (decor == BubbleDecor.musicNotes) ...[
-          Positioned(
-            top: s(-18),
-            left: isMe ? s(-18) : null,
-            right: isMe ? null : s(-18),
-            child: IgnorePointer(
-              ignoring: true,
-              child: ColorFiltered(
-                colorFilter: ColorFilter.mode(
-                  _musicNoteTintFromBubble(bubbleFill),
-                  BlendMode.srcIn,
-                ),
-                child: Image.asset(
-                  'assets/decors/TextBubbleMusicNotes.png',
-                  width: s(34),
-                  height: s(34),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          ),
-        ],
-
-        // ✅ DECOR: Surprise
-        if (decor == BubbleDecor.surprise) ...[
-          Positioned(
-            top: s(-18),
-            left: isMe ? s(-18) : null,
-            right: isMe ? null : s(-18),
-            child: IgnorePointer(
-              ignoring: true,
-              child: ColorFiltered(
-                colorFilter: ColorFilter.mode(
-                  _musicNoteTintFromBubble(bubbleFill),
-                  BlendMode.srcIn,
-                ),
-                child: Image.asset(
-                  'assets/decors/TextBubbleSurprise.png',
-                  width: s(34),
-                  height: s(34),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          ),
-        ],
-
-// ✅ DECOR: Corner Stars Glow
-if (decor == BubbleDecor.cornerStarsGlow) ...[
-  if (isMe) ...[
-    // TOP-LEFT
-    Positioned(
-      top: s(-18),
-      left: s(-22),
-      child: _decorWithGlow(
-        asset: cornerStarsLeftAsset,
-        w: s(46),
-        h: s(46),
-        baseTint: cornerStarsBaseTint,
-        glowTint: cornerStarsGlowTint,
-      ),
-    ),
-    // BOTTOM-RIGHT
-    Positioned(
-      bottom: s(-8),
-      right: s(-20),
-      child: _decorWithGlow(
-        asset: cornerStarsRightAsset,
-        w: s(48),
-        h: s(48),
-        baseTint: cornerStarsBaseTint,
-        glowTint: cornerStarsGlowTint,
-      ),
-    ),
-  ] else ...[
-    // TOP-RIGHT (mirror)
-    Positioned(
-      top: s(-18),
-      right: s(-22),
-      child: Transform.flip(
-        flipX: true,
-        child: _decorWithGlow(
-          asset: cornerStarsLeftAsset,
-          w: s(46),
-          h: s(46),
-          baseTint: cornerStarsBaseTint,
-          glowTint: cornerStarsGlowTint,
         ),
-      ),
-    ),
-    // ✅ BOTTOM-LEFT (mirror) — זה החיבור שחסר לך בכוכבים
-    Positioned(
-      bottom: s(-8),
-      left: s(-20),
-      child: Transform.flip(
-        flipX: true,
-        child: _decorWithGlow(
-          asset: cornerStarsRightAsset,
-          w: s(48),
-          h: s(48),
-          baseTint: cornerStarsBaseTint,
-          glowTint: cornerStarsGlowTint,
-        ),
-      ),
-    ),
-  ],
-],
-
-
-        // ✅ DECOR: Kitty
-        if (decor == BubbleDecor.kitty) ...[
-          Positioned(
-            top: s(-18),
-            left: isMe ? s(-18) : null,
-            right: isMe ? null : s(-18),
-            child: IgnorePointer(
-              ignoring: true,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  ColorFiltered(
-                    colorFilter: ColorFilter.mode(
-                      _musicNoteTintFromBubble(bubbleFill),
-                      BlendMode.srcIn,
-                    ),
-                    child: Image.asset(
-                      'assets/decors/TextBubbleKitty.png',
-                      width: s(34),
-                      height: s(34),
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                  ColorFiltered(
-                    colorFilter: ColorFilter.mode(
-                      _darkenColor(_musicNoteTintFromBubble(bubbleFill), 0.25),
-                      BlendMode.srcIn,
-                    ),
-                    child: Transform.scale(
-                      scale: 0.78,
-                      child: Image.asset(
-                        'assets/decors/TextBubbleKittyFace.png',
-                        width: s(34),
-                        height: s(34),
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ],
-    );
+    ],
+
+    // ✅ DECOR: Pink Hearts
+    if (decor == BubbleDecor.pinkHearts) ...[
+      if (isMe) ...[
+        Positioned(
+          top: s(-22),
+          left: s(-28),
+          child: IgnorePointer(
+            ignoring: true,
+            child: Image.asset(
+              'assets/decors/TextBubblePinkHeartsLeft.png',
+              width: s(46),
+              height: s(46),
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: s(-8),
+          right: s(-20),
+          child: IgnorePointer(
+            ignoring: true,
+            child: Image.asset(
+              'assets/decors/TextBubblePinkHeartsRight.png',
+              width: s(48),
+              height: s(48),
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ] else ...[
+        Positioned(
+          top: s(-22),
+          right: s(-28),
+          child: IgnorePointer(
+            ignoring: true,
+            child: Transform.flip(
+              flipX: true,
+              child: Image.asset(
+                'assets/decors/TextBubblePinkHeartsLeft.png',
+                width: s(46),
+                height: s(46),
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: s(-8),
+          left: s(-20),
+          child: IgnorePointer(
+            ignoring: true,
+            child: Transform.flip(
+              flipX: true,
+              child: Image.asset(
+                'assets/decors/TextBubblePinkHeartsRight.png',
+                width: s(48),
+                height: s(48),
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ],
+
+    // ✅ DECOR: Stars
+    if (decor == BubbleDecor.stars) ...[
+      if (isMe)
+        Positioned(
+          bottom: s(-20),
+          left: s(-25),
+          child: IgnorePointer(
+            ignoring: true,
+            child: Image.asset(
+              'assets/decors/TextBubbleStars.png',
+              width: s(44),
+              height: s(44),
+              fit: BoxFit.contain,
+            ),
+          ),
+        )
+      else
+        Positioned(
+          bottom: s(-20),
+          right: s(-25),
+          child: IgnorePointer(
+            ignoring: true,
+            child: Transform.flip(
+              flipX: true,
+              child: Image.asset(
+                'assets/decors/TextBubbleStars.png',
+                width: s(44),
+                height: s(44),
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
+    ],
+// ✅ DECOR: Flowers + Ribbon (bottom corner sticker)
+if (decor == BubbleDecor.flowersRibbon) ...[
+  if (isMe)
+    Positioned(
+      bottom: s(-20),
+      left: s(-40),
+      child: IgnorePointer(
+        ignoring: true,
+        child: Image.asset(
+          'assets/decors/TextBubbleFlowersAndRibbon.png',
+          width: s(70),
+          height: s(70),
+          fit: BoxFit.contain,
+        ),
+      ),
+    )
+  else
+    Positioned(
+      bottom: s(-20),
+      right: s(-40),
+      child: IgnorePointer(
+        ignoring: true,
+        child: Transform.flip(
+          flipX: true,
+          child: Image.asset(
+            'assets/decors/TextBubbleFlowersAndRibbon.png',
+            width: s(70),
+            height: s(70),
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    ),
+],
+
+    // ✅ DECOR: DripSad
+    if (decor == BubbleDecor.dripSad) ...[
+      Positioned(
+        bottom: s(-31),
+        right: isMe ? s(6) : null,
+        left: isMe ? null : s(6),
+        child: IgnorePointer(
+          ignoring: true,
+          child: Transform.flip(
+            flipX: isMe,
+            child: ColorFiltered(
+              colorFilter: ColorFilter.mode(
+                bubbleFill,
+                BlendMode.srcIn,
+              ),
+              child: Image.asset(
+                'assets/decors/TextBubbleDrip.png',
+                width: s(40),
+                height: s(40),
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
+      ),
+      Positioned(
+        bottom: s(-7),
+        right: isMe ? s(12) : null,
+        left: isMe ? null : s(18),
+        child: IgnorePointer(
+          ignoring: true,
+          child: Transform.flip(
+            flipX: isMe,
+            child: Image.asset(
+              'assets/decors/TextBubbleSadFace.png',
+              width: s(22),
+              height: s(22),
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ),
+    ],
+
+    // ✅ DECOR: Music Notes
+    if (decor == BubbleDecor.musicNotes) ...[
+      Positioned(
+        top: s(-18),
+        left: isMe ? s(-18) : null,
+        right: isMe ? null : s(-18),
+        child: IgnorePointer(
+          ignoring: true,
+          child: ColorFiltered(
+            colorFilter: ColorFilter.mode(
+              _musicNoteTintFromBubble(bubbleFill),
+              BlendMode.srcIn,
+            ),
+            child: Image.asset(
+              'assets/decors/TextBubbleMusicNotes.png',
+              width: s(34),
+              height: s(34),
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ),
+    ],
+
+    // ✅ DECOR: Surprise
+    if (decor == BubbleDecor.surprise) ...[
+      Positioned(
+        top: s(-18),
+        left: isMe ? s(-18) : null,
+        right: isMe ? null : s(-18),
+        child: IgnorePointer(
+          ignoring: true,
+          child: ColorFiltered(
+            colorFilter: ColorFilter.mode(
+              _musicNoteTintFromBubble(bubbleFill),
+              BlendMode.srcIn,
+            ),
+            child: Image.asset(
+              'assets/decors/TextBubbleSurprise.png',
+              width: s(34),
+              height: s(34),
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ),
+    ],
+
+    // ✅ DECOR: Corner Stars Glow
+    if (decor == BubbleDecor.cornerStarsGlow) ...[
+      if (isMe) ...[
+        Positioned(
+          top: s(-18),
+          left: s(-22),
+          child: _decorWithGlow(
+            asset: cornerStarsLeftAsset,
+            w: s(46),
+            h: s(46),
+            baseTint: cornerStarsBaseTint,
+            glowTint: cornerStarsGlowTint,
+          ),
+        ),
+        Positioned(
+          bottom: s(-8),
+          right: s(-20),
+          child: _decorWithGlow(
+            asset: cornerStarsRightAsset,
+            w: s(48),
+            h: s(48),
+            baseTint: cornerStarsBaseTint,
+            glowTint: cornerStarsGlowTint,
+          ),
+        ),
+      ] else ...[
+        Positioned(
+          top: s(-18),
+          right: s(-22),
+          child: Transform.flip(
+            flipX: true,
+            child: _decorWithGlow(
+              asset: cornerStarsLeftAsset,
+              w: s(46),
+              h: s(46),
+              baseTint: cornerStarsBaseTint,
+              glowTint: cornerStarsGlowTint,
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: s(-8),
+          left: s(-20),
+          child: Transform.flip(
+            flipX: true,
+            child: _decorWithGlow(
+              asset: cornerStarsRightAsset,
+              w: s(48),
+              h: s(48),
+              baseTint: cornerStarsBaseTint,
+              glowTint: cornerStarsGlowTint,
+            ),
+          ),
+        ),
+      ],
+    ],
+
+    // ✅ DECOR: Kitty
+    if (decor == BubbleDecor.kitty) ...[
+      Positioned(
+        top: s(-18),
+        left: isMe ? s(-18) : null,
+        right: isMe ? null : s(-18),
+        child: IgnorePointer(
+          ignoring: true,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              ColorFiltered(
+                colorFilter: ColorFilter.mode(
+                  _musicNoteTintFromBubble(bubbleFill),
+                  BlendMode.srcIn,
+                ),
+                child: Image.asset(
+                  'assets/decors/TextBubbleKitty.png',
+                  width: s(34),
+                  height: s(34),
+                  fit: BoxFit.contain,
+                ),
+              ),
+              ColorFiltered(
+                colorFilter: ColorFilter.mode(
+                  _darkenColor(_musicNoteTintFromBubble(bubbleFill), 0.25),
+                  BlendMode.srcIn,
+                ),
+                child: Transform.scale(
+                  scale: 0.78,
+                  child: Image.asset(
+                    'assets/decors/TextBubbleKittyFace.png',
+                    width: s(34),
+                    height: s(34),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+
+    // ✅ NEW badge (ALWAYS, independent of decor)
+    Positioned(
+      top: s(-10),
+      left: isMe ? s(-14) : null,
+      right: isMe ? null : s(-14),
+      child: IgnorePointer(
+        ignoring: true,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOut,
+          opacity: showNewBadge ? 1.0 : 0.0,
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutBack,
+            scale: showNewBadge ? 1.08 : 0.92,
+            child: MysticNewBadge(
+              uiScale: uiScale,
+            ),
+          ),
+        ),
+      ),
+    ),
+  ],
+);
+
 
     final String tLabel = showTime ? _timeLabel(timeMs) : '';
     // ✅ Reserve vertical space so the list spacing stays like the old "time-under-bubble" layout.
@@ -1241,16 +1266,17 @@ if (showName)
           if (isMe) ...nameHearts,
           if (isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
 
-          Text(
-            user.name,
-            style: TextStyle(
-              color: usernameColor,
-              fontSize: 13.5 * uiScale,
-              fontWeight: FontWeight.w400,
-              height: 1.0,
-              letterSpacing: 0.2 * uiScale,
-            ),
-          ),
+Text(
+  user.name,
+  style: TextStyle(
+    color: usernameColor,
+    fontSize: 16 * uiScale, // ✅ היה 13.5
+    fontWeight: FontWeight.w300, // ✅ אופציונלי: קצת יותר “שם”
+    height: 1.0,
+    letterSpacing: 0.2 * uiScale,
+  ),
+),
+
 
           // ✅ not isMe: hearts AFTER name (right of name)
           if (!isMe && nameHearts.isNotEmpty) SizedBox(width: 4 * uiScale),
@@ -1287,20 +1313,21 @@ Widget avatarWithTime({required bool rightSide}) {
       avatar,
       if (showTime && tLabel.isNotEmpty) ...[
         SizedBox(height: 6 * uiScale),
-        Text(
-          tLabel,
-          textHeightBehavior: const TextHeightBehavior(
-            applyHeightToFirstAscent: false,
-            applyHeightToLastDescent: false,
-          ),
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.55),
-            fontSize: 12 * uiScale,
-            fontWeight: FontWeight.w600,
-            height: 1.0,
-            letterSpacing: 0.2 * uiScale,
-          ),
-        ),
+Text(
+  tLabel,
+  textHeightBehavior: const TextHeightBehavior(
+    applyHeightToFirstAscent: false,
+    applyHeightToLastDescent: false,
+  ),
+  style: TextStyle(
+    color: timeColor.withOpacity(0.70),
+    fontSize: 12 * uiScale,
+    fontWeight: FontWeight.w600,
+    height: 1.0,
+    letterSpacing: 0.2 * uiScale,
+  ),
+),
+
       ],
     ],
   );

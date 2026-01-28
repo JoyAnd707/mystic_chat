@@ -8,8 +8,9 @@ class PresenceService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ===== Config =====
-  static const Duration heartbeatEvery = Duration(seconds: 15);
-  static const Duration onlineTimeout = Duration(seconds: 45);
+static const Duration heartbeatEvery = Duration(seconds: 10);
+static const Duration onlineTimeout = Duration(seconds: 45);
+
 
   Timer? _heartbeatTimer;
 
@@ -36,7 +37,8 @@ class PresenceService {
         'userId': userId,
         'displayName': displayName,
         'state': 'online',
-        'lastSeen': FieldValue.serverTimestamp(),
+        'lastSeen': Timestamp.now(),
+
       },
       SetOptions(merge: true),
     );
