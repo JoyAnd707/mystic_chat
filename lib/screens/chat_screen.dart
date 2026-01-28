@@ -1704,9 +1704,16 @@ Future<void> _emitLeft({bool showInUi = true}) async {
   static final Map<String, ValueNotifier<Set<String>>> _roomOnline = {};
   late final ValueNotifier<Set<String>> _onlineNotifier;
 
-  /// ===== Local typing (UI-only) =====
-  static final Map<String, ValueNotifier<Set<String>>> _roomTyping = {};
-  late final ValueNotifier<Set<String>> _typingNotifier;
+/// ===== Typing (Firestore, live) =====
+StreamSubscription<Set<String>>? _typingSub;
+late final ValueNotifier<Set<String>> _typingNotifier;
+
+// debounce so we don't write to Firestore on every keystroke
+Timer? _typingDebounce;
+
+// track my last sent typing state (prevents spam)
+bool _meTypingRemote = false;
+
 
   void _markMeOnline() {
     // Optional: quick optimistic UI (stream will override)
@@ -1720,32 +1727,42 @@ Future<void> _emitLeft({bool showInUi = true}) async {
 
 
 
-  void _setMeTyping(bool typing) {
-    final current = {..._typingNotifier.value};
-    if (typing) {
-      current.add(widget.currentUserId);
-    } else {
-      current.remove(widget.currentUserId);
-    }
-    _typingNotifier.value = current;
-  }
-  void _handleTypingChange() {
-    final hasFocus = _focusNode.hasFocus;
-    final hasText = _controller.text.trim().isNotEmpty;
+void _sendTypingToFirestore(bool shouldType) {
+  if (shouldType == _meTypingRemote) return; // no change
+  _meTypingRemote = shouldType;
 
-    // typing == focus + has some text
-    final shouldType = hasFocus && hasText;
+  final name = _displayNameForId(widget.currentUserId);
 
-    // Only react if my typing state actually changed (so we don't spam updates)
-    final wasTyping = _typingNotifier.value.contains(widget.currentUserId);
+  // Firestore write (debounced)
+  PresenceService.I.setTyping(
+    roomId: widget.roomId,
+    userId: widget.currentUserId,
+    displayName: name,
+    isTyping: shouldType,
+  );
+}
 
-    _setMeTyping(shouldType);
+void _handleTypingChange() {
+  final hasFocus = _focusNode.hasFocus;
+  final hasText = _controller.text.trim().isNotEmpty;
 
-    // ✅ If typing just turned ON, auto-scroll so I can see my own typing preview
-    if (!wasTyping && shouldType) {
-      _scrollToBottom(keepFocus: true);
-    }
-  }
+  final shouldType = hasFocus && hasText;
+
+  // debounce (prevents heavy write spam)
+  _typingDebounce?.cancel();
+  _typingDebounce = Timer(const Duration(milliseconds: 250), () {
+    if (!mounted) return;
+    _sendTypingToFirestore(shouldType);
+  });
+
+  // local UX: when typing turns ON, auto-scroll so you see your own typing row
+final wasTypingLocal = _meTypingRemote; // state we last sent
+if (!wasTypingLocal && shouldType) {
+  _scrollToBottom(keepFocus: true);
+}
+
+}
+
 
 @override
 void initState() {
@@ -1795,10 +1812,17 @@ void initState() {
     () => ValueNotifier<Set<String>>(<String>{}),
   );
 
-  _typingNotifier = _roomTyping.putIfAbsent(
-    widget.roomId,
-    () => ValueNotifier<Set<String>>(<String>{}),
-  );
+_typingNotifier = ValueNotifier<Set<String>>(<String>{});
+
+// ✅ Typing stream (Firestore) -> drives TypingBubbleRow on ALL devices
+_typingSub?.cancel();
+_typingSub = PresenceService.I
+    .streamTypingUserIds(roomId: widget.roomId)
+    .listen((ids) {
+  if (!mounted) return;
+  _typingNotifier.value = ids;
+});
+
 
   // ✅ optimistic: show myself immediately (stream will override)
   _markMeOnline();
@@ -1872,7 +1896,7 @@ void dispose() {
 
   _hourTimer?.cancel();
 
-  _setMeTyping(false);
+  
   _controller.removeListener(_handleTypingChange);
   _focusNode.removeListener(_handleTypingChange);
 
@@ -1892,6 +1916,20 @@ _scrollController.removeListener(_onScrollChanged);
 
 // ✅ last save (best-effort)
 _saveScrollOffsetNow();
+// ✅ stop typing presence (best effort)
+_typingDebounce?.cancel();
+_typingDebounce = null;
+
+_typingSub?.cancel();
+_typingSub = null;
+
+// Make sure my typing doc is removed
+PresenceService.I.setTyping(
+  roomId: widget.roomId,
+  userId: widget.currentUserId,
+  displayName: _displayNameForId(widget.currentUserId),
+  isTyping: false,
+);
 
 super.dispose();
 
@@ -2187,13 +2225,25 @@ Future<void> _sendMessage() async {
   final ts = DateTime.now().millisecondsSinceEpoch;
 
   // Clear input immediately (feels instant)
-  setState(() {
-    _controller.clear();
-    _isTyping = true;
+setState(() {
+  _controller.clear();
 
-    _selectedTemplate = BubbleTemplate.normal;
-    _selectedDecor = BubbleDecor.none;
-  });
+  // ✅ user is still in "typing mode"
+  _isTyping = true;
+
+  _selectedTemplate = BubbleTemplate.normal;
+  _selectedDecor = BubbleDecor.none;
+});
+
+// ✅ remote typing OFF
+_sendTypingToFirestore(false);
+
+// ✅ force keyboard to stay open
+WidgetsBinding.instance.addPostFrameCallback((_) {
+  if (mounted) _focusNode.requestFocus();
+});
+
+
 
   await FirestoreChatService.sendTextMessage(
     roomId: widget.roomId,
@@ -2246,382 +2296,345 @@ final Color timeColor = timeColorForHour(hour);
 
 
   debugPrint('HOUR=$hour  usernameColor=$usernameColor  bg=$bg  uiScale=$uiScale');
-return Scaffold(
-  backgroundColor: Colors.black,
-floatingActionButton: kEnableDebugIncomingPreview
-    ? FloatingActionButton(
-        onPressed: _debugSimulateIncomingMessage,
-        child: const Icon(Icons.bug_report),
-      )
-    : null,
+return GestureDetector(
+  behavior: HitTestBehavior.translucent,
+  onTap: () {
+    // closes keyboard when tapping anywhere outside inputs
+    FocusManager.instance.primaryFocus?.unfocus();
 
-  body: Column(
-    children: [
-
-
-          const TopBorderBar(height: _topBarHeight),
-
-SafeArea(
-  bottom: false,
-  child: ValueListenableBuilder<Set<String>>(
-    valueListenable: _onlineNotifier,
-    builder: (context, onlineIds, _) {
-return ActiveUsersBar(
-  usersById: users,
-  onlineUserIds: onlineIds,
-  currentUserId: widget.currentUserId,
-  onBack: () {
-    Navigator.of(context).maybePop();
+    // optional: also flip your typing UI state
+    if (mounted) {
+      setState(() => _isTyping = false);
+    }
   },
-  onOpenBubbleMenu: _openBubbleTemplateMenu,
-  titleText: widget.title ??
-      (users[widget.currentUserId]?.name ?? widget.currentUserId),
-  uiScale: uiScale,
-);
+  child: Scaffold(
+    backgroundColor: Colors.black,
+    floatingActionButton: kEnableDebugIncomingPreview
+        ? FloatingActionButton(
+            onPressed: _debugSimulateIncomingMessage,
+            child: const Icon(Icons.bug_report),
+          )
+        : null,
 
+    body: Column(
+      children: [
+        const TopBorderBar(height: _topBarHeight),
 
-    },
-  ),
-),
-
-
-          Expanded(
-            child: Stack(
-              children: [
-// ✅ Background — SAME bounds as frame + messages
-Positioned(
-  left: 0,
-  right: 0,
-  top: _redFrameTopGap,
-  bottom: 0,
-  child: AnimatedSwitcher(
-  duration: const Duration(milliseconds: 1200),
-  switchInCurve: Curves.easeInOut,
-  switchOutCurve: Curves.easeInOut,
-
-  // ⭐️ זה החלק הקריטי
-  layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
-    return Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        ...previousChildren,
-        if (currentChild != null) currentChild,
-      ],
-    );
-  },
-
-  transitionBuilder: (child, animation) {
-    return FadeTransition(
-      opacity: animation,
-      child: child,
-    );
-  },
-
-child: AnimatedBuilder(
-  key: ValueKey(bg),
-  animation: _bgFxCtrl,
-  builder: (context, _) {
-    final t = _bgFxCtrl.value;
-
-    final bool glitchOn = _bgOverride != null;
-
-    final double pulse = (t * (1.0 - t)) * 4.0; // 0..~1
-    final double blur = glitchOn ? (pulse * 7.0) : 0.0;
-
-    final double dx = glitchOn ? (sin(t * 40) * 8.0) : 0.0;
-    final double dy = glitchOn ? (cos(t * 36) * 6.0) : 0.0;
-    final double rot = glitchOn ? (sin(t * 20) * 0.03) : 0.0;
-
-    Widget img = Image.asset(
-      bg,
-      fit: BoxFit.cover,
-    );
-
-    if (!glitchOn) return img;
-
-    return Transform.translate(
-      offset: Offset(dx, dy),
-      child: Transform.rotate(
-        angle: rot,
-        child: ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: ColorFiltered(
-            colorFilter: ColorFilter.matrix(<double>[
-              1, 0, 0, 0, 18 * pulse,
-              0, 1, 0, 0, 6 * pulse,
-              0, 0, 1, 0, 24 * pulse,
-              0, 0, 0, 1, 0,
-            ]),
-            child: img,
+        SafeArea(
+          bottom: false,
+          child: ValueListenableBuilder<Set<String>>(
+            valueListenable: _onlineNotifier,
+            builder: (context, onlineIds, _) {
+              return ActiveUsersBar(
+                usersById: users,
+                onlineUserIds: onlineIds,
+                currentUserId: widget.currentUserId,
+                onBack: () {
+                  Navigator.of(context).maybePop();
+                },
+                onOpenBubbleMenu: _openBubbleTemplateMenu,
+                titleText: widget.title ??
+                    (users[widget.currentUserId]?.name ?? widget.currentUserId),
+                uiScale: uiScale,
+              );
+            },
           ),
         ),
-      ),
-    );
-  },
-),
 
-),
+        Expanded(
+          child: Stack(
+            children: [
+              // ✅ Background — SAME bounds as frame + messages
+              Positioned(
+                left: 0,
+                right: 0,
+                top: _redFrameTopGap,
+                bottom: 0,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 1200),
+                  switchInCurve: Curves.easeInOut,
+                  switchOutCurve: Curves.easeInOut,
+                  layoutBuilder:
+                      (Widget? currentChild, List<Widget> previousChildren) {
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: <Widget>[
+                        ...previousChildren,
+                        if (currentChild != null) currentChild,
+                      ],
+                    );
+                  },
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: child,
+                    );
+                  },
+                  child: AnimatedBuilder(
+                    key: ValueKey(bg),
+                    animation: _bgFxCtrl,
+                    builder: (context, _) {
+                      final t = _bgFxCtrl.value;
 
-),
+                      final bool glitchOn = _bgOverride != null;
 
+                      final double pulse = (t * (1.0 - t)) * 4.0; // 0..~1
+                      final double blur = glitchOn ? (pulse * 7.0) : 0.0;
 
+                      final double dx = glitchOn ? (sin(t * 40) * 8.0) : 0.0;
+                      final double dy = glitchOn ? (cos(t * 36) * 6.0) : 0.0;
+                      final double rot = glitchOn ? (sin(t * 20) * 0.03) : 0.0;
 
+                      Widget img = Image.asset(
+                        bg,
+                        fit: BoxFit.cover,
+                      );
 
+                      if (!glitchOn) return img;
 
-                // ✅ Messages
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: _redFrameTopGap,
-                  bottom: 0,
-                  child: Column(
-                    children: [
-Expanded(
-  child: ValueListenableBuilder<Set<String>>(
-    valueListenable: _typingNotifier,
-    builder: (context, typingIds, _) {
-      // ✅ typing users list (sorted for stability)
-      final typingList = typingIds.toList();
-      typingList.sort((a, b) {
-        final an = users[a]?.name ?? a;
-        final bn = users[b]?.name ?? b;
-        return an.toLowerCase().compareTo(bn.toLowerCase());
-      });
+                      return Transform.translate(
+                        offset: Offset(dx, dy),
+                        child: Transform.rotate(
+                          angle: rot,
+                          child: ImageFiltered(
+                            imageFilter:
+                                ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+                            child: ColorFiltered(
+                              colorFilter: ColorFilter.matrix(<double>[
+                                1, 0, 0, 0, 18 * pulse,
+                                0, 1, 0, 0, 6 * pulse,
+                                0, 0, 1, 0, 24 * pulse,
+                                0, 0, 0, 1, 0,
+                              ]),
+                              child: img,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
 
-      // ✅ limit typing bubbles (so it won’t spam the UI)
-      final limitedTyping = typingList.take(3).toList();
+              // ✅ Messages
+              Positioned(
+                left: 0,
+                right: 0,
+                top: _redFrameTopGap,
+                bottom: 0,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: ValueListenableBuilder<Set<String>>(
+                        valueListenable: _typingNotifier,
+                        builder: (context, typingIds, _) {
+                          final typingList = typingIds.toList();
+                          typingList.sort((a, b) {
+                            final an = users[a]?.name ?? a;
+                            final bn = users[b]?.name ?? b;
+                            return an.toLowerCase().compareTo(bn.toLowerCase());
+                          });
 
-      final totalCount = _messages.length + limitedTyping.length;
+                          final limitedTyping = typingList.take(3).toList();
+                          final totalCount = _messages.length + limitedTyping.length;
 
-      return ListView.builder(
-        controller: _scrollController,
-padding: EdgeInsets.only(
-  top: 8 * uiScale,
-  bottom: 88 * uiScale,
-),
+                          return ListView.builder(
+                            controller: _scrollController,
+                            padding: EdgeInsets.only(
+                              top: 8 * uiScale,
+                              bottom: 88 * uiScale,
+                            ),
+                            itemCount: totalCount,
+                            itemBuilder: (context, index) {
+                              const double chatSidePadding = 16;
 
-        itemCount: totalCount,
-        itemBuilder: (context, index) {
-          const double chatSidePadding = 16;
+                              if (index < _messages.length) {
+                                final msg = _messages[index];
+                                final prev = index > 0 ? _messages[index - 1] : null;
 
-          // =========================
-          // 1) REAL MESSAGES
-          // =========================
-if (index < _messages.length) {
-  final msg = _messages[index];
-  final prev = index > 0 ? _messages[index - 1] : null;
+                                bool showDateDivider = false;
+                                String dateLabel = '';
 
-  // ✅ DATE DIVIDER LOGIC (Group Chat only)
-  bool showDateDivider = false;
-  String dateLabel = '';
+                                if (widget.roomId == 'group_main' && msg.ts > 0) {
+                                  final msgDay = DateTime.fromMillisecondsSinceEpoch(msg.ts);
 
-  if (widget.roomId == 'group_main' && msg.ts > 0) {
-    final msgDay = DateTime.fromMillisecondsSinceEpoch(msg.ts);
+                                  if (prev == null || prev.ts <= 0) {
+                                    showDateDivider = true;
+                                    dateLabel = _dayLabel(msgDay);
+                                  } else {
+                                    final prevDay =
+                                        DateTime.fromMillisecondsSinceEpoch(prev.ts);
+                                    if (!_isSameDay(msgDay, prevDay)) {
+                                      showDateDivider = true;
+                                      dateLabel = _dayLabel(msgDay);
+                                    }
+                                  }
+                                }
 
-    if (prev == null || prev.ts <= 0) {
-      showDateDivider = true;
-      dateLabel = _dayLabel(msgDay);
-    } else {
-      final prevDay = DateTime.fromMillisecondsSinceEpoch(prev.ts);
-      if (!_isSameDay(msgDay, prevDay)) {
-        showDateDivider = true;
-        dateLabel = _dayLabel(msgDay);
-      }
-    }
-  }
+                                double topSpacing;
+                                if (msg.type == ChatMessageType.system) {
+                                  topSpacing = 14;
+                                } else if (prev == null) {
+                                  topSpacing = 10;
+                                } else if (prev.type == ChatMessageType.system) {
+                                  topSpacing = 12;
+                                } else if (prev.senderId == msg.senderId) {
+                                  topSpacing = 18;
+                                } else {
+                                  topSpacing = 12;
+                                }
 
-double topSpacing;
-if (msg.type == ChatMessageType.system) {
-  topSpacing = 14;
-} else if (prev == null) {
-  topSpacing = 10;
-} else if (prev.type == ChatMessageType.system) {
-  topSpacing = 12;
-} else if (prev.senderId == msg.senderId) {
-  topSpacing = 18; // היה 40
-} else {
-  topSpacing = 12; // היה 20
-}
+                                final List<Widget> pieces = <Widget>[];
 
+                                if (showDateDivider) {
+                                  pieces.add(_GcDateDivider(label: dateLabel, uiScale: uiScale));
+                                }
 
-  // ✅ We return a Column so we can inject the divider ABOVE the message
-  final List<Widget> pieces = <Widget>[];
+                                final int firstUnreadTs = _firstUnreadTsOrNull();
+                                final bool showUnreadDivider = !_hideUnreadDivider &&
+                                    firstUnreadTs > 0 &&
+                                    msg.type == ChatMessageType.text &&
+                                    msg.ts == firstUnreadTs;
 
-  if (showDateDivider) {
-    pieces.add(_GcDateDivider(label: dateLabel, uiScale: uiScale));
-  }
+                                if (showUnreadDivider) {
+                                  pieces.add(
+                                    KeyedSubtree(
+                                      key: _unreadDividerKey,
+                                      child: _UnreadDivider(uiScale: uiScale, text: 'UNREAD'),
+                                    ),
+                                  );
+                                }
 
+                                if (msg.type == ChatMessageType.system) {
+                                  const double systemSideInset = 2.0;
+                                  pieces.add(
+                                    Padding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        systemSideInset * uiScale,
+                                        topSpacing * uiScale,
+                                        systemSideInset * uiScale,
+                                        0,
+                                      ),
+                                      child: SystemMessageBar(text: msg.text, uiScale: uiScale),
+                                    ),
+                                  );
 
-// ✅ UNREAD divider (above the first unread message)
-final int firstUnreadTs = _firstUnreadTsOrNull();
-final bool showUnreadDivider = !_hideUnreadDivider &&
-    firstUnreadTs > 0 &&
-    msg.type == ChatMessageType.text &&
-    msg.ts == firstUnreadTs;
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: pieces,
+                                  );
+                                }
 
-if (showUnreadDivider) {
-  pieces.add(
-    KeyedSubtree(
-      key: _unreadDividerKey,
-      child: _UnreadDivider(uiScale: uiScale, text: 'UNREAD'),
-    ),
-  );
-}
+                                final user = users[msg.senderId];
+                                if (user == null) return const SizedBox.shrink();
 
+                                final isMe = user.id == widget.currentUserId;
+                                final bool isGroup = widget.roomId == 'group_main';
+                                final bool showNew =
+                                    isGroup ? (_newBadgeVisibleByTs[msg.ts] ?? false) : false;
 
-  if (msg.type == ChatMessageType.system) {
-    const double systemSideInset = 2.0; // baseline
-    pieces.add(
-      Padding(
-        padding: EdgeInsets.fromLTRB(
-          systemSideInset * uiScale,
-          topSpacing * uiScale,
-          systemSideInset * uiScale,
-          0,
+                                pieces.add(
+                                  KeyedSubtree(
+                                    key: _keyForMsg(msg),
+                                    child: Padding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        chatSidePadding * uiScale,
+                                        topSpacing * uiScale,
+                                        chatSidePadding * uiScale,
+                                        0,
+                                      ),
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.translucent,
+                                        onDoubleTap: () => _toggleHeartForMessage(msg),
+                                        child: MessageRow(
+                                          user: user,
+                                          text: msg.text,
+                                          isMe: isMe,
+                                          bubbleTemplate: msg.bubbleTemplate,
+                                          decor: msg.decor,
+                                          fontFamily: msg.fontFamily,
+                                          showName: (widget.roomId == 'group_main'),
+                                          nameHearts: (widget.roomId == 'group_main')
+                                              ? _buildHeartIcons(msg.heartReactorIds, uiScale)
+                                              : const <Widget>[],
+                                          showTime: (widget.roomId == 'group_main'),
+                                          timeMs: msg.ts,
+                                          showNewBadge: showNew,
+                                          usernameColor: usernameColor,
+                                          timeColor: timeColor,
+                                          uiScale: uiScale,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: pieces,
+                                );
+                              }
+
+                              final typingIndex = index - _messages.length;
+                              final typingUserId = limitedTyping[typingIndex];
+                              final typingUser = users[typingUserId]!;
+                              final isMeTyping = typingUserId == widget.currentUserId;
+
+                              const double topSpacing = 18;
+
+                              return Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  chatSidePadding * uiScale,
+                                  topSpacing * uiScale,
+                                  chatSidePadding * uiScale,
+                                  0,
+                                ),
+                                child: TypingBubbleRow(
+                                  user: typingUser,
+                                  isMe: isMeTyping,
+                                  uiScale: uiScale,
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ✅ Mystic red frame
+              Positioned(
+                left: 0,
+                right: 0,
+                top: _redFrameTopGap,
+                bottom: 0,
+                child: IgnorePointer(
+                  ignoring: true,
+                  child: CustomPaint(
+                    painter: _MysticRedFramePainter(),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        child: SystemMessageBar(text: msg.text, uiScale: uiScale),
-      ),
-    );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: pieces,
-    );
-  }
-
-  final user = users[msg.senderId];
-  if (user == null) {
-    // sender no longer exists (e.g. removed user like "nella")
-    return const SizedBox.shrink();
-  }
-
-final isMe = user.id == widget.currentUserId;
-
-// ✅ Group-only UI features
-final bool isGroup = widget.roomId == 'group_main';
-final bool showNew = isGroup ? (_newBadgeVisibleByTs[msg.ts] ?? false) : false;
-
-pieces.add(
-  KeyedSubtree(
-    key: _keyForMsg(msg),
-    child: Padding(
-      padding: EdgeInsets.fromLTRB(
-        chatSidePadding * uiScale,
-        topSpacing * uiScale,
-        chatSidePadding * uiScale,
-        0,
-      ),
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onDoubleTap: () => _toggleHeartForMessage(msg),
-        child: MessageRow(
-          user: user,
-          text: msg.text,
-          isMe: isMe,
-          bubbleTemplate: msg.bubbleTemplate,
-          decor: msg.decor,
-          fontFamily: msg.fontFamily,
-          showName: (widget.roomId == 'group_main'),
-          nameHearts: (widget.roomId == 'group_main')
-              ? _buildHeartIcons(msg.heartReactorIds, uiScale)
-              : const <Widget>[],
-          showTime: (widget.roomId == 'group_main'),
-          timeMs: msg.ts,
-          showNewBadge: showNew,
-          usernameColor: usernameColor,
-          timeColor: timeColor,
+        BottomBorderBar(
+          height: _bottomBarHeight * uiScale,
+          isTyping: _isTyping,
+          onTapTypeMessage: _openKeyboard,
+          controller: _controller,
+          focusNode: _focusNode,
+          onSend: _sendMessage,
           uiScale: uiScale,
         ),
-      ),
+      ],
     ),
   ),
 );
 
-
-
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: pieces,
-  );
-}
-
-
-          // =========================
-          // 2) TYPING BUBBLES (INLINE)
-          // =========================
-          final typingIndex = index - _messages.length;
-          final typingUserId = limitedTyping[typingIndex];
-          final typingUser = users[typingUserId]!;
-          final isMeTyping = typingUserId == widget.currentUserId;
-
-          // spacing above typing indicators
-          final double topSpacing = 18;
-
-return Padding(
-  padding: EdgeInsets.fromLTRB(
-    chatSidePadding * uiScale,
-    topSpacing * uiScale,
-    chatSidePadding * uiScale,
-    0,
-  ),
-  child: TypingBubbleRow(
-    user: typingUser,
-    isMe: isMeTyping,
-    uiScale: uiScale, // ✅ NEW
-  ),
-);
-
-
-
-        },
-      );
-    },
-  ),
-),
-
-                    ],
-                  ),
-                ),
-                                // ✅ Mystic red frame
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: _redFrameTopGap,
-                  bottom: 0,
-                  child: IgnorePointer(
-                    ignoring: true,
-                    child: CustomPaint(
-                      painter: _MysticRedFramePainter(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-
-
-
-
-
-
-
-
-
-BottomBorderBar(
-  height: _bottomBarHeight * uiScale,
-  isTyping: _isTyping,
-  onTapTypeMessage: _openKeyboard,
-  controller: _controller,
-  focusNode: _focusNode,
-  onSend: _sendMessage,
-  uiScale: uiScale,
-),
-
-
-        ],
-      ),
-    );
   }
 }
 

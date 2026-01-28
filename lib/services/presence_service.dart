@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PresenceService {
   PresenceService._();
@@ -123,4 +125,70 @@ static const Duration onlineTimeout = Duration(seconds: 45);
       return true;
     });
   }
+
+  // =======================
+// Typing Presence (Firestore)
+// =======================
+
+CollectionReference<Map<String, dynamic>> _typingCol(String roomId) {
+  return FirebaseFirestore.instance
+      .collection('rooms')
+      .doc(roomId)
+      .collection('typing');
+}
+
+/// Writes "I'm typing" to Firestore.
+/// We DELETE the doc when not typing (clean + no stale flags).
+Future<void> setTyping({
+  required String roomId,
+  required String userId,
+  required String displayName,
+  required bool isTyping,
+}) async {
+  final doc = _typingCol(roomId).doc(userId);
+
+  if (isTyping) {
+    await doc.set(<String, dynamic>{
+      'isTyping': true,
+      'displayName': displayName,
+      'ts': FieldValue.serverTimestamp(), // better than local time
+    }, SetOptions(merge: true));
+  } else {
+    // delete => no typing
+    await doc.delete();
+  }
+}
+
+/// Streams all currently-typing userIds in a room.
+/// Filters out stale entries by timestamp.
+/// NOTE: We rely on serverTimestamp + client "now" to ignore old docs.
+Stream<Set<String>> streamTypingUserIds({
+  required String roomId,
+  int staleAfterMs = 8000, // 8s feels right for typing indicator
+}) {
+  return _typingCol(roomId).snapshots().map((snap) {
+    final now = DateTime.now();
+    final out = <String>{};
+
+    for (final d in snap.docs) {
+      final data = d.data();
+
+      final bool isTyping = (data['isTyping'] == true);
+      if (!isTyping) continue;
+
+      final tsRaw = data['ts'];
+      if (tsRaw is! Timestamp) continue;
+
+      final ts = tsRaw.toDate();
+      final ageMs = now.difference(ts).inMilliseconds;
+
+      if (ageMs <= staleAfterMs) {
+        out.add(d.id); // docId == userId
+      }
+    }
+
+    return out;
+  });
+}
+
 }
