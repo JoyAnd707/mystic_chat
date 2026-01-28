@@ -304,6 +304,60 @@ bool _isNearBottom({double threshold = 140}) {
   return (pos.maxScrollExtent - pos.pixels) <= threshold;
 }
 
+// =======================
+// Unread Divider (last read boundary)
+// =======================
+int _lastReadTsCache = 0;
+bool _lastReadLoaded = false;
+bool _hideUnreadDivider = false;
+
+bool _hasUnreadNow() {
+  if (!_lastReadLoaded) return false;
+  return _messages.any((m) =>
+      m.type == ChatMessageType.text &&
+      m.ts > 0 &&
+      m.ts > _lastReadTsCache);
+}
+
+int _firstUnreadTsOrNull() {
+  if (!_lastReadLoaded) return 0;
+  for (final m in _messages) {
+    if (m.type != ChatMessageType.text) continue;
+    if (m.ts > 0 && m.ts > _lastReadTsCache) return m.ts;
+  }
+  return 0;
+}
+
+Future<void> _loadLastReadTsOnce() async {
+  if (_lastReadLoaded) return;
+  _lastReadTsCache = await _loadLastReadTs();
+  _lastReadLoaded = true;
+}
+
+Future<void> _markReadIfAtBottom() async {
+  if (!_lastReadLoaded) return;
+
+  // ✅ Don't auto-mark read immediately on entry
+  if (_nowMs() < _blockAutoMarkReadUntilMs) return;
+
+  if (!_isNearBottom()) return;
+
+  final int lastTs = _latestTextTs();
+  if (lastTs <= 0) return;
+
+  // nothing to do
+  if (lastTs <= _lastReadTsCache) return;
+
+  _lastReadTsCache = lastTs;
+  await _saveLastReadTs(lastTs);
+
+  if (mounted) {
+    setState(() {
+      _hideUnreadDivider = true;
+    });
+  }
+}
+
 
 // =======================
 // Scroll position restore
@@ -311,6 +365,26 @@ bool _isNearBottom({double threshold = 140}) {
 bool _didRestoreScroll = false;
 double _savedScrollOffset = 0.0;
 Timer? _scrollSaveDebounce;
+
+// ✅ IMPORTANT: don't save offset until we've restored/jumped once
+bool _allowScrollOffsetSaves = false;
+int _blockAutoMarkReadUntilMs = 0;
+
+
+// =======================
+// Unread jump helpers (keys per message + unread divider key)
+// =======================
+final Map<String, GlobalKey> _msgKeyById = <String, GlobalKey>{};
+
+/// ✅ Key for the UNREAD divider itself (so we can scroll to it and keep it at the top)
+final GlobalKey _unreadDividerKey = GlobalKey();
+
+
+
+
+GlobalKey _keyForMsg(ChatMessage m) {
+  return _msgKeyById.putIfAbsent(m.id, () => GlobalKey());
+}
 
 String _scrollOffsetPrefsKey() =>
     'scrollOffset__${widget.currentUserId}__${widget.roomId}';
@@ -320,6 +394,18 @@ Future<void> _loadSavedScrollOffset() async {
   _savedScrollOffset = prefs.getDouble(_scrollOffsetPrefsKey()) ?? 0.0;
 }
 
+Future<void> _initScrollAndStream() async {
+  await _loadSavedScrollOffset();
+  if (!mounted) return;
+
+  // attach listener ONLY after we loaded the saved offset
+  _scrollController.addListener(_onScrollChanged);
+
+  // start stream AFTER we know what to restore to
+  _startFirestoreSubscription();
+}
+
+
 Future<void> _saveScrollOffsetNow() async {
   if (!_scrollController.hasClients) return;
   final prefs = await SharedPreferences.getInstance();
@@ -327,24 +413,70 @@ Future<void> _saveScrollOffsetNow() async {
 }
 
 void _onScrollChanged() {
-  // debounce so we don’t write prefs 60 times/sec
+  // ✅ Reveal UNREAD divider when user scrolls UP, even before saving is enabled
+  if (_lastReadLoaded && _hasUnreadNow()) {
+    final bool nearBottom = _isNearBottom();
+
+    if (nearBottom) {
+      if (!_hideUnreadDivider && mounted) {
+        setState(() => _hideUnreadDivider = true);
+      }
+    } else {
+      if (_hideUnreadDivider && mounted) {
+        setState(() => _hideUnreadDivider = false);
+      }
+    }
+  }
+
+  // ✅ Don't save during initial open (prevents overwriting saved offset with 0)
+  if (!_allowScrollOffsetSaves) return;
+
   _scrollSaveDebounce?.cancel();
-  _scrollSaveDebounce = Timer(const Duration(milliseconds: 250), () {
-    _saveScrollOffsetNow();
+  _scrollSaveDebounce = Timer(const Duration(milliseconds: 250), () async {
+    await _saveScrollOffsetNow();
+    await _markReadIfAtBottom();
   });
 }
 
+
+
+
 void _tryRestoreScrollOnce() {
   if (_didRestoreScroll) return;
-  if (!_scrollController.hasClients) return;
 
-  final max = _scrollController.position.maxScrollExtent;
-  final target = _savedScrollOffset.clamp(0.0, max);
+  int triesLeft = 14;
 
-  // Jump (no animation) so it feels like “where I left off”
-  _scrollController.jumpTo(target);
+  void attempt() {
+    if (!mounted) return;
 
-  _didRestoreScroll = true;
+    if (!_scrollController.hasClients) {
+      triesLeft--;
+      if (triesLeft <= 0) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) => attempt());
+      return;
+    }
+
+    final max = _scrollController.position.maxScrollExtent;
+
+    // Wait until layout stabilizes (avatars/images can change extents).
+    if (max <= 0.0 && _messages.isNotEmpty) {
+      triesLeft--;
+      if (triesLeft <= 0) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) => attempt());
+      return;
+    }
+
+    final target = _savedScrollOffset.clamp(0.0, max);
+    _scrollController.jumpTo(target);
+
+    _didRestoreScroll = true;
+
+    // ✅ now it's safe to save offsets
+    _allowScrollOffsetSaves = true;
+
+  }
+
+  WidgetsBinding.instance.addPostFrameCallback((_) => attempt());
 }
 
 
@@ -367,6 +499,13 @@ bool _canPlayHeartFlyAnims() {
       _nowMs() >= _enableHeartAnimsAtMs;
 }
 
+int _latestTextTs() {
+  for (int i = _messages.length - 1; i >= 0; i--) {
+    final m = _messages[i];
+    if (m.type == ChatMessageType.text && m.ts > 0) return m.ts;
+  }
+  return 0;
+}
 
 /// ✅ Heart colors per user (THIS is the palette you gave)
 static const Map<String, Color> _heartColorByUserId = <String, Color>{
@@ -591,6 +730,18 @@ String _lastReadPrefsKey() =>
 Future<void> _markRoomReadNow() async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.setInt(_lastReadPrefsKey(), DateTime.now().millisecondsSinceEpoch);
+}
+String _lastReadTsPrefsKey() =>
+    'lastReadTs__${widget.currentUserId}__${widget.roomId}';
+
+Future<int> _loadLastReadTs() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getInt(_lastReadTsPrefsKey()) ?? 0;
+}
+
+Future<void> _saveLastReadTs(int ts) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setInt(_lastReadTsPrefsKey(), ts);
 }
 
 
@@ -1580,20 +1731,31 @@ Future<void> _emitLeft({bool showInUi = true}) async {
     }
   }
 
-
 @override
 void initState() {
   super.initState();
-  _loadSavedScrollOffset();
-_scrollController.addListener(_onScrollChanged);
+
+  // ✅ IMPORTANT: on entry we want the chat to open at the BOTTOM,
+  // and show UNREAD only when the user scrolls UP.
+  _hideUnreadDivider = true;
+
+  // ✅ IMPORTANT: block saving offsets until we do the initial bottom jump once
+  _allowScrollOffsetSaves = false;
+  _didRestoreScroll = false;
+
+  // ✅ Load lastRead cache once (so _firstUnreadTsOrNull() can work)
+  _loadLastReadTsOnce().then((_) {
+    if (!mounted) return;
+    setState(() {});
+  });
 
   AuthService.ensureSignedIn(currentUserId: widget.currentUserId);
-WidgetsBinding.instance.addObserver(this);
+  WidgetsBinding.instance.addObserver(this);
 
-// ✅ block fly anims for a moment after opening chat (prevents “offline” replays)
-_enableHeartAnimsAtMs = _nowMs() + 1600; // tweak: 1200–2000 feels good
-_initialSnapshotDone = false;
-_appIsResumed = true;
+  // ✅ block fly anims for a moment after opening the chat (prevents “offline” replays)
+  _enableHeartAnimsAtMs = _nowMs() + 1600; // tweak: 1200–2000 feels good
+  _initialSnapshotDone = false;
+  _appIsResumed = true;
 
   _messages = <ChatMessage>[];
 
@@ -1661,15 +1823,19 @@ _appIsResumed = true;
   // ✅ load bubble style for this user (saved locally)
   _loadBubbleStyle();
 
-  _startFirestoreSubscription();
-
-WidgetsBinding.instance.addPostFrameCallback((_) async {
-  await _markRoomReadNow();
-  await _emitSystemLine('${_displayNameForId(widget.currentUserId)} has entered the chatroom.', scroll: false);
-});
+  // ✅ IMPORTANT: load scroll offset first, then attach listener + start stream
+  _initScrollAndStream();
+  _blockAutoMarkReadUntilMs = DateTime.now().millisecondsSinceEpoch + 1200;
 
 
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await _emitSystemLine(
+      '${_displayNameForId(widget.currentUserId)} has entered the chatroom.',
+      scroll: false,
+    );
+  });
 }
+
 
 @override
 void dispose() {
@@ -1694,9 +1860,10 @@ void dispose() {
   _controller.removeListener(_handleTypingChange);
   _focusNode.removeListener(_handleTypingChange);
 
+  _scrollSaveDebounce?.cancel();
+  _scrollController.removeListener(_onScrollChanged);
   _scrollController.dispose();
-  _controller.dispose();
-  _focusNode.dispose();
+
 
   WidgetsBinding.instance.removeObserver(this);
 
@@ -1705,10 +1872,13 @@ void dispose() {
 _scrollSaveDebounce?.cancel();
 _scrollController.removeListener(_onScrollChanged);
 
+
+
 // ✅ last save (best-effort)
 _saveScrollOffsetNow();
 
-  super.dispose();
+super.dispose();
+
 }
 
 
@@ -1737,11 +1907,14 @@ final bool wasNearBottomBefore = _isNearBottom();
 
       // Convert maps -> ChatMessage
       final next = rows.map((m) => ChatMessage.fromMap(m)).toList();
+_messages = next;
 
-      _messages = next;
+// ✅ Ensure lastRead cache is loaded BEFORE UI builds unread divider
+await _loadLastReadTsOnce();
 
-      if (!mounted) return;
-      setState(() {});
+if (!mounted) return;
+setState(() {});
+
 
 
       // seed seen on first load
@@ -1823,21 +1996,22 @@ if (!_heartsSnapshotInitialized) {
 
 final bool firstLoad = (oldCount == 0 && !_didRestoreScroll);
 
-// ✅ First load: restore ONLY once, only after we actually have items
 if (firstLoad && next.isNotEmpty) {
-  WidgetsBinding.instance.addPostFrameCallback((_) {
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (!mounted) return;
-    _tryRestoreScrollOnce();
+
+    // ✅ Always open at the bottom.
+    _scrollToBottom(animated: false);
+    _didRestoreScroll = true;
+
+    // ✅ Keep UNREAD hidden on entry.
+    // It will appear only when the user scrolls up (handled in _onScrollChanged).
+    if (mounted) {
+      setState(() => _hideUnreadDivider = true);
+    }
   });
-} else {
-  // ✅ Later updates: only scroll if a new message arrived AND user was near bottom
-  if (next.length > oldCount && wasNearBottomBefore) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _scrollToBottom();
-    });
-  }
 }
+
 
 
 
@@ -1858,17 +2032,105 @@ if (firstLoad && next.isNotEmpty) {
     });
   }
 
-  void _scrollToBottom({bool keepFocus = false}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
+void _scrollToBottom({bool keepFocus = false, bool animated = true}) {
+  int triesLeft = 14;
+
+  void attempt() {
+    if (!mounted) return;
+
+    if (!_scrollController.hasClients) {
+      triesLeft--;
+      if (triesLeft <= 0) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) => attempt());
+      return;
+    }
+
+    final max = _scrollController.position.maxScrollExtent;
+
+    // If the list hasn't laid out yet (common on first open), retry next frame.
+    if (max <= 0.0 && _messages.isNotEmpty) {
+      triesLeft--;
+      if (triesLeft <= 0) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) => attempt());
+      return;
+    }
+
+    if (animated) {
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
+        max,
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
       );
-      if (keepFocus) _focusNode.requestFocus();
-    });
+    } else {
+      _scrollController.jumpTo(max);
+    }
+
+        // ✅ after the first successful bottom jump, allow saving offsets
+    _allowScrollOffsetSaves = true;
+
+    if (keepFocus) _focusNode.requestFocus();
+
   }
+
+  WidgetsBinding.instance.addPostFrameCallback((_) => attempt());
+}
+
+Future<void> _jumpToFirstUnreadIfAny() async {
+  final int lastReadTs = await _loadLastReadTs();
+
+  ChatMessage? target;
+  for (final m in _messages) {
+    if (m.type != ChatMessageType.text) continue;
+    if (m.ts > lastReadTs) {
+      target = m;
+      break;
+    }
+  }
+
+  if (target == null) {
+    _scrollToBottom(animated: false);
+    return;
+  }
+
+  // ✅ Ensure message key exists
+  final GlobalKey targetMsgKey = _keyForMsg(target);
+
+  int triesLeft = 14;
+
+  void tryScroll() {
+    if (!mounted) return;
+
+    // ✅ Prefer scrolling to the UNREAD divider so it becomes the very top row.
+    final BuildContext? dividerCtx = _unreadDividerKey.currentContext;
+    final BuildContext? msgCtx = targetMsgKey.currentContext;
+
+    final BuildContext? ctxToUse = dividerCtx ?? msgCtx;
+
+    if (ctxToUse == null) {
+      triesLeft--;
+      if (triesLeft <= 0) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) => tryScroll());
+      return;
+    }
+
+    Scrollable.ensureVisible(
+      ctxToUse,
+      alignment: 0.0, // ✅ put UNREAD bar (or the message) at the top of the viewport
+      duration: const Duration(milliseconds: 1),
+      curve: Curves.linear,
+    );
+
+    // ✅ After the initial jump, allow saving offsets
+    _allowScrollOffsetSaves = true;
+  }
+
+  WidgetsBinding.instance.addPostFrameCallback((_) => tryScroll());
+}
+
+
+
+
+  
 Future<void> _debugSimulateIncomingMessage() async {
   final ts = DateTime.now().millisecondsSinceEpoch;
 
@@ -2183,6 +2445,24 @@ if (msg.type == ChatMessageType.system) {
     pieces.add(_GcDateDivider(label: dateLabel, uiScale: uiScale));
   }
 
+
+// ✅ UNREAD divider (above the first unread message)
+final int firstUnreadTs = _firstUnreadTsOrNull();
+final bool showUnreadDivider = !_hideUnreadDivider &&
+    firstUnreadTs > 0 &&
+    msg.type == ChatMessageType.text &&
+    msg.ts == firstUnreadTs;
+
+if (showUnreadDivider) {
+  pieces.add(
+    KeyedSubtree(
+      key: _unreadDividerKey,
+      child: _UnreadDivider(uiScale: uiScale, text: 'UNREAD'),
+    ),
+  );
+}
+
+
   if (msg.type == ChatMessageType.system) {
     const double systemSideInset = 2.0; // baseline
     pieces.add(
@@ -2216,43 +2496,40 @@ final bool isGroup = widget.roomId == 'group_main';
 final bool showNew = isGroup ? (_newBadgeVisibleByTs[msg.ts] ?? false) : false;
 
 pieces.add(
-  Padding(
-    padding: EdgeInsets.fromLTRB(
-      chatSidePadding * uiScale,
-      topSpacing * uiScale,
-      chatSidePadding * uiScale,
-      0,
-    ),
-    child: GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onDoubleTap: () => _toggleHeartForMessage(msg),
-child: MessageRow(
-  user: user,
-  text: msg.text,
-  isMe: isMe,
-  bubbleTemplate: msg.bubbleTemplate,
-  decor: msg.decor,
-  fontFamily: msg.fontFamily,
-
-  // ✅ names + hearts ONLY in group
-  showName: (widget.roomId == 'group_main'),
-  nameHearts: (widget.roomId == 'group_main')
-      ? _buildHeartIcons(msg.heartReactorIds, uiScale)
-      : const <Widget>[],
-
-  // ✅ time only in group (כמו שהיה אצלך)
-  showTime: (widget.roomId == 'group_main'),
-  timeMs: msg.ts,
-
-  showNewBadge: showNew,
-  usernameColor: usernameColor,
-  uiScale: uiScale,
-),
-
-
+  KeyedSubtree(
+    key: _keyForMsg(msg),
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(
+        chatSidePadding * uiScale,
+        topSpacing * uiScale,
+        chatSidePadding * uiScale,
+        0,
+      ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onDoubleTap: () => _toggleHeartForMessage(msg),
+        child: MessageRow(
+          user: user,
+          text: msg.text,
+          isMe: isMe,
+          bubbleTemplate: msg.bubbleTemplate,
+          decor: msg.decor,
+          fontFamily: msg.fontFamily,
+          showName: (widget.roomId == 'group_main'),
+          nameHearts: (widget.roomId == 'group_main')
+              ? _buildHeartIcons(msg.heartReactorIds, uiScale)
+              : const <Widget>[],
+          showTime: (widget.roomId == 'group_main'),
+          timeMs: msg.ts,
+          showNewBadge: showNew,
+          usernameColor: usernameColor,
+          uiScale: uiScale,
+        ),
+      ),
     ),
   ),
 );
+
 
 
   return Column(
@@ -2526,6 +2803,69 @@ class _GcDateDivider extends StatelessWidget {
               fontSize: s(12),
               fontWeight: FontWeight.w800,
               letterSpacing: s(0.6),
+              height: 1.0,
+            ),
+          ),
+
+          SizedBox(width: s(10)),
+
+          // right line
+          Expanded(
+            child: Container(
+              height: s(1),
+              color: Colors.white.withOpacity(0.25),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+class _UnreadDivider extends StatelessWidget {
+  final double uiScale;
+  final String text;
+
+  const _UnreadDivider({
+    required this.uiScale,
+    this.text = 'UNREAD',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * uiScale;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(s(10), s(12), s(10), s(8)),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // left line
+          Expanded(
+            child: Container(
+              height: s(1),
+              color: Colors.white.withOpacity(0.25),
+            ),
+          ),
+
+          SizedBox(width: s(10)),
+
+          // ✅ your decor instead of hourglass
+          Image.asset(
+            'assets/ui/LastReadBarDecor.png', // <-- put your file here
+            width: s(30),
+            height: s(30),
+            fit: BoxFit.contain,
+          ),
+
+          SizedBox(width: s(8)),
+
+          Text(
+            text,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.9),
+              fontSize: s(12),
+              fontWeight: FontWeight.w900,
+              letterSpacing: s(0.8),
               height: 1.0,
             ),
           ),
