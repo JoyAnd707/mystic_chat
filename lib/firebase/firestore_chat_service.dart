@@ -6,19 +6,15 @@ class FirestoreChatService {
 
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  // ✅ FIX: define rooms ref
+  static CollectionReference<Map<String, dynamic>> get _roomsRef =>
+      _db.collection('rooms');
+
   static CollectionReference<Map<String, dynamic>> _messagesCol(String roomId) {
-    return _db.collection('rooms').doc(roomId).collection('messages');
+    return _roomsRef.doc(roomId).collection('messages');
   }
 
   /// Stream of messages ordered by ts ascending.
-  /// Each item includes:
-  /// - id (docId)
-  /// - type: "text" | "system"
-  /// - senderId
-  /// - text
-  /// - ts (int ms)
-  /// - bubbleTemplate, decor, fontFamily
-  /// - heartReactorIds: List<String>
   static Stream<List<Map<String, dynamic>>> messagesStreamMaps(String roomId) {
     return _messagesCol(roomId)
         .orderBy('ts', descending: false)
@@ -26,13 +22,13 @@ class FirestoreChatService {
         .map((snap) {
       return snap.docs.map((d) {
         final data = d.data();
-        data['id'] = d.id; // inject docId so ChatScreen can use it
+        data['id'] = d.id; // inject docId
         return data;
       }).toList();
     });
   }
 
-  /// We use docId = ts.toString() so we can later update hearts by id easily.
+  /// ✅ TEXT message (docId = ts.toString())
   static Future<void> sendTextMessage({
     required String roomId,
     required String senderId,
@@ -41,10 +37,16 @@ class FirestoreChatService {
     required String bubbleTemplate,
     required String decor,
     String? fontFamily,
+
+    // ✅ reply payload
+    String? replyToMessageId,
+    String? replyToSenderId,
+    String? replyToText,
   }) async {
     final docId = ts.toString();
 
-    await _messagesCol(roomId).doc(docId).set({
+    await _messagesCol(roomId).doc(docId).set(<String, dynamic>{
+      'id': docId,
       'type': 'text',
       'senderId': senderId,
       'text': text,
@@ -53,21 +55,30 @@ class FirestoreChatService {
       'decor': decor,
       'fontFamily': fontFamily,
       'heartReactorIds': <String>[],
+
+      // ✅ reply fields (optional)
+      'replyToMessageId': replyToMessageId,
+      'replyToSenderId': replyToSenderId,
+      'replyToText': replyToText,
     });
   }
 
+  /// ✅ NEW: SYSTEM message (entered/left)
   static Future<void> sendSystemLine({
     required String roomId,
-    required String line,
+    required String text,
     required int ts,
   }) async {
     final docId = ts.toString();
 
-    await _messagesCol(roomId).doc(docId).set({
+    await _messagesCol(roomId).doc(docId).set(<String, dynamic>{
+      'id': docId,
       'type': 'system',
-      'senderId': '',
-      'text': line,
+      'senderId': 'system',
+      'text': text,
       'ts': ts,
+
+      // keep schema stable
       'bubbleTemplate': 'normal',
       'decor': 'none',
       'fontFamily': null,
@@ -77,8 +88,8 @@ class FirestoreChatService {
 
   static Future<void> toggleHeart({
     required String roomId,
-    required String messageId, // docId
-    required String reactorId, // who liked
+    required String messageId,
+    required String reactorId,
     required bool isAdding,
   }) async {
     final ref = _messagesCol(roomId).doc(messageId);

@@ -467,6 +467,10 @@ class MessageRow extends StatelessWidget {
   final ChatUser user;
   final String text;
   final bool isMe;
+  final String? replyToSenderName;
+final String? replyToText;
+final VoidCallback? onTapReplyPreview;
+
   final List<Widget> nameHearts;
 
   /// ✅ איזה טמפלייט לצייר
@@ -491,25 +495,31 @@ class MessageRow extends StatelessWidget {
   final bool showTime;
   final int timeMs;
 
-  const MessageRow({
-    super.key,
-    required this.user,
-    required this.text,
-    required this.isMe,
-    required this.bubbleTemplate,
-    this.decor = BubbleDecor.none,
-    this.fontFamily,
-    this.showName = true,
-    required this.usernameColor,
-    required this.timeColor,
-    required this.showNewBadge,
-    this.nameHearts = const <Widget>[],
-    required this.uiScale,
+const MessageRow({
+  super.key,
+  required this.user,
+  required this.text,
+  required this.isMe,
+  required this.bubbleTemplate,
+  this.decor = BubbleDecor.none,
+  this.fontFamily,
+  this.showName = true,
+  required this.usernameColor,
+  required this.timeColor,
+  required this.showNewBadge,
+  this.nameHearts = const <Widget>[],
+  required this.uiScale,
 
-    // ✅ NEW
-    this.showTime = false,
-    this.timeMs = 0,
-  });
+  // ✅ reply preview
+  this.replyToSenderName,
+  this.replyToText,
+  this.onTapReplyPreview,
+
+  // ✅ time
+  this.showTime = false,
+  this.timeMs = 0,
+});
+
 
   Color _decorBaseFromUser(Color c) {
     // Very light tint (reference: #fff8f8 on red)
@@ -739,41 +749,93 @@ final bubbleInner = Padding(
     horizontal: 10 * uiScale,
     vertical: 6 * uiScale,
   ),
-  child: Directionality(
-    textDirection:
-        _isProbablyRtl(displayText) ? TextDirection.rtl : TextDirection.ltr,
-    child: Text(
-      _bidiIsolate(displayText),
+  child: Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if ((replyToText != null && replyToText!.trim().isNotEmpty) ||
+          (replyToSenderName != null && replyToSenderName!.trim().isNotEmpty))
+        GestureDetector(
+          onTap: onTapReplyPreview,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            margin: EdgeInsets.only(bottom: 6 * uiScale),
+            padding: EdgeInsets.symmetric(
+              horizontal: 8 * uiScale,
+              vertical: 6 * uiScale,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(4 * uiScale),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (replyToSenderName != null && replyToSenderName!.trim().isNotEmpty)
+                  Text(
+                    replyToSenderName!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12 * uiScale,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black.withOpacity(0.70),
+                      height: 1.0,
+                    ),
+                  ),
+                if (replyToText != null && replyToText!.trim().isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(top: 3 * uiScale),
+                    child: Text(
+                      replyToText!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12 * uiScale,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black.withOpacity(0.65),
+                        height: 1.1,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
 
-      textAlign: _isProbablyRtl(displayText) ? TextAlign.right : TextAlign.left,
-
-      // ✅ IMPORTANT: allow natural wrapping
-      softWrap: true,
-      maxLines: null,
-      overflow: TextOverflow.visible,
-
-      // ✅ keeps line height consistent like Mystic
-      strutStyle: StrutStyle(
-        fontSize: 16 * uiScale,
-        height: 1.2,
-        forceStrutHeight: true,
+      Directionality(
+        textDirection:
+            _isProbablyRtl(displayText) ? TextDirection.rtl : TextDirection.ltr,
+        child: Text(
+          _bidiIsolate(displayText),
+          textAlign: _isProbablyRtl(displayText) ? TextAlign.right : TextAlign.left,
+          softWrap: true,
+          maxLines: null,
+          overflow: TextOverflow.visible,
+          strutStyle: StrutStyle(
+            fontSize: 16 * uiScale,
+            height: 1.2,
+            forceStrutHeight: true,
+          ),
+          textHeightBehavior: const TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
+          ),
+          style: TextStyle(
+            fontFamily: fontFamily,
+            fontSize: 16 * uiScale,
+            height: 1.2,
+            color: Colors.black,
+            fontWeight: FontWeight.w400,
+            letterSpacing: -0.15 * uiScale,
+            leadingDistribution: TextLeadingDistribution.even,
+          ),
+        ),
       ),
-      textHeightBehavior: const TextHeightBehavior(
-        applyHeightToFirstAscent: false,
-        applyHeightToLastDescent: false,
-      ),
-      style: TextStyle(
-        fontFamily: fontFamily,
-        fontSize: 16 * uiScale,
-        height: 1.2,
-        color: Colors.black,
-        fontWeight: FontWeight.w400,
-        letterSpacing: -0.15 * uiScale,
-        leadingDistribution: TextLeadingDistribution.even,
-      ),
-    ),
+    ],
   ),
 );
+
 
 
 

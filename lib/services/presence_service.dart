@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PresenceService {
   PresenceService._();

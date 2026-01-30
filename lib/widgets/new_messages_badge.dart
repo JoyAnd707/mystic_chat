@@ -4,12 +4,17 @@ import 'package:flutter/material.dart';
 class NewMessagesBadge extends StatefulWidget {
   final int count;
   final Color badgeColor;
+
+  /// ✅ NEW: if true -> show a small @ indicator (mentions exist below)
+  final bool hasMention;
+
   final VoidCallback? onTap;
 
   const NewMessagesBadge({
     super.key,
     required this.count,
     required this.badgeColor,
+    this.hasMention = false,
     this.onTap,
   });
 
@@ -50,6 +55,11 @@ class _NewMessagesBadgeState extends State<NewMessagesBadge>
 
     // כשהמספר עולה → תן "טיק" קטן מיידית (חמוד)
     if (widget.count > oldWidget.count) {
+      _shakeOnce();
+    }
+
+    // ✅ גם אם count לא עלה אבל הופיע mention -> טיק קטן
+    if (!oldWidget.hasMention && widget.hasMention) {
       _shakeOnce();
     }
 
@@ -107,6 +117,7 @@ class _NewMessagesBadgeState extends State<NewMessagesBadge>
         child: _BadgeBody(
           count: widget.count,
           badgeColor: widget.badgeColor,
+          hasMention: widget.hasMention,
         ),
       ),
     );
@@ -116,10 +127,12 @@ class _NewMessagesBadgeState extends State<NewMessagesBadge>
 class _BadgeBody extends StatelessWidget {
   final int count;
   final Color badgeColor;
+  final bool hasMention;
 
   const _BadgeBody({
     required this.count,
     required this.badgeColor,
+    required this.hasMention,
   });
 
   @override
@@ -149,6 +162,38 @@ class _BadgeBody extends StatelessWidget {
             ),
           ),
 
+          // ✅ @ indicator (mentions exist below)
+if (hasMention)
+  Positioned(
+    left: -6,
+    top: -6,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: badgeColor, // ✅ same as unread count bubble
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Colors.black.withOpacity(0.35),
+          width: 1,
+        ),
+      ),
+      child: const Text(
+        '@',
+        textHeightBehavior: TextHeightBehavior(
+          applyHeightToFirstAscent: false,
+          applyHeightToLastDescent: false,
+        ),
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w900,
+          height: 1.0,
+        ),
+      ),
+    ),
+  ),
+
+
           // העיגול האדום עם המספר
           Positioned(
             top: -6,
@@ -158,7 +203,10 @@ class _BadgeBody extends StatelessWidget {
               decoration: BoxDecoration(
                 color: badgeColor, // #ef797e
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: Colors.black.withOpacity(0.35), width: 1),
+                border: Border.all(
+                  color: Colors.black.withOpacity(0.35),
+                  width: 1,
+                ),
               ),
               child: Text(
                 count > 99 ? '99+' : '$count',

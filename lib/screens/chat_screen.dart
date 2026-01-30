@@ -13,6 +13,8 @@ import '../firebase/firestore_chat_service.dart';
 import '../firebase/auth_service.dart';
 import '../services/presence_service.dart';
 import '../widgets/new_messages_badge.dart'; // ✅ ADD THIS
+import '../widgets/reply_preview_bar.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 
 double mysticUiScale(BuildContext context) {
@@ -145,6 +147,11 @@ class ChatMessage {
 
   final Set<String> heartReactorIds;
 
+  // ✅ REPLY META (for preview inside the bubble)
+  final String? replyToMessageId;
+  final String? replyToSenderId;
+  final String? replyToText;
+
   ChatMessage({
     required this.id,
     required this.type,
@@ -155,6 +162,11 @@ class ChatMessage {
     this.decor = BubbleDecor.none,
     this.fontFamily,
     Set<String>? heartReactorIds,
+
+    // ✅ reply
+    this.replyToMessageId,
+    this.replyToSenderId,
+    this.replyToText,
   }) : heartReactorIds = heartReactorIds ?? <String>{};
 
   ChatMessage copyWith({
@@ -167,6 +179,10 @@ class ChatMessage {
     BubbleDecor? decor,
     String? fontFamily,
     Set<String>? heartReactorIds,
+
+    String? replyToMessageId,
+    String? replyToSenderId,
+    String? replyToText,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -178,6 +194,10 @@ class ChatMessage {
       decor: decor ?? this.decor,
       fontFamily: fontFamily ?? this.fontFamily,
       heartReactorIds: heartReactorIds ?? this.heartReactorIds,
+
+      replyToMessageId: replyToMessageId ?? this.replyToMessageId,
+      replyToSenderId: replyToSenderId ?? this.replyToSenderId,
+      replyToText: replyToText ?? this.replyToText,
     );
   }
 
@@ -191,6 +211,11 @@ class ChatMessage {
         'decor': decor.name,
         'fontFamily': fontFamily,
         'heartReactorIds': heartReactorIds.toList(),
+
+        // ✅ reply fields
+        'replyToMessageId': replyToMessageId,
+        'replyToSenderId': replyToSenderId,
+        'replyToText': replyToText,
       };
 
   static ChatMessage fromMap(Map m) {
@@ -221,7 +246,11 @@ class ChatMessage {
     final rawReactors = (m['heartReactorIds'] as List?) ?? const [];
     final reactors = rawReactors.map((e) => e.toString()).toSet();
 
-    final id = (m['id'] ?? ts.toString()).toString();
+    final rawId = m['id'];
+final id = (rawId != null && rawId.toString().trim().isNotEmpty)
+    ? rawId.toString()
+    : '${ts}_${m['senderId'] ?? ''}_${(m['text'] ?? '').toString().hashCode}';
+
 
     return ChatMessage(
       id: id,
@@ -233,11 +262,14 @@ class ChatMessage {
       decor: decor,
       fontFamily: fontFamily,
       heartReactorIds: reactors,
+
+      // ✅ reply
+      replyToMessageId: (m['replyToMessageId'] as String?)?.toString(),
+      replyToSenderId: (m['replyToSenderId'] as String?)?.toString(),
+      replyToText: (m['replyToText'] as String?)?.toString(),
     );
   }
 }
-
-
 
 
 
@@ -279,6 +311,8 @@ VoidCallback? _onlineListener;
 // Creepy BG Easter Egg
 // =======================
 String? _bgOverride;
+final ItemScrollController _itemScrollController = ItemScrollController();
+final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
 
 late final AnimationController _bgFxCtrl;
 
@@ -309,11 +343,81 @@ static const List<String> _creepyTriggers = <String>[
 
 static const String _heartAsset = 'assets/reactions/HeartReaction.png';
 
-bool _isNearBottom({double threshold = 140}) {
-  if (!_scrollController.hasClients) return true;
-  final pos = _scrollController.position;
-  return (pos.maxScrollExtent - pos.pixels) <= threshold;
+bool _isNearBottom({int thresholdItems = 1}) {
+  // thresholdItems = כמה פריטים מהסוף עדיין נחשב “למטה”
+  final positions = _itemPositionsListener.itemPositions.value;
+  if (positions.isEmpty) return true;
+
+  final maxVisible = positions
+      .where((p) => p.itemTrailingEdge > 0) // מופיע במסך
+      .map((p) => p.index)
+      .fold<int>(-1, (a, b) => a > b ? a : b);
+
+  if (_messages.isEmpty) return true;
+
+  final lastIndex = _messages.length - 1;
+  return maxVisible >= (lastIndex - thresholdItems);
 }
+
+// =======================
+// Reply (WhatsApp-like preview)
+// =======================
+ChatMessage? _replyTarget;
+
+// highlight flash per message id
+final Map<String, bool> _highlightByMsgId = <String, bool>{};
+
+// drag accumulator
+double _dragDx = 0.0;
+
+String _replyPreviewText(String raw) {
+  final s = raw.replaceAll('\n', ' ').trim();
+  if (s.isEmpty) return '';
+  if (s.length <= 70) return s;
+  return '${s.substring(0, 70)}…';
+}
+
+void _setReplyTarget(ChatMessage msg) {
+  if (!mounted) return;
+  setState(() => _replyTarget = msg);
+}
+
+void _clearReplyTarget() {
+  if (!mounted) return;
+  setState(() => _replyTarget = null);
+}
+
+void _flashHighlight(String msgId) {
+  if (!mounted) return;
+  setState(() => _highlightByMsgId[msgId] = true);
+
+  // ✅ exactly 1 second total, fade-out handled by AnimatedOpacity
+  Future.delayed(const Duration(milliseconds: 1000), () {
+    if (!mounted) return;
+    setState(() => _highlightByMsgId[msgId] = false);
+  });
+}
+
+
+
+
+Future<void> _jumpToMessageId(String messageId) async {
+  final int index = _messages.indexWhere((m) => m.id == messageId);
+  if (index < 0) return;
+
+  if (!_itemScrollController.isAttached) return;
+
+  await _itemScrollController.scrollTo(
+    index: index,
+    duration: const Duration(milliseconds: 320),
+    curve: Curves.easeOut,
+    alignment: 0.15, // קצת מתחת לראש, נראה טוב ל-reply jump
+  );
+
+  if (!mounted) return;
+  _flashHighlight(messageId);
+}
+
 
 // =======================
 // Unread Divider (last read boundary)
@@ -326,6 +430,10 @@ bool _hideUnreadDivider = false;
 // NEW "messages below" badge (overlay)
 // =======================
 int _newBelowCount = 0;
+
+// ✅ NEW: whether there is a mention below (so we can show @)
+bool _newBelowHasMention = false;
+
 
 /// ✅ counts only "real unread-ish" messages:
 // - text only
@@ -344,6 +452,27 @@ int _countAddedUnreadishMessages(List<ChatMessage> oldList, List<ChatMessage> ne
 
   return c;
 }
+
+/// ✅ NEW: detect if ANY added message is a "mention" of me
+/// In our app: "mention" == someone replied to MY message
+bool _hasAddedMentionsOfMe(List<ChatMessage> oldList, List<ChatMessage> newList) {
+  if (newList.length <= oldList.length) return false;
+
+  final added = newList.sublist(oldList.length);
+
+  for (final m in added) {
+    if (m.type != ChatMessageType.text) continue;
+    if (m.senderId == widget.currentUserId) continue;
+
+    // ✅ mention rule
+    if (m.replyToSenderId != null && m.replyToSenderId == widget.currentUserId) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 
 
 bool _hasUnreadNow() {
@@ -387,11 +516,13 @@ Future<void> _markReadIfAtBottom() async {
   if (!_isNearBottom()) return;
 
   // ✅ when user reaches bottom: badge disappears
-  if (_newBelowCount != 0 && mounted) {
-    setState(() {
-      _newBelowCount = 0;
-    });
-  }
+if ((_newBelowCount != 0 || _newBelowHasMention) && mounted) {
+  setState(() {
+    _newBelowCount = 0;
+    _newBelowHasMention = false;
+  });
+}
+
 
   final int lastTs = _latestTextTs();
   if (lastTs <= 0) return;
@@ -423,19 +554,16 @@ int _blockAutoMarkReadUntilMs = 0;
 
 
 // =======================
-// Unread jump helpers (keys per message + unread divider key)
+// Unread jump helpers (NO GlobalKeys inside a lazy list)
 // =======================
-final Map<String, GlobalKey> _msgKeyById = <String, GlobalKey>{};
 
-/// ✅ Key for the UNREAD divider itself (so we can scroll to it and keep it at the top)
-final GlobalKey _unreadDividerKey = GlobalKey();
+// ✅ Stable key per message (safe for ScrollablePositionedList)
+Key _keyForMsg(ChatMessage m) => ValueKey<String>('msg_${m.id}');
+
+// ✅ Stable key for UNREAD divider (also NOT GlobalKey)
+final Key _unreadDividerKey = ValueKey<String>('unread_divider');
 
 
-
-
-GlobalKey _keyForMsg(ChatMessage m) {
-  return _msgKeyById.putIfAbsent(m.id, () => GlobalKey());
-}
 
 String _scrollOffsetPrefsKey() =>
     'scrollOffset__${widget.currentUserId}__${widget.roomId}';
@@ -450,7 +578,9 @@ Future<void> _initScrollAndStream() async {
   if (!mounted) return;
 
   // attach listener ONLY after we loaded the saved offset
-  _scrollController.addListener(_onScrollChanged);
+ // ScrollablePositionedList doesn't use _scrollController.
+// We listen via _itemPositionsListener instead.
+
 
   // start stream AFTER we know what to restore to
   _startFirestoreSubscription();
@@ -463,29 +593,42 @@ Future<void> _saveScrollOffsetNow() async {
   await prefs.setDouble(_scrollOffsetPrefsKey(), _scrollController.offset);
 }
 
-void _onScrollChanged() {
-  // ✅ Reveal UNREAD divider when user scrolls UP, even before saving is enabled
+void _onPositionsChanged() {
+  if (!mounted) return;
+
+  // ✅ Reveal/hide UNREAD divider based on being near bottom
   if (_lastReadLoaded && _hasUnreadNow()) {
     final bool nearBottom = _isNearBottom();
 
     if (nearBottom) {
-      if (!_hideUnreadDivider && mounted) {
+      if (!_hideUnreadDivider) {
         setState(() => _hideUnreadDivider = true);
       }
     } else {
-      if (_hideUnreadDivider && mounted) {
+      if (_hideUnreadDivider) {
         setState(() => _hideUnreadDivider = false);
       }
     }
+  } else {
+    // no unread at all -> keep hidden
+    if (!_hideUnreadDivider) {
+      setState(() => _hideUnreadDivider = true);
+    }
   }
 
-  // ✅ Don't save during initial open (prevents overwriting saved offset with 0)
+  // ✅ Don't do side-effects during initial open
   if (!_allowScrollOffsetSaves) return;
 
   _scrollSaveDebounce?.cancel();
   _scrollSaveDebounce = Timer(const Duration(milliseconds: 250), () async {
-    await _saveScrollOffsetNow();
+    if (!mounted) return;
+
+    // ✅ mark read when user is at bottom
     await _markReadIfAtBottom();
+
+    // ✅ You *can* keep this (best effort), but note:
+    // ScrollablePositionedList does NOT use _scrollController.
+    await _saveScrollOffsetNow();
   });
 }
 
@@ -1708,11 +1851,13 @@ Future<void> _emitSystemLine(
   final ts = DateTime.now().millisecondsSinceEpoch;
 
   // Send to Firestore so ALL devices see it
-  await FirestoreChatService.sendSystemLine(
-    roomId: widget.roomId,
-    line: line,
-    ts: ts,
-  );
+await FirestoreChatService.sendSystemLine(
+  roomId: widget.roomId,
+  text: line,
+  ts: ts,
+);
+
+
 
   // UI will update via stream; optional scroll
   if (scroll && mounted) {
@@ -1905,7 +2050,10 @@ _typingSub = PresenceService.I
 
   // ✅ IMPORTANT: load scroll offset first, then attach listener + start stream
   _initScrollAndStream();
+  
   _blockAutoMarkReadUntilMs = DateTime.now().millisecondsSinceEpoch + 1200;
+_itemPositionsListener.itemPositions.addListener(_onPositionsChanged);
+
 
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -1922,7 +2070,7 @@ void dispose() {
   // ✅ Best-effort: don't await in dispose
   _emitLeft(showInUi: false);
 
-  // ✅ presence leave (correct signature)
+  // ✅ presence leave
   PresenceService.I.leaveRoom(
     roomId: widget.roomId,
     userId: widget.currentUserId,
@@ -1934,46 +2082,47 @@ void dispose() {
   _presenceSub?.cancel();
   _presenceSub = null;
 
+  _typingSub?.cancel();
+  _typingSub = null;
+
   _hourTimer?.cancel();
 
-  
+  // ✅ remove typing listeners (UI-only)
   _controller.removeListener(_handleTypingChange);
   _focusNode.removeListener(_handleTypingChange);
 
-  _scrollSaveDebounce?.cancel();
-  _scrollController.removeListener(_onScrollChanged);
-  _scrollController.dispose();
+  // ✅ remove ScrollablePositionedList positions listener
+  _itemPositionsListener.itemPositions.removeListener(_onPositionsChanged);
 
+  // ✅ debounce cleanup
+  _scrollSaveDebounce?.cancel();
+  _scrollSaveDebounce = null;
+
+  // ✅ last save (best-effort)
+  _saveScrollOffsetNow();
+
+  // ✅ stop typing presence (best effort)
+  _typingDebounce?.cancel();
+  _typingDebounce = null;
+
+  PresenceService.I.setTyping(
+    roomId: widget.roomId,
+    userId: widget.currentUserId,
+    displayName: _displayNameForId(widget.currentUserId),
+    isTyping: false,
+  );
+
+  // ✅ this controller isn't attached to the list, but it's safe to dispose
+  _scrollController.dispose();
 
   WidgetsBinding.instance.removeObserver(this);
 
   _bgFxCtrl.dispose();
-    _markMeOffline();
-_scrollSaveDebounce?.cancel();
-_scrollController.removeListener(_onScrollChanged);
+  _markMeOffline();
 
-
-
-// ✅ last save (best-effort)
-_saveScrollOffsetNow();
-// ✅ stop typing presence (best effort)
-_typingDebounce?.cancel();
-_typingDebounce = null;
-
-_typingSub?.cancel();
-_typingSub = null;
-
-// Make sure my typing doc is removed
-PresenceService.I.setTyping(
-  roomId: widget.roomId,
-  userId: widget.currentUserId,
-  displayName: _displayNameForId(widget.currentUserId),
-  isTyping: false,
-);
-
-super.dispose();
-
+  super.dispose();
 }
+
 
 
 
@@ -2007,15 +2156,19 @@ _roomSub = FirestoreChatService.messagesStreamMaps(widget.roomId).listen(
 
     // ✅ IMPORTANT: if new messages arrived and user is NOT near bottom,
     // increment the "below" counter (only other users, text only)
-    final bool hasNewMessages = next.length > oldCount;
-    if (hasNewMessages && !wasNearBottomBefore) {
-      final int added = _countAddedUnreadishMessages(oldMessages, next);
-      if (added > 0 && mounted) {
-        setState(() {
-          _newBelowCount += added;
-        });
-      }
-    }
+final bool hasNewMessages = next.length > oldCount;
+if (hasNewMessages && !wasNearBottomBefore) {
+  final int added = _countAddedUnreadishMessages(oldMessages, next);
+  final bool addedMention = _hasAddedMentionsOfMe(oldMessages, next);
+
+  if ((added > 0 || addedMention) && mounted) {
+    setState(() {
+      if (added > 0) _newBelowCount += added;
+      if (addedMention) _newBelowHasMention = true;
+    });
+  }
+}
+
 
     // ✅ Auto-scroll ONLY if I was already near the bottom before the update.
     if (hasNewMessages && wasNearBottomBefore) {
@@ -2107,23 +2260,23 @@ _roomSub = FirestoreChatService.messagesStreamMaps(widget.roomId).listen(
       }
     }
 
-    final bool firstLoad = (oldCount == 0 && !_didRestoreScroll);
+final bool firstLoad = (oldCount == 0 && !_didRestoreScroll);
 
-    if (firstLoad && next.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
+if (firstLoad && next.isNotEmpty) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
 
-        // ✅ Always open at the bottom.
-        _scrollToBottom(animated: false);
-        _didRestoreScroll = true;
+    // ✅ ScrollablePositionedList: start at bottom
+    _scrollToBottom(animated: false);
 
-        // ✅ Keep UNREAD hidden on entry.
-        // It will appear only when the user scrolls up (handled in _onScrollChanged).
-        if (mounted) {
-          setState(() => _hideUnreadDivider = true);
-        }
-      });
+    _didRestoreScroll = true;
+
+    if (mounted) {
+      setState(() => _hideUnreadDivider = true);
     }
+  });
+}
+
   },
 );
 
@@ -2143,98 +2296,72 @@ _roomSub = FirestoreChatService.messagesStreamMaps(widget.roomId).listen(
   }
 
 void _scrollToBottom({bool keepFocus = false, bool animated = true}) {
-  int triesLeft = 14;
+  if (!mounted) return;
+  if (_messages.isEmpty) return;
+  if (!_itemScrollController.isAttached) return;
 
-  void attempt() {
+  final lastIndex = _messages.length - 1;
+
+  // חשוב: לעשות את זה אחרי שהפריים נבנה (כדי שה-itemCount יהיה מעודכן)
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (!mounted) return;
-
-    if (!_scrollController.hasClients) {
-      triesLeft--;
-      if (triesLeft <= 0) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) => attempt());
-      return;
-    }
-
-    final max = _scrollController.position.maxScrollExtent;
-
-    // If the list hasn't laid out yet (common on first open), retry next frame.
-    if (max <= 0.0 && _messages.isNotEmpty) {
-      triesLeft--;
-      if (triesLeft <= 0) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) => attempt());
-      return;
-    }
+    if (!_itemScrollController.isAttached) return;
 
     if (animated) {
-      _scrollController.animateTo(
-        max,
-        duration: const Duration(milliseconds: 200),
+      await _itemScrollController.scrollTo(
+        index: lastIndex,
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,
+        alignment: 1.0, // ✅ שים את הפריט האחרון בתחתית הוויטפורט
       );
     } else {
-      _scrollController.jumpTo(max);
+      _itemScrollController.jumpTo(
+        index: lastIndex,
+        alignment: 1.0,
+      );
     }
 
-        // ✅ after the first successful bottom jump, allow saving offsets
+    // אם עדיין את משתמשת בסייב של offset (אפשר גם לבטל בהמשך)
     _allowScrollOffsetSaves = true;
 
     if (keepFocus) _focusNode.requestFocus();
-
-  }
-
-  WidgetsBinding.instance.addPostFrameCallback((_) => attempt());
+  });
 }
+
 
 Future<void> _jumpToFirstUnreadIfAny() async {
   final int lastReadTs = await _loadLastReadTs();
 
-  ChatMessage? target;
-  for (final m in _messages) {
+  int targetIndex = -1;
+
+  // ✅ First unread from OTHER users only (same rule as your divider)
+  for (int i = 0; i < _messages.length; i++) {
+    final m = _messages[i];
     if (m.type != ChatMessageType.text) continue;
+    if (m.ts <= 0) continue;
+    if (m.senderId == widget.currentUserId) continue;
+
     if (m.ts > lastReadTs) {
-      target = m;
+      targetIndex = i;
       break;
     }
   }
 
-  if (target == null) {
+  if (targetIndex < 0) {
     _scrollToBottom(animated: false);
     return;
   }
 
-  // ✅ Ensure message key exists
-  final GlobalKey targetMsgKey = _keyForMsg(target);
+  if (!_itemScrollController.isAttached) return;
 
-  int triesLeft = 14;
+  await _itemScrollController.scrollTo(
+    index: targetIndex,
+    duration: const Duration(milliseconds: 280),
+    curve: Curves.easeOut,
+    alignment: 0.0, // ✅ keep it at top
+  );
 
-  void tryScroll() {
-    if (!mounted) return;
-
-    // ✅ Prefer scrolling to the UNREAD divider so it becomes the very top row.
-    final BuildContext? dividerCtx = _unreadDividerKey.currentContext;
-    final BuildContext? msgCtx = targetMsgKey.currentContext;
-
-    final BuildContext? ctxToUse = dividerCtx ?? msgCtx;
-
-    if (ctxToUse == null) {
-      triesLeft--;
-      if (triesLeft <= 0) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) => tryScroll());
-      return;
-    }
-
-    Scrollable.ensureVisible(
-      ctxToUse,
-      alignment: 0.0, // ✅ put UNREAD bar (or the message) at the top of the viewport
-      duration: const Duration(milliseconds: 1),
-      curve: Curves.linear,
-    );
-
-    // ✅ After the initial jump, allow saving offsets
-    _allowScrollOffsetSaves = true;
-  }
-
-  WidgetsBinding.instance.addPostFrameCallback((_) => tryScroll());
+  _allowScrollOffsetSaves = true;
 }
 
 
@@ -2280,26 +2407,33 @@ Future<void> _sendMessage() async {
 
   final ts = DateTime.now().millisecondsSinceEpoch;
 
-  // Clear input immediately (feels instant)
-setState(() {
-  _controller.clear();
+  // ✅ capture reply info BEFORE we clear it
+  final ChatMessage? reply = _replyTarget;
+  final String? replyToId = reply?.id;
+  final String? replyToSenderId = reply?.senderId;
+  final String? replyToText = reply?.text;
 
-  // ✅ user is still in "typing mode"
-  _isTyping = true;
+  setState(() {
+    _controller.clear();
 
-  _selectedTemplate = BubbleTemplate.normal;
-  _selectedDecor = BubbleDecor.none;
-});
+    // ✅ user stays typing
+    _isTyping = true;
 
-// ✅ remote typing OFF
-_sendTypingToFirestore(false);
+    // ✅ reset bubble menu defaults
+    _selectedTemplate = BubbleTemplate.normal;
+    _selectedDecor = BubbleDecor.none;
 
-// ✅ force keyboard to stay open
-WidgetsBinding.instance.addPostFrameCallback((_) {
-  if (mounted) _focusNode.requestFocus();
-});
+    // ✅ IMPORTANT: auto-cancel mention/reply bar after send
+    _replyTarget = null;
+  });
 
+  // ✅ remote typing OFF
+  _sendTypingToFirestore(false);
 
+  // ✅ keep keyboard open
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted) _focusNode.requestFocus();
+  });
 
   await FirestoreChatService.sendTextMessage(
     roomId: widget.roomId,
@@ -2309,6 +2443,11 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
     bubbleTemplate: templateForThisMessage.name,
     decor: decorForThisMessage.name,
     fontFamily: fontFamilyForThisMessage,
+
+    // ✅ reply payload
+    replyToMessageId: replyToId,
+    replyToSenderId: replyToSenderId,
+    replyToText: replyToText,
   );
 
   Sfx.I.playSend();
@@ -2321,16 +2460,10 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
     _playCreepyEggFx();
   }
 
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
-      _focusNode.requestFocus();
-    }
-  });
+WidgetsBinding.instance.addPostFrameCallback((_) {
+  _scrollToBottom(animated: true, keepFocus: true);
+});
+
 }
 
 
@@ -2493,18 +2626,16 @@ return GestureDetector(
 
 final limitedTyping = typingList.take(3).toList();
 
-return ListView.builder(
-  controller: _scrollController,
+return ScrollablePositionedList.builder(
+  itemScrollController: _itemScrollController,
+  itemPositionsListener: _itemPositionsListener,
+  // ✅ keep your existing padding behavior
   padding: EdgeInsets.only(
     top: 8 * uiScale,
-
-    // ✅ BottomBorderBar is OUTSIDE this Stack, so we only need a small breathing room.
     bottom: 10 * uiScale,
   ),
   itemCount: _messages.length,
   itemBuilder: (context, index) {
-
-
     const double chatSidePadding = 16;
 
     final msg = _messages[index];
@@ -2554,12 +2685,13 @@ return ListView.builder(
         msg.ts == firstUnreadTs;
 
     if (showUnreadDivider) {
-      pieces.add(
-        KeyedSubtree(
-          key: _unreadDividerKey,
-          child: _UnreadDivider(uiScale: uiScale, text: 'UNREAD'),
-        ),
-      );
+pieces.add(
+  KeyedSubtree(
+    key: _unreadDividerKey,
+    child: _UnreadDivider(uiScale: uiScale, text: 'UNREAD'),
+  ),
+);
+
     }
 
     if (msg.type == ChatMessageType.system) {
@@ -2602,23 +2734,99 @@ return ListView.builder(
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onDoubleTap: () => _toggleHeartForMessage(msg),
-            child: MessageRow(
-              user: user,
-              text: msg.text,
-              isMe: isMe,
-              bubbleTemplate: msg.bubbleTemplate,
-              decor: msg.decor,
-              fontFamily: msg.fontFamily,
-              showName: (widget.roomId == 'group_main'),
-              nameHearts: (widget.roomId == 'group_main')
-                  ? _buildHeartIcons(msg.heartReactorIds, uiScale)
-                  : const <Widget>[],
-              showTime: (widget.roomId == 'group_main'),
-              timeMs: msg.ts,
-              showNewBadge: showNew,
-              usernameColor: usernameColor,
-              timeColor: timeColor,
-              uiScale: uiScale,
+            onHorizontalDragStart: (_) {
+              _dragDx = 0.0;
+            },
+            onHorizontalDragUpdate: (details) {
+              _dragDx += details.delta.dx;
+
+              final bool swipeOk = (_dragDx > 28);
+
+              if (swipeOk) {
+                _dragDx = 0.0;
+                _setReplyTarget(msg);
+                _flashHighlight(msg.id);
+                _focusNode.requestFocus();
+              }
+            },
+            onHorizontalDragEnd: (_) {
+              _dragDx = 0.0;
+            },
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: IgnorePointer(
+                    ignoring: true,
+                    child: AnimatedOpacity(
+                      opacity: (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 140),
+                      curve: Curves.easeOut,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 140),
+                        curve: Curves.easeOut,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(22 * uiScale),
+                          color: user.bubbleColor.withOpacity(0.18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: user.bubbleColor.withOpacity(0.45),
+                              blurRadius: 22 * uiScale,
+                              spreadRadius: 1.5 * uiScale,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                MessageRow(
+                  user: user,
+                  text: msg.text,
+                  isMe: isMe,
+                  bubbleTemplate: msg.bubbleTemplate,
+                  decor: msg.decor,
+                  fontFamily: msg.fontFamily,
+                  showName: (widget.roomId == 'group_main'),
+                  nameHearts: (widget.roomId == 'group_main')
+                      ? _buildHeartIcons(msg.heartReactorIds, uiScale)
+                      : const <Widget>[],
+                  showTime: (widget.roomId == 'group_main'),
+                  timeMs: msg.ts,
+                  showNewBadge: showNew,
+                  usernameColor: usernameColor,
+                  timeColor: timeColor,
+                  uiScale: uiScale,
+                  replyToSenderName: (msg.replyToSenderId == null)
+                      ? null
+                      : (users[msg.replyToSenderId!]?.name ?? msg.replyToSenderId!),
+                  replyToText: msg.replyToText,
+                  onTapReplyPreview: () {
+                    final id = msg.replyToMessageId;
+                    if (id != null) _jumpToMessageId(id);
+                  },
+                ),
+
+                Positioned.fill(
+                  child: IgnorePointer(
+                    ignoring: true,
+                    child: AnimatedOpacity(
+                      opacity: (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 140),
+                      curve: Curves.easeOut,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18 * uiScale),
+                          border: Border.all(
+                            color: user.bubbleColor.withOpacity(0.55),
+                            width: 1.6 * uiScale,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -2631,6 +2839,7 @@ return ListView.builder(
     );
   },
 );
+
 
                         },
                       ),
@@ -2696,11 +2905,13 @@ if (_newBelowCount > 0 && !_isNearBottom())
     child: NewMessagesBadge(
       count: _newBelowCount,
       badgeColor: const Color(0xFFEF797E),
+      hasMention: _newBelowHasMention,
       onTap: () {
-        // optional: Scrollable.ensureVisible(_unreadDividerKey.currentContext!, alignment: 0.0, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+        // אופציונלי: אפשר לקפוץ ל-UNREAD או ל-mention הראשון
       },
     ),
   ),
+
 
 
 
@@ -2724,6 +2935,21 @@ if (_newBelowCount > 0 && !_isNearBottom())
           ),
         ),
 
+        // ✅ WhatsApp-like Reply Preview (only when replying)
+        if (_replyTarget != null)
+          ReplyPreviewBar(
+            uiScale: uiScale,
+            stripeColor:
+                (users[_replyTarget!.senderId]?.bubbleColor ?? Colors.white),
+            title: _displayNameForId(_replyTarget!.senderId),
+            subtitle: _replyPreviewText(_replyTarget!.text),
+            onTap: () {
+              final id = _replyTarget!.id;
+              _jumpToMessageId(id);
+            },
+            onClose: _clearReplyTarget,
+          ),
+
         BottomBorderBar(
           height: _bottomBarHeight * uiScale,
           isTyping: _isTyping,
@@ -2733,6 +2959,7 @@ if (_newBelowCount > 0 && !_isNearBottom())
           onSend: _sendMessage,
           uiScale: uiScale,
         ),
+
       ],
     ),
   ),
