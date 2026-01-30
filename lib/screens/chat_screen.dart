@@ -433,6 +433,10 @@ int _newBelowCount = 0;
 
 // ✅ NEW: whether there is a mention below (so we can show @)
 bool _newBelowHasMention = false;
+// ✅ When I send a message, we wait for the Firestore snapshot that includes it.
+// When we see that exact ts in the list -> scroll to bottom (even if list length didn't grow).
+int _pendingScrollToBottomTs = 0;
+
 
 
 /// ✅ counts only "real unread-ish" messages:
@@ -1008,6 +1012,7 @@ bool _shouldTrigger707Egg(String raw) {
 // ✅ Live hour update (changes BG + username color even if nobody sends messages)
 Timer? _hourTimer;
 late int _uiHour;
+double _lastKeyboardInset = 0.0;
 
 
 void _scheduleNextHourTick() {
@@ -1848,7 +1853,11 @@ Future<void> _emitSystemLine(
   bool showInUi = true,
   bool scroll = true,
 }) async {
-  final ts = DateTime.now().millisecondsSinceEpoch;
+final ts = DateTime.now().millisecondsSinceEpoch;
+
+// ✅ Force scroll when THIS exact system line appears in the Firestore snapshot
+_pendingScrollToBottomTs = ts;
+
 
   // Send to Firestore so ALL devices see it
 await FirestoreChatService.sendSystemLine(
@@ -2170,13 +2179,34 @@ if (hasNewMessages && !wasNearBottomBefore) {
 }
 
 
-    // ✅ Auto-scroll ONLY if I was already near the bottom before the update.
-    if (hasNewMessages && wasNearBottomBefore) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _scrollToBottom(animated: true);
-      });
-    }
+// ✅ Auto-scroll when:
+// 1) I was already near bottom before the update, OR
+// 2) the snapshot now contains the message I just sent (ts match)
+final bool snapshotContainsMyPendingMessage =
+    (_pendingScrollToBottomTs > 0) &&
+    next.any((m) =>
+        m.ts == _pendingScrollToBottomTs &&
+        m.senderId == widget.currentUserId);
+
+if (wasNearBottomBefore || snapshotContainsMyPendingMessage) {
+  // ✅ IMPORTANT: wait TWO frames so the list rebuilds with the new itemCount
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _scrollToBottom(animated: true, keepFocus: true);
+
+      // ✅ consume
+      if (snapshotContainsMyPendingMessage) {
+        _pendingScrollToBottomTs = 0;
+      }
+    });
+  });
+}
+
+
 
     // ✅ Ensure lastRead cache is loaded BEFORE UI builds unread divider
     await _loadLastReadTsOnce();
@@ -2297,34 +2327,41 @@ if (firstLoad && next.isNotEmpty) {
 
 void _scrollToBottom({bool keepFocus = false, bool animated = true}) {
   if (!mounted) return;
-  if (_messages.isEmpty) return;
   if (!_itemScrollController.isAttached) return;
 
-  final lastIndex = _messages.length - 1;
+  // ✅ We scroll to the SPACER item (extra item at the end)
+  final int spacerIndex = _messages.length; // <- NOT length-1
 
-  // חשוב: לעשות את זה אחרי שהפריים נבנה (כדי שה-itemCount יהיה מעודכן)
+  final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+  final bool keyboardOpen = keyboardInset > 0.0;
+
+  // When keyboard open, keep content a bit higher.
+  // When closed, go true bottom.
+  final double alignment = keyboardOpen ? 0.85 : 1.0;
+
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (!mounted) return;
     if (!_itemScrollController.isAttached) return;
 
     if (animated) {
       await _itemScrollController.scrollTo(
-        index: lastIndex,
+        index: spacerIndex,
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,
-        alignment: 1.0, // ✅ שים את הפריט האחרון בתחתית הוויטפורט
+        alignment: alignment,
       );
     } else {
       _itemScrollController.jumpTo(
-        index: lastIndex,
-        alignment: 1.0,
+        index: spacerIndex,
+        alignment: alignment,
       );
     }
 
-    // אם עדיין את משתמשת בסייב של offset (אפשר גם לבטל בהמשך)
     _allowScrollOffsetSaves = true;
 
-    if (keepFocus) _focusNode.requestFocus();
+    if (keepFocus) {
+      _focusNode.requestFocus();
+    }
   });
 }
 
@@ -2406,6 +2443,9 @@ Future<void> _sendMessage() async {
       : null;
 
   final ts = DateTime.now().millisecondsSinceEpoch;
+  // ✅ Force scroll when THIS exact message appears in the Firestore snapshot
+_pendingScrollToBottomTs = ts;
+
 
   // ✅ capture reply info BEFORE we clear it
   final ChatMessage? reply = _replyTarget;
@@ -2460,9 +2500,7 @@ Future<void> _sendMessage() async {
     _playCreepyEggFx();
   }
 
-WidgetsBinding.instance.addPostFrameCallback((_) {
-  _scrollToBottom(animated: true, keepFocus: true);
-});
+
 
 }
 
@@ -2480,7 +2518,22 @@ final Color timeColor = timeColorForHour(hour);
 
 
 
-  final double uiScale = mysticUiScale(context);
+   final double uiScale = mysticUiScale(context);
+
+  // ✅ Keyboard height (0 when closed)
+  final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+
+WidgetsBinding.instance.addPostFrameCallback((_) {
+  if (!mounted) return;
+
+  if (_lastKeyboardInset == keyboardInset) return;
+  _lastKeyboardInset = keyboardInset;
+
+  // ✅ Only auto-snap if user is already near bottom
+  if (_isNearBottom()) {
+    _scrollToBottom(animated: false);
+  }
+});
 
 
 
@@ -2626,16 +2679,51 @@ return GestureDetector(
 
 final limitedTyping = typingList.take(3).toList();
 
+final bool keyboardOpen = keyboardInset > 0.0;
+
+// ✅ system bottom inset (gesture bar / home indicator)
+final double safeBottom = MediaQuery.of(context).padding.bottom;
+
+// ✅ Space only when keyboard is open (your "70" look)
+final double extraBottomWhenKeyboardOpen = 70 * uiScale;
+
+// ✅ When keyboard is closed: leave a small "floor" so the last bubble + shadow
+// never gets clipped at the bottom edge.
+final double bottomWhenClosed = (18 * uiScale) + safeBottom;
+
+final double listBottomPadding = keyboardOpen
+    ? (keyboardInset + extraBottomWhenKeyboardOpen)
+    : bottomWhenClosed;
+
+
 return ScrollablePositionedList.builder(
   itemScrollController: _itemScrollController,
   itemPositionsListener: _itemPositionsListener,
-  // ✅ keep your existing padding behavior
   padding: EdgeInsets.only(
     top: 8 * uiScale,
-    bottom: 10 * uiScale,
+    // ✅ Bottom padding is handled by the spacer item below (more reliable)
+    bottom: 0,
   ),
-  itemCount: _messages.length,
+
+  // ✅ ADD 1: extra spacer item at the end
+  itemCount: _messages.length + 1,
+
   itemBuilder: (context, index) {
+    // ✅ LAST ITEM = spacer (gives real "floor" so last message never hides)
+    if (index == _messages.length) {
+      final bool keyboardOpen = keyboardInset > 0.0;
+      final double safeBottom = MediaQuery.of(context).padding.bottom;
+
+      final double extraBottomWhenKeyboardOpen = 70 * uiScale;
+      final double bottomWhenClosed = (28 * uiScale) + safeBottom;
+
+      final double spacerHeight = keyboardOpen
+          ? (keyboardInset + extraBottomWhenKeyboardOpen)
+          : bottomWhenClosed;
+
+      return SizedBox(height: spacerHeight);
+    }
+
     const double chatSidePadding = 16;
 
     final msg = _messages[index];
@@ -2685,13 +2773,12 @@ return ScrollablePositionedList.builder(
         msg.ts == firstUnreadTs;
 
     if (showUnreadDivider) {
-pieces.add(
-  KeyedSubtree(
-    key: _unreadDividerKey,
-    child: _UnreadDivider(uiScale: uiScale, text: 'UNREAD'),
-  ),
-);
-
+      pieces.add(
+        KeyedSubtree(
+          key: _unreadDividerKey,
+          child: _UnreadDivider(uiScale: uiScale, text: 'UNREAD'),
+        ),
+      );
     }
 
     if (msg.type == ChatMessageType.system) {
@@ -2719,7 +2806,8 @@ pieces.add(
 
     final isMe = user.id == widget.currentUserId;
     final bool isGroup = widget.roomId == 'group_main';
-    final bool showNew = isGroup ? (_newBadgeVisibleByTs[msg.ts] ?? false) : false;
+    final bool showNew =
+        isGroup ? (_newBadgeVisibleByTs[msg.ts] ?? false) : false;
 
     pieces.add(
       KeyedSubtree(
@@ -2758,7 +2846,8 @@ pieces.add(
                   child: IgnorePointer(
                     ignoring: true,
                     child: AnimatedOpacity(
-                      opacity: (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
+                      opacity:
+                          (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
                       duration: const Duration(milliseconds: 140),
                       curve: Curves.easeOut,
                       child: AnimatedContainer(
@@ -2779,7 +2868,6 @@ pieces.add(
                     ),
                   ),
                 ),
-
                 MessageRow(
                   user: user,
                   text: msg.text,
@@ -2799,19 +2887,20 @@ pieces.add(
                   uiScale: uiScale,
                   replyToSenderName: (msg.replyToSenderId == null)
                       ? null
-                      : (users[msg.replyToSenderId!]?.name ?? msg.replyToSenderId!),
+                      : (users[msg.replyToSenderId!]?.name ??
+                          msg.replyToSenderId!),
                   replyToText: msg.replyToText,
                   onTapReplyPreview: () {
                     final id = msg.replyToMessageId;
                     if (id != null) _jumpToMessageId(id);
                   },
                 ),
-
                 Positioned.fill(
                   child: IgnorePointer(
                     ignoring: true,
                     child: AnimatedOpacity(
-                      opacity: (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
+                      opacity:
+                          (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
                       duration: const Duration(milliseconds: 140),
                       curve: Curves.easeOut,
                       child: Container(
@@ -2841,6 +2930,9 @@ pieces.add(
 );
 
 
+
+
+
                         },
                       ),
                     ),
@@ -2855,8 +2947,9 @@ pieces.add(
 Positioned(
   left: 0,
   right: 0,
-  bottom: 8 * uiScale, // ✅ closer to the bottom of the chat area
+  bottom: (8 * uiScale) + keyboardInset, // ✅ lift above keyboard
   child: IgnorePointer(
+
     ignoring: true,
     child: ValueListenableBuilder<Set<String>>(
       valueListenable: _typingNotifier,
@@ -2899,10 +2992,11 @@ Positioned(
 
 // ✅ NEW messages-below badge (single instance)
 if (_newBelowCount > 0 && !_isNearBottom())
-  Positioned(
-    right: 16 * uiScale,
-    bottom: 52 * uiScale, // ✅ lower (still above typing row a bit)
-    child: NewMessagesBadge(
+Positioned(
+  right: 16 * uiScale,
+  bottom: (52 * uiScale) + keyboardInset, // ✅ lift above keyboard
+  child: NewMessagesBadge(
+
       count: _newBelowCount,
       badgeColor: const Color(0xFFEF797E),
       hasMention: _newBelowHasMention,
