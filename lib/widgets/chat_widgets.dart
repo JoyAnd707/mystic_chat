@@ -503,6 +503,14 @@ class MessageRow extends StatelessWidget {
   final String? replyToSenderName;
 final String? replyToText;
 final VoidCallback? onTapReplyPreview;
+  /// ✅ NEW: message type + image url
+  final String messageType; // 'text' / 'image'
+  final String? imageUrl;
+
+  /// ✅ NEW: allow heart reaction on images even when outer detector can't win
+  final VoidCallback? onDoubleTapImage;
+
+
 // ✅ NEW: builds TextSpans so @mentions are white (including the @)
 List<InlineSpan> _buildMentionSpans(String s, {required double uiScale}) {
   final spans = <InlineSpan>[];
@@ -510,7 +518,6 @@ List<InlineSpan> _buildMentionSpans(String s, {required double uiScale}) {
   final words = s.split(RegExp(r'(\s+)')); // keep spaces as tokens
   for (final token in words) {
     if (token.trim().isEmpty) {
-      // spaces
       spans.add(TextSpan(text: token));
       continue;
     }
@@ -530,6 +537,49 @@ List<InlineSpan> _buildMentionSpans(String s, {required double uiScale}) {
 
   return spans;
 }
+void _openImageViewer(BuildContext context, String url) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          titleSpacing: 12,
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(color: Colors.white, fontSize: 18),
+                ),
+              ),
+              TextButton(
+                onPressed: () {}, // אם תרצי בעתיד: כפתור "+" לפיצ׳רים
+                child: const Text(
+                  '[ + ]',
+                  style: TextStyle(color: Colors.white, fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+        ),
+        body: Center(
+          child: InteractiveViewer(
+            minScale: 1.0,
+            maxScale: 4.0,
+            child: Image.network(url, fit: BoxFit.contain),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 
 // ✅ NEW: extract plain display text without bidi isolates (for parsing)
 String _plainForMentions(String s) => s; // keep it simple for now
@@ -558,7 +608,7 @@ String _plainForMentions(String s) => s; // keep it simple for now
   final bool showTime;
   final int timeMs;
 
-const MessageRow({
+MessageRow({
   super.key,
   required this.user,
   required this.text,
@@ -573,6 +623,11 @@ const MessageRow({
   this.nameHearts = const <Widget>[],
   required this.uiScale,
 
+  /// ✅ NEW
+  this.messageType = 'text',
+  this.imageUrl,
+  this.onDoubleTapImage,
+
   // ✅ reply preview
   this.replyToSenderName,
   this.replyToText,
@@ -582,6 +637,7 @@ const MessageRow({
   this.showTime = false,
   this.timeMs = 0,
 });
+
 
 
   Color _decorBaseFromUser(Color c) {
@@ -771,6 +827,16 @@ String _wrapByWordCount(String s, {int maxWordsPerLine = 5}) {
     final double avatarSize = 56 * uiScale; // ✅ scale with device
     final double gap = 10 * uiScale;
     double s(double v) => v * uiScale;
+final double screenW = MediaQuery.of(context).size.width;
+final double sidePadding = 16;
+
+final double availableForBubble =
+    screenW - (sidePadding * 2) - (avatarSize + gap);
+
+final double mysticMax = availableForBubble * 0.86;
+final double hardCap = 360 * uiScale;
+
+final double maxBubbleWidth = math.min(hardCap, mysticMax);
 
     final avatar = SizedBox(
       width: avatarSize,
@@ -806,7 +872,137 @@ String _wrapByWordCount(String s, {int maxWordsPerLine = 5}) {
 final String displayText =
     _wrapByWordCount(_softWrapLongTokens(text), maxWordsPerLine: 5);
 
+// ✅ Decide what the row shows: image OR text
+late final Widget messageBody;
 
+final String msgType = messageType; // 'text' / 'image'
+final String? imgUrl = imageUrl;
+
+// ✅ Fixed SMALL rectangular preview (same size for all images)
+final double imagePreviewWidth  = math.min(maxBubbleWidth, 140 * uiScale);
+final double imagePreviewHeight = 210 * uiScale;
+
+
+if (msgType == 'image' && imgUrl != null && imgUrl.trim().isNotEmpty) {
+messageBody = GestureDetector(
+    onTap: () => _openImageViewer(context, imgUrl),
+    onDoubleTap: onDoubleTapImage,
+    behavior: HitTestBehavior.opaque,
+    child: ClipRect(
+      child: SizedBox(
+        width: imagePreviewWidth,
+        height: imagePreviewHeight,
+        child: Image.network(
+          imgUrl,
+          fit: BoxFit.cover, // ✅ crop intentional like Mystic
+        ),
+      ),
+    ),
+  );
+
+} else {
+  const double _msgFont = 15.0; // ✅ היה 16.0 — תורידי/תעלי פה בקטנה
+
+  messageBody = Directionality(
+    textDirection:
+        _isProbablyRtl(displayText) ? TextDirection.rtl : TextDirection.ltr,
+    child: Text(
+      _bidiIsolate(displayText),
+      textAlign: _isProbablyRtl(displayText) ? TextAlign.right : TextAlign.left,
+      softWrap: true,
+      maxLines: null,
+      overflow: TextOverflow.visible,
+      strutStyle: StrutStyle(
+        fontSize: _msgFont * uiScale,
+        height: 1.2,
+        forceStrutHeight: true,
+      ),
+      textHeightBehavior: const TextHeightBehavior(
+        applyHeightToFirstAscent: false,
+        applyHeightToLastDescent: false,
+      ),
+      style: TextStyle(
+        fontFamily: fontFamily,
+        fontSize: _msgFont * uiScale,
+        height: 1.2,
+        color: Colors.black,
+        fontWeight: FontWeight.w400,
+        letterSpacing: -0.15 * uiScale,
+        leadingDistribution: TextLeadingDistribution.even,
+      ),
+    ),
+  );
+}
+
+
+
+// ✅ Reply preview builder (shared)
+Widget _replyPreview() {
+  if (!((replyToText != null && replyToText!.trim().isNotEmpty) ||
+      (replyToSenderName != null && replyToSenderName!.trim().isNotEmpty))) {
+    return const SizedBox.shrink();
+  }
+
+  return GestureDetector(
+    onTap: onTapReplyPreview,
+    behavior: HitTestBehavior.opaque,
+    child: Container(
+      margin: EdgeInsets.only(bottom: 6 * uiScale),
+      padding: EdgeInsets.symmetric(
+        horizontal: 8 * uiScale,
+        vertical: 6 * uiScale,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(4 * uiScale),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (replyToSenderName != null && replyToSenderName!.trim().isNotEmpty)
+            Text(
+              replyToSenderName!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12 * uiScale,
+                fontWeight: FontWeight.w700,
+                color: Colors.black.withOpacity(0.70),
+                height: 1.0,
+              ),
+            ),
+          if (replyToText != null && replyToText!.trim().isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(top: 3 * uiScale),
+              child: Text(
+                replyToText!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12 * uiScale,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black.withOpacity(0.65),
+                  height: 1.1,
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+// ✅ IMAGE: no bubble at all (only the image)
+final Widget imageOnlyWidget = Column(
+  mainAxisSize: MainAxisSize.min,
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    _replyPreview(),
+    messageBody,
+  ],
+);
+
+// ✅ TEXT: keep the bubble exactly as before
 final bubbleInner = Padding(
   padding: EdgeInsets.symmetric(
     horizontal: 10 * uiScale,
@@ -816,150 +1012,44 @@ final bubbleInner = Padding(
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      if ((replyToText != null && replyToText!.trim().isNotEmpty) ||
-          (replyToSenderName != null && replyToSenderName!.trim().isNotEmpty))
-        GestureDetector(
-          onTap: onTapReplyPreview,
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            margin: EdgeInsets.only(bottom: 6 * uiScale),
-            padding: EdgeInsets.symmetric(
-              horizontal: 8 * uiScale,
-              vertical: 6 * uiScale,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(4 * uiScale),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (replyToSenderName != null && replyToSenderName!.trim().isNotEmpty)
-                  Text(
-                    replyToSenderName!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12 * uiScale,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black.withOpacity(0.70),
-                      height: 1.0,
-                    ),
-                  ),
-                if (replyToText != null && replyToText!.trim().isNotEmpty)
-                  Padding(
-                    padding: EdgeInsets.only(top: 3 * uiScale),
-                    child: Text(
-                      replyToText!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12 * uiScale,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black.withOpacity(0.65),
-                        height: 1.1,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-
-      Directionality(
-        textDirection:
-            _isProbablyRtl(displayText) ? TextDirection.rtl : TextDirection.ltr,
-        child: Text.rich(
-          TextSpan(
-            children: <InlineSpan>[
-              const TextSpan(text: '\u2068'), // FSI
-              ..._buildMentionSpans(displayText, uiScale: uiScale),
-              const TextSpan(text: '\u2069'), // PDI
-            ],
-          ),
-          textAlign: _isProbablyRtl(displayText) ? TextAlign.right : TextAlign.left,
-          softWrap: true,
-          maxLines: null,
-          overflow: TextOverflow.visible,
-
-          // ✅ THIS is what prevents the bubble from “shrinking”
-          textWidthBasis: TextWidthBasis.longestLine,
-
-          strutStyle: StrutStyle(
-            fontSize: 16 * uiScale,
-            height: 1.2,
-            forceStrutHeight: true,
-          ),
-          textHeightBehavior: const TextHeightBehavior(
-            applyHeightToFirstAscent: false,
-            applyHeightToLastDescent: false,
-          ),
-          style: TextStyle(
-            fontFamily: fontFamily,
-            fontSize: 16 * uiScale,
-            height: 1.2,
-            color: Colors.black,
-            fontWeight: FontWeight.w400,
-            letterSpacing: -0.15 * uiScale,
-            leadingDistribution: TextLeadingDistribution.even,
-          ),
-        ),
-      ),
-
+      _replyPreview(),
+      messageBody,
     ],
   ),
 );
 
-
-
-
-
-final double screenW = MediaQuery.of(context).size.width;
-
-// ✅ keep screen padding stable (don’t over-scale it)
-final double sidePadding = 16;
-
-final double availableForBubble =
-    screenW - (sidePadding * 2) - (avatarSize + gap);
-
-// ✅ Mystic-like: bubble can be fairly wide, but not full screen
-final double mysticMax = availableForBubble * 0.86;
-
-// ✅ hard cap so it doesn’t become a giant rectangle on tablets
-final double hardCap = 360 * uiScale;
-
-final double maxBubbleWidth = math.min(hardCap, mysticMax);
-
-
-
 // ✅ Mystic-like minimum width so short messages don't wrap weirdly
 final double minBubbleWidth = 18 * uiScale; // רוחב של אות אחת בערך
 
-final bubbleWidget = ConstrainedBox(
-  constraints: BoxConstraints(
-    minWidth: minBubbleWidth,
-    maxWidth: maxBubbleWidth,
-  ),
-  child: BubbleWithTail(
-    color: bubbleFill,
-    isMe: isMe,
-    radius: 6 * uiScale,
-    tailWidth: 10 * uiScale,
-    tailHeight: 6 * uiScale,
-    tailTop: 12 * uiScale,
-    glowEnabled: (effectiveTemplate == BubbleTemplate.glow),
-    glowInnerColor: innerDarkGlow,
-    glowOuterColor: outerBrightGlow,
-    child: bubbleInner,
-  ),
-);
+final Widget bubbleWidget = (msgType == 'image' && imgUrl != null && imgUrl.trim().isNotEmpty)
+    ? imageOnlyWidget
+    : ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: minBubbleWidth,
+          maxWidth: maxBubbleWidth,
+        ),
+        child: BubbleWithTail(
+          color: bubbleFill,
+          isMe: isMe,
+          radius: 6 * uiScale,
+          tailWidth: 10 * uiScale,
+          tailHeight: 6 * uiScale,
+          tailTop: 12 * uiScale,
+          glowEnabled: (effectiveTemplate == BubbleTemplate.glow),
+          glowInnerColor: innerDarkGlow,
+          glowOuterColor: outerBrightGlow,
+          child: bubbleInner,
+        ),
+      );
 
+// ✅ If image: return just the widget (no decors). If text: keep decors stack.
+final Widget bubbleStack = (msgType == 'image' && imgUrl != null && imgUrl.trim().isNotEmpty)
+    ? bubbleWidget
+    : Stack(
+        clipBehavior: Clip.none,
+        children: [
+          bubbleWidget,
 
-
-final bubbleStack = Stack(
-  clipBehavior: Clip.none,
-  children: [
-    bubbleWidget,
 
     // ✅ DECOR: Hearts
     if (decor == BubbleDecor.hearts) ...[

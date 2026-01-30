@@ -15,6 +15,7 @@ import '../services/presence_service.dart';
 import '../widgets/new_messages_badge.dart'; // ✅ ADD THIS
 import '../widgets/reply_preview_bar.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import '../services/image_message_service.dart';
 
 
 double mysticUiScale(BuildContext context) {
@@ -130,7 +131,7 @@ const Map<String, ChatUser> users = {
 /// MESSAGE MODEL
 /// =======================
 
-enum ChatMessageType { text, system }
+enum ChatMessageType { text, system, image }
 
 class ChatMessage {
   /// Firestore doc id (we use ts.toString())
@@ -138,7 +139,13 @@ class ChatMessage {
 
   final ChatMessageType type;
   final String senderId;
+
+  /// For text messages
   final String text;
+
+  /// For image messages
+  final String? imageUrl;
+
   final int ts;
 
   final BubbleTemplate bubbleTemplate;
@@ -158,6 +165,7 @@ class ChatMessage {
     required this.senderId,
     required this.text,
     required this.ts,
+    this.imageUrl,
     this.bubbleTemplate = BubbleTemplate.normal,
     this.decor = BubbleDecor.none,
     this.fontFamily,
@@ -174,12 +182,12 @@ class ChatMessage {
     ChatMessageType? type,
     String? senderId,
     String? text,
+    String? imageUrl,
     int? ts,
     BubbleTemplate? bubbleTemplate,
     BubbleDecor? decor,
     String? fontFamily,
     Set<String>? heartReactorIds,
-
     String? replyToMessageId,
     String? replyToSenderId,
     String? replyToText,
@@ -189,12 +197,12 @@ class ChatMessage {
       type: type ?? this.type,
       senderId: senderId ?? this.senderId,
       text: text ?? this.text,
+      imageUrl: imageUrl ?? this.imageUrl,
       ts: ts ?? this.ts,
       bubbleTemplate: bubbleTemplate ?? this.bubbleTemplate,
       decor: decor ?? this.decor,
       fontFamily: fontFamily ?? this.fontFamily,
       heartReactorIds: heartReactorIds ?? this.heartReactorIds,
-
       replyToMessageId: replyToMessageId ?? this.replyToMessageId,
       replyToSenderId: replyToSenderId ?? this.replyToSenderId,
       replyToText: replyToText ?? this.replyToText,
@@ -206,13 +214,12 @@ class ChatMessage {
         'type': type.name,
         'senderId': senderId,
         'text': text,
+        'imageUrl': imageUrl,
         'ts': ts,
         'bubbleTemplate': bubbleTemplate.name,
         'decor': decor.name,
         'fontFamily': fontFamily,
         'heartReactorIds': heartReactorIds.toList(),
-
-        // ✅ reply fields
         'replyToMessageId': replyToMessageId,
         'replyToSenderId': replyToSenderId,
         'replyToText': replyToText,
@@ -247,23 +254,25 @@ class ChatMessage {
     final reactors = rawReactors.map((e) => e.toString()).toSet();
 
     final rawId = m['id'];
-final id = (rawId != null && rawId.toString().trim().isNotEmpty)
-    ? rawId.toString()
-    : '${ts}_${m['senderId'] ?? ''}_${(m['text'] ?? '').toString().hashCode}';
+    final id = (rawId != null && rawId.toString().trim().isNotEmpty)
+        ? rawId.toString()
+        : '${ts}_${m['senderId'] ?? ''}_${(m['text'] ?? '').toString().hashCode}';
 
+    final img = (m['imageUrl'] == null || m['imageUrl'].toString().trim().isEmpty)
+        ? null
+        : m['imageUrl'].toString();
 
     return ChatMessage(
       id: id,
       type: type,
       senderId: (m['senderId'] ?? '').toString(),
       text: (m['text'] ?? '').toString(),
+      imageUrl: img,
       ts: ts,
       bubbleTemplate: bt,
       decor: decor,
       fontFamily: fontFamily,
       heartReactorIds: reactors,
-
-      // ✅ reply
       replyToMessageId: (m['replyToMessageId'] as String?)?.toString(),
       replyToSenderId: (m['replyToSenderId'] as String?)?.toString(),
       replyToText: (m['replyToText'] as String?)?.toString(),
@@ -313,6 +322,7 @@ VoidCallback? _onlineListener;
 String? _bgOverride;
 final ItemScrollController _itemScrollController = ItemScrollController();
 final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
+final ImageMessageService _imageService = ImageMessageService();
 
 // ✅ IMPORTANT: cached "near bottom" state so UI rebuilds on scroll
 bool _nearBottomCached = true;
@@ -1039,9 +1049,9 @@ Widget _nameWithHeartsHeader({
   );
 }
 
-
 Future<void> _toggleHeartForMessage(ChatMessage msg) async {
-  if (msg.type != ChatMessageType.text) return;
+  // ✅ Hearts allowed for text + image (but never system)
+  if (msg.type == ChatMessageType.system) return;
 
   // ❌ Block hearts on my own messages (no add, no remove)
   if (msg.senderId == widget.currentUserId) return;
@@ -2774,9 +2784,28 @@ return ActiveUsersBar(
   onOpenBubbleMenu: _openBubbleTemplateMenu,
 
   // ✅ NEW: camera button action (for now: just debug)
-  onPickImage: () {
-    debugPrint('pick image');
-  },
+onPickImage: () async {
+  try {
+    final roomId = widget.roomId;
+
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    _pendingScrollToBottomTs = ts;
+
+    await _imageService.pickAndSendImage(
+      roomId: roomId,
+      senderId: widget.currentUserId,
+      ts: ts,
+    );
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to send image: $e')),
+    );
+  }
+},
+
+
+
 
   titleText: widget.title ??
       (users[widget.currentUserId]?.name ?? widget.currentUserId),
@@ -3005,6 +3034,11 @@ return ScrollablePositionedList.builder(
       );
     }
 
+
+
+
+
+
     final user = users[msg.senderId];
     if (user == null) return const SizedBox.shrink();
 
@@ -3023,13 +3057,11 @@ return ScrollablePositionedList.builder(
             chatSidePadding * uiScale,
             0,
           ),
-          child: GestureDetector(
+child: GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onDoubleTap: () {
-  // ❌ No hearts on my own messages
-  if (msg.senderId == widget.currentUserId) return;
-  _toggleHeartForMessage(msg);
-},
+            onDoubleTap: (msg.type == ChatMessageType.image)
+                ? null
+                : () => _toggleHeartForMessage(msg),
 
             onHorizontalDragStart: (_) {
               _dragDx = 0.0;
@@ -3052,32 +3084,31 @@ return ScrollablePositionedList.builder(
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: IgnorePointer(
-                    ignoring: true,
-                    child: AnimatedOpacity(
-                      opacity:
-                          (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 140),
-                      curve: Curves.easeOut,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 140),
-                        curve: Curves.easeOut,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(22 * uiScale),
-                          color: user.bubbleColor.withOpacity(0.18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: user.bubbleColor.withOpacity(0.45),
-                              blurRadius: 22 * uiScale,
-                              spreadRadius: 1.5 * uiScale,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+child: IgnorePointer(
+  ignoring: true,
+  child: AnimatedOpacity(
+    opacity: (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
+    duration: const Duration(milliseconds: 140),
+    curve: Curves.easeOut,
+    child: Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22 * uiScale),
+        color: user.bubbleColor.withOpacity(0.18),
+        boxShadow: [
+          BoxShadow(
+            color: user.bubbleColor.withOpacity(0.45),
+            blurRadius: 22 * uiScale,
+            spreadRadius: 1.5 * uiScale,
+          ),
+        ],
+      ),
+    ),
+  ),
+),
+
                   ),
-                ),
-                MessageRow(
+                
+MessageRow(
                   user: user,
                   text: msg.text,
                   isMe: isMe,
@@ -3103,7 +3134,17 @@ return ScrollablePositionedList.builder(
                     final id = msg.replyToMessageId;
                     if (id != null) _jumpToMessageId(id);
                   },
+
+                  // ✅ NEW: image rendering + image heart reaction
+                  messageType:
+                      (msg.type == ChatMessageType.image) ? 'image' : 'text',
+                  imageUrl: msg.imageUrl,
+                  onDoubleTapImage: (msg.type == ChatMessageType.image)
+                      ? () => _toggleHeartForMessage(msg)
+                      : null,
                 ),
+
+
                 Positioned.fill(
                   child: IgnorePointer(
                     ignoring: true,
@@ -3730,6 +3771,34 @@ class _MentionPickerBar extends StatelessWidget {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+class _AvatarCircle extends StatelessWidget {
+  final ChatUser user;
+  final double size;
+
+  const _AvatarCircle({
+    required this.user,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final path = user.avatarPath;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: (path != null && path.trim().isNotEmpty)
+            ? Image.asset(path, fit: BoxFit.cover)
+            : Container(
+                color: Colors.white.withOpacity(0.10),
+                child: Icon(Icons.person, color: Colors.white70, size: size * 0.55),
+              ),
       ),
     );
   }
