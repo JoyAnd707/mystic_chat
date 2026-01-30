@@ -249,6 +249,9 @@ class ActiveUsersBar extends StatelessWidget {
   /// ✅ opens the bubble-style menu
   final VoidCallback onOpenBubbleMenu;
 
+  /// ✅ NEW: pick image (camera button)
+  final VoidCallback onPickImage;
+
   /// ✅ title text to display in the center
   final String titleText;
 
@@ -262,9 +265,11 @@ class ActiveUsersBar extends StatelessWidget {
     required this.currentUserId,
     required this.onBack,
     required this.onOpenBubbleMenu,
+    required this.onPickImage,
     required this.titleText,
     required this.uiScale,
   });
+
 
   static const double barHeight = 64;
 
@@ -369,29 +374,57 @@ class ActiveUsersBar extends StatelessWidget {
           // ❌ הוסר: Active users row (bottom center)
           // זה בדיוק מה שצייר את ה-A הקטנה
 
-          // ✅ Bubble menu button (RIGHT)
-          Positioned(
-            right: s(6),
-            top: 0,
-            bottom: 0,
+// ✅ Right-side actions: [Camera] [Bubble menu]
+Positioned(
+  right: s(6),
+  top: 0,
+  bottom: 0,
+  child: Center(
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 📷 Camera button
+        GestureDetector(
+          onTap: onPickImage,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: tapSize,
+            height: tapSize,
             child: Center(
-              child: GestureDetector(
-                onTap: onOpenBubbleMenu,
-                behavior: HitTestBehavior.opaque,
-                child: SizedBox(
-                  width: tapSize,
-                  height: tapSize,
-                  child: Center(
-                    child: Icon(
-                      Icons.auto_awesome,
-                      size: s(20),
-                      color: Colors.white.withOpacity(0.9),
-                    ),
-                  ),
-                ),
+              child: Image.asset(
+                'assets/ui/CameraIcon.png',
+                width: s(32),
+                height: s(32),
+                fit: BoxFit.contain,
+                color: Colors.white.withOpacity(0.92),
               ),
             ),
           ),
+        ),
+
+        SizedBox(width: s(6)),
+
+        // ✨ Bubble menu button (existing)
+        GestureDetector(
+          onTap: onOpenBubbleMenu,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: tapSize,
+            height: tapSize,
+            child: Center(
+              child: Icon(
+                Icons.auto_awesome,
+                size: s(20),
+                color: Colors.white.withOpacity(0.9),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+
         ],
       ),
     );
@@ -470,6 +503,36 @@ class MessageRow extends StatelessWidget {
   final String? replyToSenderName;
 final String? replyToText;
 final VoidCallback? onTapReplyPreview;
+// ✅ NEW: builds TextSpans so @mentions are white (including the @)
+List<InlineSpan> _buildMentionSpans(String s, {required double uiScale}) {
+  final spans = <InlineSpan>[];
+
+  final words = s.split(RegExp(r'(\s+)')); // keep spaces as tokens
+  for (final token in words) {
+    if (token.trim().isEmpty) {
+      // spaces
+      spans.add(TextSpan(text: token));
+      continue;
+    }
+
+    final isMention = token.startsWith('@') && token.length > 1;
+
+    spans.add(
+      TextSpan(
+        text: token,
+        style: TextStyle(
+          color: isMention ? Colors.white : Colors.black,
+          fontWeight: isMention ? FontWeight.w700 : FontWeight.w400,
+        ),
+      ),
+    );
+  }
+
+  return spans;
+}
+
+// ✅ NEW: extract plain display text without bidi isolates (for parsing)
+String _plainForMentions(String s) => s; // keep it simple for now
 
   final List<Widget> nameHearts;
 
@@ -806,12 +869,22 @@ final bubbleInner = Padding(
       Directionality(
         textDirection:
             _isProbablyRtl(displayText) ? TextDirection.rtl : TextDirection.ltr,
-        child: Text(
-          _bidiIsolate(displayText),
+        child: Text.rich(
+          TextSpan(
+            children: <InlineSpan>[
+              const TextSpan(text: '\u2068'), // FSI
+              ..._buildMentionSpans(displayText, uiScale: uiScale),
+              const TextSpan(text: '\u2069'), // PDI
+            ],
+          ),
           textAlign: _isProbablyRtl(displayText) ? TextAlign.right : TextAlign.left,
           softWrap: true,
           maxLines: null,
           overflow: TextOverflow.visible,
+
+          // ✅ THIS is what prevents the bubble from “shrinking”
+          textWidthBasis: TextWidthBasis.longestLine,
+
           strutStyle: StrutStyle(
             fontSize: 16 * uiScale,
             height: 1.2,
@@ -832,6 +905,7 @@ final bubbleInner = Padding(
           ),
         ),
       ),
+
     ],
   ),
 );

@@ -366,6 +366,129 @@ bool _isNearBottom({int thresholdItems = 1}) {
 // =======================
 // Reply (WhatsApp-like preview)
 // =======================
+// =======================
+// Mentions (@) (WhatsApp-like picker)
+// =======================
+bool _mentionMenuOpen = false;
+int _mentionAtIndex = -1;       // index of '@' in the text
+String _mentionQuery = '';      // text after '@' until caret
+List<ChatUser> _mentionResults = <ChatUser>[];
+
+String _normalizeMentionToken(String s) {
+  // keep letters+digits+hebrew, drop symbols like ★
+  return s
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9\u0590-\u05FF]+'), '');
+}
+
+bool _isWordBoundaryBeforeAt(String text, int atIndex) {
+  if (atIndex <= 0) return true;
+  final ch = text[atIndex - 1];
+  return ch.trim().isEmpty; // whitespace boundary
+}
+
+void _closeMentionMenu() {
+  if (!mounted) return;
+  if (!_mentionMenuOpen) return;
+  setState(() {
+    _mentionMenuOpen = false;
+    _mentionAtIndex = -1;
+    _mentionQuery = '';
+    _mentionResults = <ChatUser>[];
+  });
+}
+
+List<ChatUser> _allMentionCandidates() {
+  // include everyone except me + optionally exclude bot
+  final list = users.values.where((u) {
+    if (u.id == widget.currentUserId) return false;
+    if (u.id == 'gackto_facto') return false; // optional: remove bot from mention list
+    return true;
+  }).toList();
+
+  list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  return list;
+}
+
+void _updateMentionMenuFromText() {
+  if (!mounted) return;
+
+  final text = _controller.text;
+  final sel = _controller.selection;
+  final caret = sel.baseOffset;
+
+  if (caret < 0 || caret > text.length) {
+    _closeMentionMenu();
+    return;
+  }
+
+  // Find last '@' BEFORE caret
+  final int at = text.lastIndexOf('@', caret - 1);
+  if (at < 0) {
+    _closeMentionMenu();
+    return;
+  }
+
+  // Must be boundary before '@' (start or whitespace)
+  if (!_isWordBoundaryBeforeAt(text, at)) {
+    _closeMentionMenu();
+    return;
+  }
+
+  // The substring between '@' and caret must not include whitespace/newline
+  final between = text.substring(at + 1, caret);
+  if (between.contains(RegExp(r'\s'))) {
+    _closeMentionMenu();
+    return;
+  }
+
+  final queryNorm = _normalizeMentionToken(between);
+
+  // Filter candidates by name tokens
+  final candidates = _allMentionCandidates();
+  final results = candidates.where((u) {
+    final nameNorm = _normalizeMentionToken(u.name);
+    if (queryNorm.isEmpty) return true;
+    return nameNorm.contains(queryNorm);
+  }).toList();
+
+  // If no results, still show nothing but keep menu open (WhatsApp style can close)
+  setState(() {
+    _mentionMenuOpen = true;
+    _mentionAtIndex = at;
+    _mentionQuery = between;
+    _mentionResults = results;
+  });
+}
+
+void _insertMention(ChatUser u) {
+  final text = _controller.text;
+  final sel = _controller.selection;
+  final caret = sel.baseOffset;
+
+  if (_mentionAtIndex < 0 || caret < 0) return;
+  if (_mentionAtIndex >= text.length) return;
+
+  final before = text.substring(0, _mentionAtIndex);
+  final after = text.substring(caret);
+
+  final insertion = '@${u.name} ';
+
+  final nextText = before + insertion + after;
+
+  final newCaret = (before.length + insertion.length);
+
+  _controller.value = TextEditingValue(
+    text: nextText,
+    selection: TextSelection.collapsed(offset: newCaret),
+  );
+
+  // keep keyboard open
+  _focusNode.requestFocus();
+
+  _closeMentionMenu();
+}
+
 ChatMessage? _replyTarget;
 
 // highlight flash per message id
@@ -463,6 +586,28 @@ int _countAddedUnreadishMessages(List<ChatMessage> oldList, List<ChatMessage> ne
 
 /// ✅ NEW: detect if ANY added message is a "mention" of me
 /// In our app: "mention" == someone replied to MY message
+bool _textMentionsUser(ChatMessage m, String userId) {
+  final me = users[userId];
+  if (me == null) return false;
+
+  final raw = m.text;
+  if (raw.isEmpty) return false;
+
+  // direct contains (with the star etc)
+  final directToken = '@${me.name}';
+  if (raw.contains(directToken)) return true;
+
+  // normalized compare (drop symbols like ★)
+  final normRaw = raw.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\u0590-\u05FF@ ]+'), '');
+  final normMe = _normalizeMentionToken(me.name);
+  if (normMe.isEmpty) return false;
+
+  // look for "@<normalizedName>" in normalized string
+  if (normRaw.contains('@$normMe')) return true;
+
+  return false;
+}
+
 bool _hasAddedMentionsOfMe(List<ChatMessage> oldList, List<ChatMessage> newList) {
   if (newList.length <= oldList.length) return false;
 
@@ -472,8 +617,13 @@ bool _hasAddedMentionsOfMe(List<ChatMessage> oldList, List<ChatMessage> newList)
     if (m.type != ChatMessageType.text) continue;
     if (m.senderId == widget.currentUserId) continue;
 
-    // ✅ mention rule
+    // ✅ mention rule 1: reply to MY message (your existing behavior)
     if (m.replyToSenderId != null && m.replyToSenderId == widget.currentUserId) {
+      return true;
+    }
+
+    // ✅ mention rule 2: "@Me" in text
+    if (_textMentionsUser(m, widget.currentUserId)) {
       return true;
     }
   }
@@ -2033,6 +2183,8 @@ _typingSub = PresenceService.I
 
   // ✅ typing listeners (UI-only)
   _controller.addListener(_handleTypingChange);
+  _controller.addListener(_updateMentionMenuFromText);
+
   _focusNode.addListener(_handleTypingChange);
 
   // ✅ REAL presence enter
@@ -2108,6 +2260,8 @@ void dispose() {
 
   // ✅ remove typing listeners (UI-only)
   _controller.removeListener(_handleTypingChange);
+  _controller.removeListener(_updateMentionMenuFromText);
+
   _focusNode.removeListener(_handleTypingChange);
 
   // ✅ remove ScrollablePositionedList positions listener
@@ -2605,23 +2759,30 @@ return GestureDetector(
           child: ValueListenableBuilder<Set<String>>(
             valueListenable: _onlineNotifier,
             builder: (context, onlineIds, _) {
-              return ActiveUsersBar(
-                usersById: users,
-                onlineUserIds: onlineIds,
-                currentUserId: widget.currentUserId,
-      onBack: () async {
-  if (widget.enableBgm) {
-    await Bgm.I.leaveGroupAndResumeHomeDm();
-  }
-  if (!mounted) return;
-  Navigator.of(context).maybePop();
-},
+return ActiveUsersBar(
+  usersById: users,
+  onlineUserIds: onlineIds,
+  currentUserId: widget.currentUserId,
+  onBack: () async {
+    if (widget.enableBgm) {
+      await Bgm.I.leaveGroupAndResumeHomeDm();
+    }
+    if (!mounted) return;
+    Navigator.of(context).maybePop();
+  },
 
-                onOpenBubbleMenu: _openBubbleTemplateMenu,
-                titleText: widget.title ??
-                    (users[widget.currentUserId]?.name ?? widget.currentUserId),
-                uiScale: uiScale,
-              );
+  onOpenBubbleMenu: _openBubbleTemplateMenu,
+
+  // ✅ NEW: camera button action (for now: just debug)
+  onPickImage: () {
+    debugPrint('pick image');
+  },
+
+  titleText: widget.title ??
+      (users[widget.currentUserId]?.name ?? widget.currentUserId),
+  uiScale: uiScale,
+);
+
             },
           ),
         ),
@@ -3110,30 +3271,42 @@ if (!_nearBottomCached)
           ),
         ),
 
-        // ✅ WhatsApp-like Reply Preview (only when replying)
-        if (_replyTarget != null)
-          ReplyPreviewBar(
-            uiScale: uiScale,
-            stripeColor:
-                (users[_replyTarget!.senderId]?.bubbleColor ?? Colors.white),
-            title: _displayNameForId(_replyTarget!.senderId),
-            subtitle: _replyPreviewText(_replyTarget!.text),
-            onTap: () {
-              final id = _replyTarget!.id;
-              _jumpToMessageId(id);
-            },
-            onClose: _clearReplyTarget,
-          ),
+// ✅ Mentions picker (WhatsApp-like) — sits above the input bar
+if (_mentionMenuOpen)
+  _MentionPickerBar(
+    uiScale: uiScale,
+    results: _mentionResults,
+    onPick: (u) => _insertMention(u),
+    onClose: _closeMentionMenu,
+    heartColorForUserId: _heartColorForUserId,
+  ),
 
-        BottomBorderBar(
-          height: _bottomBarHeight * uiScale,
-          isTyping: _isTyping,
-          onTapTypeMessage: _openKeyboard,
-          controller: _controller,
-          focusNode: _focusNode,
-          onSend: _sendMessage,
-          uiScale: uiScale,
-        ),
+// ✅ WhatsApp-like Reply Preview (only when replying)
+if (_replyTarget != null)
+  ReplyPreviewBar(
+    uiScale: uiScale,
+    stripeColor:
+        (users[_replyTarget!.senderId]?.bubbleColor ?? Colors.white),
+    title: _displayNameForId(_replyTarget!.senderId),
+    subtitle: _replyPreviewText(_replyTarget!.text),
+    onTap: () {
+      final id = _replyTarget!.id;
+      _jumpToMessageId(id);
+    },
+    onClose: _clearReplyTarget,
+  ),
+
+BottomBorderBar(
+  height: _bottomBarHeight * uiScale,
+  isTyping: _isTyping,
+  onTapTypeMessage: _openKeyboard,
+  controller: _controller,
+  focusNode: _focusNode,
+  onSend: _sendMessage,
+  uiScale: uiScale,
+),
+
+       
 
       ],
     ),
@@ -3416,6 +3589,145 @@ class _UnreadDivider extends StatelessWidget {
               height: s(1),
               color: Colors.white.withOpacity(0.25),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+class _MentionPickerBar extends StatelessWidget {
+  final double uiScale;
+  final List<ChatUser> results;
+  final void Function(ChatUser) onPick;
+  final VoidCallback onClose;
+  final Color Function(String userId) heartColorForUserId;
+
+  const _MentionPickerBar({
+    required this.uiScale,
+    required this.results,
+    required this.onPick,
+    required this.onClose,
+    required this.heartColorForUserId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * uiScale;
+
+    // If nothing matches, you can show a small "no results" bar (optional)
+    final items = results;
+
+    return Container(
+      margin: EdgeInsets.fromLTRB(s(12), s(6), s(12), s(6)),
+      padding: EdgeInsets.fromLTRB(s(10), s(10), s(10), s(10)),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.82),
+        borderRadius: BorderRadius.circular(s(14)),
+        border: Border.all(color: Colors.white.withOpacity(0.18), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: s(18),
+            spreadRadius: s(1),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // small header row like WhatsApp
+          Row(
+            children: [
+              Text(
+                'Mention',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: s(12),
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: s(0.3),
+                  height: 1.0,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: onClose,
+                child: Icon(
+                  Icons.close_rounded,
+                  color: Colors.white.withOpacity(0.85),
+                  size: s(18),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: s(8)),
+
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              // max height so it never covers the whole screen
+              maxHeight: s(220),
+            ),
+            child: items.isEmpty
+                ? Padding(
+                    padding: EdgeInsets.symmetric(vertical: s(12)),
+                    child: Text(
+                      'No matches',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) => SizedBox(height: s(6)),
+                    itemBuilder: (context, i) {
+                      final u = items[i];
+                      final heart = heartColorForUserId(u.id);
+
+                      return GestureDetector(
+                        onTap: () => onPick(u),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: s(10),
+                            vertical: s(10),
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(s(12)),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.10),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              // tiny colored heart-dot
+                              Container(
+                                width: s(10),
+                                height: s(10),
+                                decoration: BoxDecoration(
+                                  color: heart,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              SizedBox(width: s(10)),
+                              Text(
+                                u.name,
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.95),
+                                  fontSize: s(13),
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.0,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
