@@ -38,6 +38,12 @@ class Bgm {
     _volume = v.clamp(0.0, 1.0);
     await _player.setVolume(_volume);
   }
+// ✅ NEW: resume positions only for GROUP assets
+final Map<String, Duration> _groupPosByAsset = <String, Duration>{};
+  // ✅ NEW: remember GROUP position when temporarily switching to Home/DM
+  String? _groupResumeAsset;
+  Duration? _groupResumePosition;
+
 
   Future<void> init() async {
     final bgmContext = AudioContext(
@@ -162,41 +168,78 @@ String assetForHour(int hour) {
     if (_eggPlaying) return;
 
     if (_scope != _BgmScope.group) return;
+
+    // ✅ SAVE current GROUP position BEFORE we switch scope to home
+    final String? prevAsset = _currentAsset;
+    if (prevAsset != null && prevAsset != _homeDmAsset) {
+      try {
+        final pos = await _player.getCurrentPosition();
+        if (pos != null) {
+          _groupPosByAsset[prevAsset] = pos;
+          debugPrint('🎵 Saved GROUP pos: $prevAsset -> $pos');
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
     await playHomeDm();
   }
+
 
   // ==========================
   // Core play logic
   // ==========================
-  Future<void> _playLoopingAsset(String asset) async {
-    if (!enabled) return;
-    if (_currentAsset == asset) return;
+Future<void> _playLoopingAsset(String asset) async {
+  if (!enabled) return;
+  if (_currentAsset == asset) return;
 
-    final resumePos =
-        (_lastStoppedAsset == asset) ? _lastStoppedPosition : null;
+  // We treat ONLY the home/dm asset as "home"
+  final bool switchingToHome = (asset == _homeDmAsset);
 
-    _currentAsset = asset;
-
+  // ✅ Save position ONLY for group tracks (never for home/dm)
+  final String? prevAsset = _currentAsset;
+  if (prevAsset != null && prevAsset != _homeDmAsset) {
     try {
-      debugPrint('🎵 BGM set source: $asset');
-
-      await _player.setReleaseMode(ReleaseMode.loop);
-
-      await _player.stop();
-      await _player.setSource(AssetSource(asset));
-
-      if (resumePos != null) {
-        await _player.seek(resumePos);
-        _lastStoppedAsset = null;
-        _lastStoppedPosition = null;
+      final pos = await _player.getCurrentPosition();
+      if (pos != null) {
+        _groupPosByAsset[prevAsset] = pos;
       }
-
-      await _player.resume();
-    } catch (e, s) {
-      debugPrint('❌ BGM failed: $e');
-      debugPrint('$s');
+    } catch (_) {
+      // ignore
     }
   }
+
+  // ✅ Decide resume position:
+  // - GROUP: resume from saved position (if exists)
+  // - HOME/DM: ALWAYS start from beginning (no resume)
+  final Duration? resumePos = switchingToHome ? null : _groupPosByAsset[asset];
+
+
+  _currentAsset = asset;
+
+  try {
+    debugPrint('🎵 BGM set source: $asset');
+
+    await _player.setReleaseMode(ReleaseMode.loop);
+
+    await _player.stop();
+    await _player.setSource(AssetSource(asset));
+
+    if (resumePos != null) {
+      await _player.seek(resumePos);
+    } else {
+      // ✅ explicit start at 0 for home/dm (or group without saved pos)
+      await _player.seek(Duration.zero);
+    }
+
+    await _player.resume();
+  } catch (e, s) {
+    debugPrint('❌ BGM failed: $e');
+    debugPrint('$s');
+  }
+}
+
 
   // ==========================
   // Easter egg

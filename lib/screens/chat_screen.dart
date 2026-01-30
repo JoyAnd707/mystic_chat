@@ -314,6 +314,10 @@ String? _bgOverride;
 final ItemScrollController _itemScrollController = ItemScrollController();
 final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
 
+// ✅ IMPORTANT: cached "near bottom" state so UI rebuilds on scroll
+bool _nearBottomCached = true;
+
+
 late final AnimationController _bgFxCtrl;
 
 // איפה שמכניסים את המילים לטריגר:
@@ -600,10 +604,18 @@ Future<void> _saveScrollOffsetNow() async {
 void _onPositionsChanged() {
   if (!mounted) return;
 
+  // ✅ Always compute and cache "near bottom"
+  final bool nearBottom = _isNearBottom();
+
+  // ✅ Force rebuild when near-bottom changes (this fixes the button "stuck" issue)
+  if (nearBottom != _nearBottomCached) {
+    setState(() {
+      _nearBottomCached = nearBottom;
+    });
+  }
+
   // ✅ Reveal/hide UNREAD divider based on being near bottom
   if (_lastReadLoaded && _hasUnreadNow()) {
-    final bool nearBottom = _isNearBottom();
-
     if (nearBottom) {
       if (!_hideUnreadDivider) {
         setState(() => _hideUnreadDivider = true);
@@ -630,8 +642,7 @@ void _onPositionsChanged() {
     // ✅ mark read when user is at bottom
     await _markReadIfAtBottom();
 
-    // ✅ You *can* keep this (best effort), but note:
-    // ScrollablePositionedList does NOT use _scrollController.
+    // ✅ best-effort (note: ScrollablePositionedList doesn't use _scrollController)
     await _saveScrollOffsetNow();
   });
 }
@@ -671,11 +682,11 @@ void _tryRestoreScrollOnce() {
 
     // ✅ now it's safe to save offsets
     _allowScrollOffsetSaves = true;
-
   }
 
   WidgetsBinding.instance.addPostFrameCallback((_) => attempt());
 }
+
 
 
 
@@ -705,15 +716,15 @@ int _latestTextTs() {
   return 0;
 }
 
-/// ✅ Heart colors per user (THIS is the palette you gave)
+/// ❤️ Heart colors per user (FINAL)
 static const Map<String, Color> _heartColorByUserId = <String, Color>{
-  'joy': Color(0xFFA69BEE),
-  'adi': Color(0xFFEE9BEA),
-  'lian': Color(0xFFFF2020),
-  'danielle': Color(0xFF5098BE),
-  'lera': Color(0xFFD2CD3F),
-  'lihi': Color(0xFFD2703F),
-  'tal': Color(0xFF46D23F),
+  'lian': Color(0xFFFF2020), // #ff2020
+  'lihi': Color(0xFFFF9020), // #ff9020
+  'lera': Color(0xFFFFF420), // #fff420
+  'tal': Color(0xFF33FF20),  // #33ff20
+  'danielle': Color(0xFF20D2FF), // #20d2ff
+  'joy': Color(0xFFB120FF),  // #b120ff
+  'adi': Color(0xFFFF20AA),  // #ff20aa
 };
 
 Color _heartColorForUserId(String userId) {
@@ -882,6 +893,9 @@ Widget _nameWithHeartsHeader({
 Future<void> _toggleHeartForMessage(ChatMessage msg) async {
   if (msg.type != ChatMessageType.text) return;
 
+  // ❌ Block hearts on my own messages (no add, no remove)
+  if (msg.senderId == widget.currentUserId) return;
+
   final me = widget.currentUserId;
   final isAdding = !msg.heartReactorIds.contains(me);
 
@@ -893,11 +907,7 @@ Future<void> _toggleHeartForMessage(ChatMessage msg) async {
     isAdding: isAdding,
   );
 
-  // 🎬 אנימציה: לפי הספציפיקציה — רק מי שכתבה את ההודעה “מקבלת” את הלב.
-  if (isAdding && msg.senderId == widget.currentUserId && mounted) {
-    final reactorColor = _heartColorForUserId(me);
-    HeartReactionFlyLayer.of(context).spawnHeart(color: reactorColor);
-  }
+  // ✅ No fly anim here (fly anim is for the RECEIVER / author via snapshot logic)
 }
 
 
@@ -2147,6 +2157,20 @@ _roomSub = FirestoreChatService.messagesStreamMaps(widget.roomId).listen(
     final List<ChatMessage> oldMessages = List<ChatMessage>.from(_messages);
     final int oldCount = oldMessages.length;
     final bool wasNearBottomBefore = _isNearBottom();
+void _onTapScrollToBottomButton() {
+  // ✅ clear "messages below" badge too (WhatsApp behavior)
+  if (mounted) {
+    setState(() {
+      _newBelowCount = 0;
+      _newBelowHasMention = false;
+    });
+  }
+
+  _scrollToBottom(animated: true, keepFocus: true);
+
+  // Optional: also mark read if we're now at bottom
+  _markReadIfAtBottom();
+}
 
     // snapshot "seen" BEFORE reload
     final oldSeen = Set<int>.from(_seenMessageTs);
@@ -2505,6 +2529,20 @@ _pendingScrollToBottomTs = ts;
 }
 
 
+void _onTapScrollToBottomButton() {
+  // ✅ clear "messages below" badge too (WhatsApp behavior)
+  if (mounted) {
+    setState(() {
+      _newBelowCount = 0;
+      _newBelowHasMention = false;
+    });
+  }
+
+  _scrollToBottom(animated: true, keepFocus: true);
+
+  // Optional: also mark read if we're now at bottom
+  _markReadIfAtBottom();
+}
 
 
 
@@ -2571,9 +2609,14 @@ return GestureDetector(
                 usersById: users,
                 onlineUserIds: onlineIds,
                 currentUserId: widget.currentUserId,
-                onBack: () {
-                  Navigator.of(context).maybePop();
-                },
+      onBack: () async {
+  if (widget.enableBgm) {
+    await Bgm.I.leaveGroupAndResumeHomeDm();
+  }
+  if (!mounted) return;
+  Navigator.of(context).maybePop();
+},
+
                 onOpenBubbleMenu: _openBubbleTemplateMenu,
                 titleText: widget.title ??
                     (users[widget.currentUserId]?.name ?? widget.currentUserId),
@@ -2821,7 +2864,12 @@ return ScrollablePositionedList.builder(
           ),
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onDoubleTap: () => _toggleHeartForMessage(msg),
+            onDoubleTap: () {
+  // ❌ No hearts on my own messages
+  if (msg.senderId == widget.currentUserId) return;
+  _toggleHeartForMessage(msg);
+},
+
             onHorizontalDragStart: (_) {
               _dragDx = 0.0;
             },
@@ -2991,12 +3039,11 @@ Positioned(
 ),
 
 // ✅ NEW messages-below badge (single instance)
-if (_newBelowCount > 0 && !_isNearBottom())
-Positioned(
-  right: 16 * uiScale,
-  bottom: (52 * uiScale) + keyboardInset, // ✅ lift above keyboard
-  child: NewMessagesBadge(
-
+if (_newBelowCount > 0 && !_nearBottomCached)
+  Positioned(
+    right: 16 * uiScale,
+    bottom: 52 * uiScale,
+    child: NewMessagesBadge(
       count: _newBelowCount,
       badgeColor: const Color(0xFFEF797E),
       hasMention: _newBelowHasMention,
@@ -3006,6 +3053,40 @@ Positioned(
     ),
   ),
 
+
+// ✅ Scroll-to-bottom button (WhatsApp-style)
+if (!_nearBottomCached)
+  Positioned(
+    right: 16 * uiScale,
+    bottom: 16 * uiScale,
+    child: GestureDetector(
+      onTap: _onTapScrollToBottomButton,
+      child: Container(
+        width: 44 * uiScale,
+        height: 44 * uiScale,
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.72),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.22),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.35),
+              blurRadius: 16 * uiScale,
+              spreadRadius: 1 * uiScale,
+            ),
+          ],
+        ),
+        child: Icon(
+          Icons.keyboard_arrow_down_rounded,
+          color: Colors.white,
+          size: 30 * uiScale,
+        ),
+      ),
+    ),
+  ),
 
 
 
