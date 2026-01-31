@@ -2619,57 +2619,67 @@ child: Scaffold(
                     ),
                   ),
 
-                  // ✅ Typing overlay (always visible, even when user is scrolled up)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: (8 * uiScale) + keyboardInset,
-                    child: IgnorePointer(
-                      ignoring: true,
-                      child: ValueListenableBuilder<Set<String>>(
-                        valueListenable: _typingNotifier,
-                        builder: (context, typingIds, _) {
-                          final ids = typingIds.toList()..remove(widget.currentUserId);
-                          if (ids.isEmpty) return const SizedBox.shrink();
+// ✅ Typing overlay (always visible, even when user is scrolled up)
+Positioned(
+  left: 0,
+  right: 0,
 
-                          ids.sort((a, b) {
-                            final an = users[a]?.name ?? a;
-                            final bn = users[b]?.name ?? b;
-                            return an.toLowerCase().compareTo(bn.toLowerCase());
-                          });
+  // ✅ IMPORTANT:
+  // The Column already shrinks the Expanded(Stack) when keyboard opens,
+  // because BottomBorderBar is wrapped with AnimatedPadding(bottom: keyboardInset).
+  // So adding keyboardInset here double-shifts and can push the overlay out of view.
+  bottom: (8 * uiScale),
 
-                          final limited = ids.take(3).toList();
-                          const double chatSidePadding = 16;
+  child: IgnorePointer(
+    ignoring: true,
+    child: ValueListenableBuilder<Set<String>>(
+      valueListenable: _typingNotifier,
+      builder: (context, typingIds, _) {
+        final ids = typingIds.toList()..remove(widget.currentUserId);
+        if (ids.isEmpty) return const SizedBox.shrink();
 
-                          return Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: chatSidePadding * uiScale),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                for (final uid in limited)
-                                  Padding(
-                                    padding: EdgeInsets.only(bottom: 6 * uiScale),
-                                    child: TypingBubbleRow(
-                                      user: users[uid]!,
-                                      isMe: false,
-                                      uiScale: uiScale,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+        ids.sort((a, b) {
+          final an = users[a]?.name ?? a;
+          final bn = users[b]?.name ?? b;
+          return an.toLowerCase().compareTo(bn.toLowerCase());
+        });
+
+        final limited = ids.take(3).toList();
+        const double chatSidePadding = 16;
+
+        return Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: chatSidePadding * uiScale,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final uid in limited)
+                Padding(
+                  padding: EdgeInsets.only(bottom: 6 * uiScale),
+                  child: TypingBubbleRow(
+                    user: users[uid]!,
+                    isMe: false,
+                    uiScale: uiScale,
                   ),
+                ),
+            ],
+          ),
+        );
+      },
+    ),
+  ),
+),
+
+
+
 
 // ✅ NEW messages-below badge (wiggle cute)
 if (_newBelowCount > 0 && !_nearBottomCached)
   Positioned(
     right: 16 * uiScale,
-    bottom: 52 * uiScale,
+    bottom: 80 * uiScale, // ⬆️ הועלה למעלה (Mystic-like)
     child: AnimatedBuilder(
       animation: _wiggleAnim,
       builder: (context, child) {
@@ -2698,6 +2708,7 @@ if (_newBelowCount > 0 && !_nearBottomCached)
       ),
     ),
   ),
+
 
 
                   // ✅ Scroll-to-bottom button (WhatsApp-style)

@@ -88,15 +88,34 @@ class BottomBorderBar extends StatefulWidget {
 
 class _BottomBorderBarState extends State<BottomBorderBar> {
   final ScrollController _typeFieldScrollController = ScrollController();
-TextDirection _inputDirection = TextDirection.ltr;
 
-bool _containsRtl(String s) {
-  // עברית + ערבית (טווחים נפוצים)
-  return RegExp(r'[\u0590-\u05FF\u0600-\u06FF]').hasMatch(s);
-}
+  TextDirection _inputDirection = TextDirection.ltr;
+
+  bool _containsRtl(String s) {
+    // עברית + ערבית (טווחים נפוצים)
+    return RegExp(r'[\u0590-\u05FF\u0600-\u06FF]').hasMatch(s);
+  }
+
+  // ✅ NEW: whether there is at least 1 real char to send
+  bool _canSend = false;
+
+  void _syncCanSend() {
+    final next = widget.controller.text.trim().isNotEmpty;
+    if (next == _canSend) return;
+    if (!mounted) return;
+    setState(() => _canSend = next);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _canSend = widget.controller.text.trim().isNotEmpty;
+    widget.controller.addListener(_syncCanSend);
+  }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_syncCanSend);
     _typeFieldScrollController.dispose();
     super.dispose();
   }
@@ -140,169 +159,178 @@ bool _containsRtl(String s) {
     );
   }
 
-  Widget _inactiveSendButton({
-    required bool left,
-    required double Function(double) s,
-  }) {
-    return Positioned(
-      left: left ? s(BottomBorderBar._sendInset) : null,
-      right: left ? null : s(BottomBorderBar._sendInset),
-      child: Transform.translate(
-        offset: Offset(0, s(BottomBorderBar._sendDown)),
-        child: IgnorePointer(
-          ignoring: true,
-          child: SizedBox(
-            width: s(BottomBorderBar._sendBoxSize),
-            height: s(BottomBorderBar._sendBoxSize),
-            child: Transform.scale(
-              scale: BottomBorderBar._sendScale,
-              child: left
-                  ? Transform.flip(
-                      flipX: true,
-                      child: Image.asset(
-                        'assets/ui/SendMessageButton.png',
-                        fit: BoxFit.contain,
-                      ),
-                    )
-                  : Image.asset(
+Widget _inactiveSendButton({
+  required bool left,
+  required double Function(double) s,
+}) {
+  return Positioned(
+    left: left ? s(BottomBorderBar._sendInset) : null,
+    right: left ? null : s(BottomBorderBar._sendInset),
+    child: Transform.translate(
+      offset: Offset(0, s(BottomBorderBar._sendDown)),
+      child: IgnorePointer(
+        ignoring: true,
+        child: SizedBox(
+          width: s(BottomBorderBar._sendBoxSize),
+          height: s(BottomBorderBar._sendBoxSize),
+          child: Transform.scale(
+            scale: BottomBorderBar._sendScale,
+            child: left
+                ? Transform.flip(
+                    flipX: true,
+                    child: Image.asset(
                       'assets/ui/SendMessageButton.png',
                       fit: BoxFit.contain,
                     ),
-            ),
+                  )
+                : Image.asset(
+                    'assets/ui/SendMessageButton.png',
+                    fit: BoxFit.contain,
+                  ),
           ),
         ),
       ),
-    );
-  }
-
-  // =====================
-  // TYPING MODE
-  // =====================
-Widget _typingBar(double Function(double) s) {
-  void _scrollTypeFieldToEndForDirection(TextDirection dir) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_typeFieldScrollController.hasClients) return;
-
-      // ב-LTR "סוף" הוא max, ב-RTL "סוף" מבחינת מה שרוצים לראות הוא min
-      final target = (dir == TextDirection.rtl)
-          ? _typeFieldScrollController.position.minScrollExtent
-          : _typeFieldScrollController.position.maxScrollExtent;
-
-      _typeFieldScrollController.jumpTo(target);
-    });
-  }
-
-  void _handleChanged(String text) {
-    final nextDir = _containsRtl(text) ? TextDirection.rtl : TextDirection.ltr;
-
-    if (nextDir != _inputDirection) {
-      setState(() {
-        _inputDirection = nextDir;
-      });
-    }
-
-    _scrollTypeFieldToEndForDirection(nextDir);
-  }
-
-  return Stack(
-    alignment: Alignment.center,
-    children: [
-      SizedBox(
-        width: s(BottomBorderBar._typeButtonWidth),
-        child: Stack(
-          children: [
-            Image.asset(
-              'assets/ui/TypeBar.png',
-              fit: BoxFit.fitWidth,
-            ),
-            Positioned.fill(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: s(18),
-                  vertical: s(8),
-                ),
-                child: TextField(
-                  controller: widget.controller,
-                  focusNode: widget.focusNode,
-                  maxLines: 1,
-                  scrollController: _typeFieldScrollController,
-
-                  // ✅ זה החלק שעושה את ההבדל בעברית
-                  textDirection: _inputDirection,
-                  textAlign: _inputDirection == TextDirection.rtl
-                      ? TextAlign.right
-                      : TextAlign.left,
-
-                  textAlignVertical: TextAlignVertical.center,
-                  onChanged: _handleChanged,
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: s(14),
-                    height: 1.2,
-                  ),
-                  cursorColor: Colors.black,
-decoration: InputDecoration(
-  border: InputBorder.none,
-  isDense: true,
-  contentPadding: EdgeInsets.zero,
-  hintText: 'Type...',
-  hintStyle: TextStyle(
-    color: Colors.black54,
-    fontSize: s(14),
-    height: 1.2,
-  ),
-  hintTextDirection: TextDirection.ltr, // ✅ תמיד LTR
-),
-
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      _activeSendButton(left: true, s: s),
-      _activeSendButton(left: false, s: s),
-    ],
+    ),
   );
 }
 
 
-  Widget _activeSendButton({
-    required bool left,
-    required double Function(double) s,
-  }) {
-    return Positioned(
-      left: left ? s(BottomBorderBar._sendInset) : null,
-      right: left ? null : s(BottomBorderBar._sendInset),
-      child: Transform.translate(
-        offset: Offset(0, s(BottomBorderBar._sendDown)),
-        child: GestureDetector(
-          onTap: widget.onSend,
-          behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            width: s(BottomBorderBar._sendBoxSize),
-            height: s(BottomBorderBar._sendBoxSize),
-            child: Transform.scale(
-              scale: BottomBorderBar._sendScale,
-              child: left
-                  ? Transform.flip(
-                      flipX: true,
-                      child: Image.asset(
-                        'assets/ui/SendMessageButton.png',
-                        fit: BoxFit.contain,
+  // =====================
+  // TYPING MODE
+  // =====================
+  Widget _typingBar(double Function(double) s) {
+    void _scrollTypeFieldToEndForDirection(TextDirection dir) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_typeFieldScrollController.hasClients) return;
+
+        // ב-LTR "סוף" הוא max, ב-RTL "סוף" מבחינת מה שרוצים לראות הוא min
+        final target = (dir == TextDirection.rtl)
+            ? _typeFieldScrollController.position.minScrollExtent
+            : _typeFieldScrollController.position.maxScrollExtent;
+
+        _typeFieldScrollController.jumpTo(target);
+      });
+    }
+
+    void _handleChanged(String text) {
+      final nextDir = _containsRtl(text) ? TextDirection.rtl : TextDirection.ltr;
+
+      if (nextDir != _inputDirection) {
+        setState(() {
+          _inputDirection = nextDir;
+        });
+      }
+
+      _scrollTypeFieldToEndForDirection(nextDir);
+      // ✅ canSend updates via controller listener (_syncCanSend)
+    }
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        SizedBox(
+          width: s(BottomBorderBar._typeButtonWidth),
+          child: Stack(
+            children: [
+              Image.asset(
+                'assets/ui/TypeBar.png',
+                fit: BoxFit.fitWidth,
+              ),
+              Positioned.fill(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: s(18),
+                    vertical: s(8),
+                  ),
+                  child: TextField(
+                    controller: widget.controller,
+                    focusNode: widget.focusNode,
+                    maxLines: 1,
+                    scrollController: _typeFieldScrollController,
+
+                    // ✅ זה החלק שעושה את ההבדל בעברית
+                    textDirection: _inputDirection,
+                    textAlign: _inputDirection == TextDirection.rtl
+                        ? TextAlign.right
+                        : TextAlign.left,
+
+                    textAlignVertical: TextAlignVertical.center,
+                    onChanged: _handleChanged,
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: s(14),
+                      height: 1.2,
+                    ),
+                    cursorColor: Colors.black,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: 'Type...',
+                      hintStyle: TextStyle(
+                        color: Colors.black54,
+                        fontSize: s(14),
+                        height: 1.2,
                       ),
-                    )
-                  : Image.asset(
-                      'assets/ui/SendMessageButton.png',
+                      hintTextDirection: TextDirection.ltr, // ✅ תמיד LTR
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        _activeSendButton(left: true, s: s),
+        _activeSendButton(left: false, s: s),
+      ],
+    );
+  }
+
+Widget _activeSendButton({
+  required bool left,
+  required double Function(double) s,
+}) {
+  final String asset = _canSend
+      ? 'assets/ui/SendMessageButtonActive.png'
+      : 'assets/ui/SendMessageButton.png';
+
+  return Positioned(
+    left: left ? s(BottomBorderBar._sendInset) : null,
+    right: left ? null : s(BottomBorderBar._sendInset),
+    child: Transform.translate(
+      offset: Offset(0, s(BottomBorderBar._sendDown)),
+      child: GestureDetector(
+        onTap: () {
+          if (!_canSend) return; // ✅ block empty/whitespace-only
+          widget.onSend();
+        },
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: s(BottomBorderBar._sendBoxSize),
+          height: s(BottomBorderBar._sendBoxSize),
+          child: Transform.scale(
+            scale: BottomBorderBar._sendScale,
+            child: left
+                ? Transform.flip(
+                    flipX: true,
+                    child: Image.asset(
+                      asset,
                       fit: BoxFit.contain,
                     ),
-            ),
+                  )
+                : Image.asset(
+                    asset,
+                    fit: BoxFit.contain,
+                  ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
 }
+
+}
+
 
 class ActiveUsersBar extends StatelessWidget {
   final Map<String, ChatUser> usersById;
@@ -426,8 +454,8 @@ class ActiveUsersBar extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: s(18),
-                      fontWeight: FontWeight.w500,
+                      fontSize: s(15),
+                      fontWeight: FontWeight.w400,
                     ),
                   );
                 },
@@ -1039,15 +1067,20 @@ messageBody = GestureDetector(
         applyHeightToFirstAscent: false,
         applyHeightToLastDescent: false,
       ),
-      style: TextStyle(
-        fontFamily: fontFamily,
-        fontSize: _msgFont * uiScale,
-        height: 1.2,
-        color: Colors.black,
-        fontWeight: FontWeight.w400,
-        letterSpacing: -0.15 * uiScale,
-        leadingDistribution: TextLeadingDistribution.even,
-      ),
+style: TextStyle(
+  fontFamily: fontFamily,
+  fontFamilyFallback: [
+    _hebrewFallbackFor(fontFamily),
+    'NotoSans',
+  ],
+  fontSize: _msgFont * uiScale,
+  height: 1.2,
+  color: Colors.black,
+  fontWeight: FontWeight.w400,
+  letterSpacing: -0.15 * uiScale,
+  leadingDistribution: TextLeadingDistribution.even,
+),
+
     ),
   );
 }
@@ -1147,6 +1180,10 @@ final double _bubbleInnerHPad = 20 * uiScale;
 const double _msgFont = 15.0; // keep identical to the one used above
 final TextStyle _measureStyle = TextStyle(
   fontFamily: fontFamily,
+  fontFamilyFallback: [
+    _hebrewFallbackFor(fontFamily),
+    'NotoSans',
+  ],
   fontSize: _msgFont * uiScale,
   height: 1.2,
   fontWeight: FontWeight.w400,
@@ -2155,6 +2192,19 @@ bool _isRtl(String text) {
 
   return false;
 }
+String _hebrewFallbackFor(String? latinFamily) {
+  switch (latinFamily) {
+    case 'NanumGothic':
+      return 'Heebo';
+    case 'NanumMyeongjo':
+      return 'FrankRuhlLibre';
+    case 'BMHanna':
+      return 'AmaticSC';
+    default:
+      return 'Heebo';
+  }
+}
+
 // =====================
 // Typing line (Option 2)
 // =====================
