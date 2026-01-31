@@ -2214,16 +2214,21 @@ _wiggleCtrl.dispose();
           setState(() => _isTyping = false);
         }
       },
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        floatingActionButton: kEnableDebugIncomingPreview
-            ? FloatingActionButton(
-                onPressed: _debugSimulateIncomingMessage,
-                child: const Icon(Icons.bug_report),
-              )
-            : null,
-        body: Column(
-          children: [
+child: Scaffold(
+  backgroundColor: Colors.black,
+
+  // ✅ IMPORTANT: we handle keyboard spacing ourselves via the list spacer
+  resizeToAvoidBottomInset: false,
+
+  floatingActionButton: kEnableDebugIncomingPreview
+      ? FloatingActionButton(
+          onPressed: _debugSimulateIncomingMessage,
+          child: const Icon(Icons.bug_report),
+        )
+      : null,
+  body: Column(
+    children: [
+
             const TopBorderBar(height: _topBarHeight),
             SafeArea(
               bottom: false,
@@ -2371,22 +2376,21 @@ _wiggleCtrl.dispose();
                                 ),
                                 itemCount: _messages.length + 1,
                                 itemBuilder: (context, index) {
-                                  if (index == _messages.length) {
-                                    final bool keyboardOpen = keyboardInset > 0.0;
-                                    final double safeBottom =
-                                        MediaQuery.of(context).padding.bottom;
+                   if (index == _messages.length) {
+  final bool keyboardOpen = keyboardInset > 0.0;
+  final double safeBottom = MediaQuery.of(context).padding.bottom;
 
-                                    final double extraBottomWhenKeyboardOpen =
-                                        70 * uiScale;
-                                    final double bottomWhenClosed =
-                                        (28 * uiScale) + safeBottom;
+  // ✅ If Scaffold is resizing for keyboard, DON'T add keyboardInset again.
+  final double extraBottomWhenKeyboardOpen = 70 * uiScale;
+  final double bottomWhenClosed = (28 * uiScale) + safeBottom;
 
-                                    final double spacerHeight = keyboardOpen
-                                        ? (keyboardInset + extraBottomWhenKeyboardOpen)
-                                        : bottomWhenClosed;
+  final double spacerHeight = keyboardOpen
+      ? extraBottomWhenKeyboardOpen
+      : bottomWhenClosed;
 
-                                    return SizedBox(height: spacerHeight);
-                                  }
+  return SizedBox(height: spacerHeight);
+}
+
 
                                   const double chatSidePadding = 16;
 
@@ -2771,16 +2775,21 @@ if (_newBelowCount > 0 && !_nearBottomCached)
                 },
                 onClose: _clearReplyTarget,
               ),
+AnimatedPadding(
+  duration: const Duration(milliseconds: 120),
+  curve: Curves.easeOut,
+  padding: EdgeInsets.only(bottom: keyboardInset),
+  child: BottomBorderBar(
+    height: _bottomBarHeight * uiScale,
+    isTyping: _isTyping,
+    onTapTypeMessage: _openKeyboard,
+    controller: _controller,
+    focusNode: _focusNode,
+    onSend: _sendMessage,
+    uiScale: uiScale,
+  ),
+),
 
-            BottomBorderBar(
-              height: _bottomBarHeight * uiScale,
-              isTyping: _isTyping,
-              onTapTypeMessage: _openKeyboard,
-              controller: _controller,
-              focusNode: _focusNode,
-              onSend: _sendMessage,
-              uiScale: uiScale,
-            ),
           ],
         ),
       ),

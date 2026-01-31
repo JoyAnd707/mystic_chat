@@ -53,7 +53,7 @@ class TopBorderBar extends StatelessWidget {
   }
 }
 
-class BottomBorderBar extends StatelessWidget {
+class BottomBorderBar extends StatefulWidget {
   final double height;
   final bool isTyping;
   final VoidCallback onTapTypeMessage;
@@ -77,24 +77,42 @@ class BottomBorderBar extends StatelessWidget {
 
   static const double _typeButtonWidth = 260;
   static const double _sendBoxSize = 40;
- static const double _sendScale = 1.0;
-
+  static const double _sendScale = 1.0;
 
   static const double _sendInset = 14;
   static const double _sendDown = 3;
 
   @override
-  Widget build(BuildContext context) {
-    if (height <= 0) return const SizedBox.shrink();
+  State<BottomBorderBar> createState() => _BottomBorderBarState();
+}
 
-    double s(double v) => v * uiScale;
+class _BottomBorderBarState extends State<BottomBorderBar> {
+  final ScrollController _typeFieldScrollController = ScrollController();
+TextDirection _inputDirection = TextDirection.ltr;
+
+bool _containsRtl(String s) {
+  // עברית + ערבית (טווחים נפוצים)
+  return RegExp(r'[\u0590-\u05FF\u0600-\u06FF]').hasMatch(s);
+}
+
+  @override
+  void dispose() {
+    _typeFieldScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.height <= 0) return const SizedBox.shrink();
+
+    double s(double v) => v * widget.uiScale;
 
     return Container(
-      height: height,
+      height: widget.height,
       width: double.infinity,
       color: Colors.black,
       padding: EdgeInsets.only(bottom: s(10)),
-      child: isTyping ? _typingBar(s) : _typeMessageBar(s),
+      child: widget.isTyping ? _typingBar(s) : _typeMessageBar(s),
     );
   }
 
@@ -107,9 +125,9 @@ class BottomBorderBar extends StatelessWidget {
       children: [
         // Type Message button
         GestureDetector(
-          onTap: onTapTypeMessage,
+          onTap: widget.onTapTypeMessage,
           child: SizedBox(
-            width: s(_typeButtonWidth),
+            width: s(BottomBorderBar._typeButtonWidth),
             child: Image.asset(
               'assets/ui/TypeMessageButton.png',
               fit: BoxFit.fitWidth,
@@ -122,19 +140,22 @@ class BottomBorderBar extends StatelessWidget {
     );
   }
 
-  Widget _inactiveSendButton({required bool left, required double Function(double) s}) {
+  Widget _inactiveSendButton({
+    required bool left,
+    required double Function(double) s,
+  }) {
     return Positioned(
-      left: left ? s(_sendInset) : null,
-      right: left ? null : s(_sendInset),
+      left: left ? s(BottomBorderBar._sendInset) : null,
+      right: left ? null : s(BottomBorderBar._sendInset),
       child: Transform.translate(
-        offset: Offset(0, s(_sendDown)),
+        offset: Offset(0, s(BottomBorderBar._sendDown)),
         child: IgnorePointer(
           ignoring: true,
           child: SizedBox(
-            width: s(_sendBoxSize),
-            height: s(_sendBoxSize),
+            width: s(BottomBorderBar._sendBoxSize),
+            height: s(BottomBorderBar._sendBoxSize),
             child: Transform.scale(
-              scale: _sendScale,
+              scale: BottomBorderBar._sendScale,
               child: left
                   ? Transform.flip(
                       flipX: true,
@@ -157,68 +178,112 @@ class BottomBorderBar extends StatelessWidget {
   // =====================
   // TYPING MODE
   // =====================
-  Widget _typingBar(double Function(double) s) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // Type bar + text field
-        SizedBox(
-          width: s(_typeButtonWidth),
-          child: Stack(
-            children: [
-              Image.asset(
-                'assets/ui/TypeBar.png',
-                fit: BoxFit.fitWidth,
-              ),
-              Positioned.fill(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: s(18),
-                    vertical: s(8),
-                  ),
-                  child: TextField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    maxLines: 1,
-                    textAlignVertical: TextAlignVertical.center,
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: s(14),
-                      height: 1.2,
-                    ),
-                    cursorColor: Colors.black,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Type...',
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        _activeSendButton(left: true, s: s),
-        _activeSendButton(left: false, s: s),
-      ],
-    );
+Widget _typingBar(double Function(double) s) {
+  void _scrollTypeFieldToEndForDirection(TextDirection dir) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_typeFieldScrollController.hasClients) return;
+
+      // ב-LTR "סוף" הוא max, ב-RTL "סוף" מבחינת מה שרוצים לראות הוא min
+      final target = (dir == TextDirection.rtl)
+          ? _typeFieldScrollController.position.minScrollExtent
+          : _typeFieldScrollController.position.maxScrollExtent;
+
+      _typeFieldScrollController.jumpTo(target);
+    });
   }
 
-  Widget _activeSendButton({required bool left, required double Function(double) s}) {
+  void _handleChanged(String text) {
+    final nextDir = _containsRtl(text) ? TextDirection.rtl : TextDirection.ltr;
+
+    if (nextDir != _inputDirection) {
+      setState(() {
+        _inputDirection = nextDir;
+      });
+    }
+
+    _scrollTypeFieldToEndForDirection(nextDir);
+  }
+
+  return Stack(
+    alignment: Alignment.center,
+    children: [
+      SizedBox(
+        width: s(BottomBorderBar._typeButtonWidth),
+        child: Stack(
+          children: [
+            Image.asset(
+              'assets/ui/TypeBar.png',
+              fit: BoxFit.fitWidth,
+            ),
+            Positioned.fill(
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: s(18),
+                  vertical: s(8),
+                ),
+                child: TextField(
+                  controller: widget.controller,
+                  focusNode: widget.focusNode,
+                  maxLines: 1,
+                  scrollController: _typeFieldScrollController,
+
+                  // ✅ זה החלק שעושה את ההבדל בעברית
+                  textDirection: _inputDirection,
+                  textAlign: _inputDirection == TextDirection.rtl
+                      ? TextAlign.right
+                      : TextAlign.left,
+
+                  textAlignVertical: TextAlignVertical.center,
+                  onChanged: _handleChanged,
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: s(14),
+                    height: 1.2,
+                  ),
+                  cursorColor: Colors.black,
+decoration: InputDecoration(
+  border: InputBorder.none,
+  isDense: true,
+  contentPadding: EdgeInsets.zero,
+  hintText: 'Type...',
+  hintStyle: TextStyle(
+    color: Colors.black54,
+    fontSize: s(14),
+    height: 1.2,
+  ),
+  hintTextDirection: TextDirection.ltr, // ✅ תמיד LTR
+),
+
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      _activeSendButton(left: true, s: s),
+      _activeSendButton(left: false, s: s),
+    ],
+  );
+}
+
+
+  Widget _activeSendButton({
+    required bool left,
+    required double Function(double) s,
+  }) {
     return Positioned(
-      left: left ? s(_sendInset) : null,
-      right: left ? null : s(_sendInset),
+      left: left ? s(BottomBorderBar._sendInset) : null,
+      right: left ? null : s(BottomBorderBar._sendInset),
       child: Transform.translate(
-        offset: Offset(0, s(_sendDown)),
+        offset: Offset(0, s(BottomBorderBar._sendDown)),
         child: GestureDetector(
-          onTap: onSend,
+          onTap: widget.onSend,
           behavior: HitTestBehavior.opaque,
           child: SizedBox(
-            width: s(_sendBoxSize),
-            height: s(_sendBoxSize),
+            width: s(BottomBorderBar._sendBoxSize),
+            height: s(BottomBorderBar._sendBoxSize),
             child: Transform.scale(
-              scale: _sendScale,
+              scale: BottomBorderBar._sendScale,
               child: left
                   ? Transform.flip(
                       flipX: true,
@@ -238,7 +303,6 @@ class BottomBorderBar extends StatelessWidget {
     );
   }
 }
-
 
 class ActiveUsersBar extends StatelessWidget {
   final Map<String, ChatUser> usersById;
@@ -490,6 +554,38 @@ class SystemMessageBar extends StatelessWidget {
       ),
     );
   }
+}
+double _minBubbleWidthForFirstWords({
+  required BuildContext context,
+  required String text,
+  required TextStyle style,
+  required double uiScale,
+  int minWords = 3,
+  required double maxBubbleWidth,
+  required double horizontalPadding, // סה"כ padding אופקי (ימין+שמאל)
+}) {
+  final raw = text.trim();
+  if (raw.isEmpty) return 0;
+
+  // פיצול "מילים" בצורה פשוטה
+  final parts = raw.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+  if (parts.isEmpty) return 0;
+
+  final takeN = parts.length < minWords ? parts.length : minWords;
+  final sample = parts.take(takeN).join(' ');
+
+  final painter = TextPainter(
+    text: TextSpan(text: sample, style: style),
+    textDirection: Directionality.of(context),
+    maxLines: 1,
+    ellipsis: '',
+  )..layout(maxWidth: maxBubbleWidth);
+
+  // רוחב הטקסט + padding של הבועה
+  final w = painter.size.width + horizontalPadding;
+
+  // לא לעבור את maxBubbleWidth
+  return w.clamp(0.0, maxBubbleWidth);
 }
 
 
@@ -788,6 +884,27 @@ String _softWrapLongTokens(String s) {
     (m) => '${m.group(1)}$zwsp',
   );
 }
+String _avoidOrphanLastWord(String s) {
+  // עובד גם אם יש כבר '\n' (עובר שורה-שורה)
+  final lines = s.split('\n');
+  final out = <String>[];
+
+  for (final line in lines) {
+    final trimmed = line.trimRight();
+    final idx = trimmed.lastIndexOf(' ');
+    if (idx <= 0) {
+      out.add(line);
+      continue;
+    }
+
+    // החלף רק את הרווח האחרון ב-NBSP כדי ששתי המילים האחרונות יישארו יחד
+    final before = trimmed.substring(0, idx);
+    final after = trimmed.substring(idx + 1);
+    out.add('$before\u00A0$after');
+  }
+
+  return out.join('\n');
+}
 
 // ✅ NEW: force wrap by WORD COUNT (max N words per line)
 String _wrapByWordCount(String s, {int maxWordsPerLine = 5}) {
@@ -869,8 +986,9 @@ final double maxBubbleWidth = math.min(hardCap, mysticMax);
     const String cornerStarsRightAsset =
         'assets/decors/TextBubble4CornerStarsRightpng.png';
 
-final String displayText =
-    _wrapByWordCount(_softWrapLongTokens(text), maxWordsPerLine: 5);
+final String displayText = _avoidOrphanLastWord(_softWrapLongTokens(text));
+
+
 
 // ✅ Decide what the row shows: image OR text
 late final Widget messageBody;
@@ -1019,7 +1137,38 @@ final bubbleInner = Padding(
 );
 
 // ✅ Mystic-like minimum width so short messages don't wrap weirdly
-final double minBubbleWidth = 18 * uiScale; // רוחב של אות אחת בערך
+// ✅ PLUS: require at least 3 words on the first line before wrapping down
+final double _floorMinBubbleWidth = 18 * uiScale; // רצפה מינימלית (גם למילה אחת)
+
+// Horizontal padding inside bubbleInner: 10 left + 10 right
+final double _bubbleInnerHPad = 20 * uiScale;
+
+// Use the SAME text style as the message Text (so measurement matches reality)
+const double _msgFont = 15.0; // keep identical to the one used above
+final TextStyle _measureStyle = TextStyle(
+  fontFamily: fontFamily,
+  fontSize: _msgFont * uiScale,
+  height: 1.2,
+  fontWeight: FontWeight.w400,
+  letterSpacing: -0.15 * uiScale,
+);
+
+// Measure using the ORIGINAL "text" (not displayText) so it respects real words
+final double _minBy3Words = _minBubbleWidthForFirstWords(
+  context: context,
+  text: text,
+  style: _measureStyle,
+  uiScale: uiScale,
+  minWords: 3,
+  maxBubbleWidth: maxBubbleWidth,
+  horizontalPadding: _bubbleInnerHPad,
+);
+
+// Final min width = max(floor, 3-words width) and never above maxBubbleWidth
+final double minBubbleWidth = math.min(
+  maxBubbleWidth,
+  math.max(_floorMinBubbleWidth, _minBy3Words),
+);
 
 final Widget bubbleWidget = (msgType == 'image' && imgUrl != null && imgUrl.trim().isNotEmpty)
     ? imageOnlyWidget
@@ -1041,6 +1190,7 @@ final Widget bubbleWidget = (msgType == 'image' && imgUrl != null && imgUrl.trim
           child: bubbleInner,
         ),
       );
+
 
 // ✅ If image: return just the widget (no decors). If text: keep decors stack.
 final Widget bubbleStack = (msgType == 'image' && imgUrl != null && imgUrl.trim().isNotEmpty)
