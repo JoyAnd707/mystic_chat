@@ -6,15 +6,13 @@ class FirestoreChatService {
 
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // ✅ FIX: define rooms ref
-  static CollectionReference<Map<String, dynamic>> get _roomsRef =>
-      _db.collection('rooms');
-
   static CollectionReference<Map<String, dynamic>> _messagesCol(String roomId) {
-    return _roomsRef.doc(roomId).collection('messages');
+    return _db.collection('rooms').doc(roomId).collection('messages');
   }
 
   /// Stream of messages ordered by ts ascending.
+  /// Injects:
+  /// - id (docId)
   static Stream<List<Map<String, dynamic>>> messagesStreamMaps(String roomId) {
     return _messagesCol(roomId)
         .orderBy('ts', descending: false)
@@ -22,13 +20,13 @@ class FirestoreChatService {
         .map((snap) {
       return snap.docs.map((d) {
         final data = d.data();
-        data['id'] = d.id; // inject docId
+        data['id'] = d.id;
         return data;
       }).toList();
     });
   }
 
-  /// ✅ TEXT message (docId = ts.toString())
+  /// docId = ts.toString()
   static Future<void> sendTextMessage({
     required String roomId,
     required String senderId,
@@ -38,15 +36,14 @@ class FirestoreChatService {
     required String decor,
     String? fontFamily,
 
-    // ✅ reply payload
+    // ✅ must match ChatScreenState named params
     String? replyToMessageId,
     String? replyToSenderId,
     String? replyToText,
   }) async {
     final docId = ts.toString();
 
-    await _messagesCol(roomId).doc(docId).set(<String, dynamic>{
-      'id': docId,
+    await _messagesCol(roomId).doc(docId).set({
       'type': 'text',
       'senderId': senderId,
       'text': text,
@@ -56,14 +53,14 @@ class FirestoreChatService {
       'fontFamily': fontFamily,
       'heartReactorIds': <String>[],
 
-      // ✅ reply fields (optional)
+      // ✅ reply fields
       'replyToMessageId': replyToMessageId,
       'replyToSenderId': replyToSenderId,
       'replyToText': replyToText,
     });
   }
 
-  /// ✅ NEW: SYSTEM message (entered/left)
+  /// ✅ must match ChatScreenState: sendSystemLine(text: ..., ts: ...)
   static Future<void> sendSystemLine({
     required String roomId,
     required String text,
@@ -71,14 +68,11 @@ class FirestoreChatService {
   }) async {
     final docId = ts.toString();
 
-    await _messagesCol(roomId).doc(docId).set(<String, dynamic>{
-      'id': docId,
+    await _messagesCol(roomId).doc(docId).set({
       'type': 'system',
-      'senderId': 'system',
+      'senderId': '',
       'text': text,
       'ts': ts,
-
-      // keep schema stable
       'bubbleTemplate': 'normal',
       'decor': 'none',
       'fontFamily': null,
@@ -99,5 +93,13 @@ class FirestoreChatService {
           ? FieldValue.arrayUnion([reactorId])
           : FieldValue.arrayRemove([reactorId]),
     });
+  }
+
+  /// ✅ VER103 — delete doc (no rules changes)
+  static Future<void> deleteMessage({
+    required String roomId,
+    required String messageId,
+  }) async {
+    await _messagesCol(roomId).doc(messageId).delete();
   }
 }

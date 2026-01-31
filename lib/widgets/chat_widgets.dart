@@ -1127,7 +1127,7 @@ Widget _replyPreview() {
               padding: EdgeInsets.only(top: 3 * uiScale),
               child: Text(
                 replyToText!,
-                maxLines: 2,
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12 * uiScale,

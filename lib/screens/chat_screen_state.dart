@@ -27,6 +27,8 @@ class _ChatScreenState extends State<ChatScreen>
 
   // ✅ IMPORTANT: cached "near bottom" state so UI rebuilds on scroll
   bool _nearBottomCached = true;
+// ✅ VER103 — Delete mode (long-press my message)
+String? _armedDeleteMessageId;
 
   late final AnimationController _bgFxCtrl;
 late final AnimationController _wiggleCtrl;
@@ -59,6 +61,62 @@ Timer? _wiggleTimer;
   ];
 
   static const String _heartAsset = 'assets/reactions/HeartReaction.png';
+
+
+
+
+// ✅ VER103 — helpers
+bool _isMyDeletableMessage(ChatMessage msg) {
+  if (msg.type == ChatMessageType.system) return false;
+  return msg.senderId == widget.currentUserId;
+  
+}
+// ✅ VER104 — custom text shown when reply target was deleted
+static const String _deletedReplyLabel =
+    'ERROR 404!!\n~This message is gone FOREVER~';
+
+
+bool _isArmedDelete(ChatMessage msg) {
+  return _armedDeleteMessageId != null && _armedDeleteMessageId == msg.id;
+}
+
+void _toggleArmDelete(ChatMessage msg) {
+  if (!_isMyDeletableMessage(msg)) return;
+
+  setState(() {
+    if (_armedDeleteMessageId == msg.id) {
+      _armedDeleteMessageId = null; // toggle off
+    } else {
+      _armedDeleteMessageId = msg.id; // arm this one
+    }
+  });
+}
+
+Future<void> _deleteArmedMessage(ChatMessage msg) async {
+  if (!_isMyDeletableMessage(msg)) return;
+  if (!_isArmedDelete(msg)) return;
+
+  // close UI first (feels snappy)
+  setState(() => _armedDeleteMessageId = null);
+
+  try {
+    await FirestoreChatService.deleteMessage(
+      roomId: widget.roomId,
+      messageId: msg.id,
+    );
+    // no setState needed: stream will remove it
+  } catch (e) {
+    // If rules block delete or network fails, show small feedback
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not delete message: $e'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
+
 
   bool _isNearBottom({int thresholdItems = 1}) {
     // thresholdItems = כמה פריטים מהסוף עדיין נחשב “למטה”
@@ -2212,6 +2270,8 @@ _wiggleCtrl.dispose();
 
         if (mounted) {
           setState(() => _isTyping = false);
+              // ✅ VER104 — tap outside cancels delete mode
+    _armedDeleteMessageId = null;
         }
       },
 child: Scaffold(
@@ -2396,6 +2456,11 @@ child: Scaffold(
 
                                   final msg = _messages[index];
                                   final prev = index > 0 ? _messages[index - 1] : null;
+final String? replyId = msg.replyToMessageId;
+final bool replyTargetExists = (replyId == null)
+    ? false
+    : _messages.any((m) => m.id == replyId);
+
 
                                   bool showDateDivider = false;
                                   String dateLabel = '';
@@ -2492,116 +2557,193 @@ child: Scaffold(
                                           chatSidePadding * uiScale,
                                           0,
                                         ),
-                                        child: GestureDetector(
-                                          behavior: HitTestBehavior.translucent,
-                                          onDoubleTap: (msg.type == ChatMessageType.image)
-                                              ? null
-                                              : () => _toggleHeartForMessage(msg),
-                                          onHorizontalDragStart: (_) {
-                                            _dragDx = 0.0;
-                                          },
-                                          onHorizontalDragUpdate: (details) {
-                                            _dragDx += details.delta.dx;
+  child: GestureDetector(
+  behavior: HitTestBehavior.translucent,
 
-                                            final bool swipeOk = (_dragDx > 28);
+  // ✅ VER103 — long press arms delete ONLY for my own messages
+  onLongPress: () {
+    if (_isMyDeletableMessage(msg)) {
+      _toggleArmDelete(msg);
+    }
+  },
 
-                                            if (swipeOk) {
-                                              _dragDx = 0.0;
-                                              _setReplyTarget(msg);
-                                              _flashHighlight(msg.id);
-                                              _focusNode.requestFocus();
-                                            }
-                                          },
-                                          onHorizontalDragEnd: (_) {
-                                            _dragDx = 0.0;
-                                          },
-                                          child: Stack(
-                                            children: [
-                                              Positioned.fill(
-                                                child: IgnorePointer(
-                                                  ignoring: true,
-                                                  child: AnimatedOpacity(
-                                                    opacity: (_highlightByMsgId[msg.id] ?? false)
-                                                        ? 1.0
-                                                        : 0.0,
-                                                    duration: const Duration(milliseconds: 140),
-                                                    curve: Curves.easeOut,
-                                                    child: Container(
-                                                      decoration: BoxDecoration(
-                                                        borderRadius:
-                                                            BorderRadius.circular(22 * uiScale),
-                                                        color: user.bubbleColor.withOpacity(0.18),
-                                                        boxShadow: [
-                                                          BoxShadow(
-                                                            color: user.bubbleColor.withOpacity(0.45),
-                                                            blurRadius: 22 * uiScale,
-                                                            spreadRadius: 1.5 * uiScale,
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              MessageRow(
-                                                user: user,
-                                                text: msg.text,
-                                                isMe: isMe,
-                                                bubbleTemplate: msg.bubbleTemplate,
-                                                decor: msg.decor,
-                                                fontFamily: msg.fontFamily,
-                                                showName: (widget.roomId == 'group_main'),
-                                                nameHearts: (widget.roomId == 'group_main')
-                                                    ? _buildHeartIcons(msg.heartReactorIds, uiScale)
-                                                    : const <Widget>[],
-                                                showTime: (widget.roomId == 'group_main'),
-                                                timeMs: msg.ts,
-                                                showNewBadge: showNew,
-                                                usernameColor: usernameColor,
-                                                timeColor: timeColor,
-                                                uiScale: uiScale,
-                                                replyToSenderName: (msg.replyToSenderId == null)
-                                                    ? null
-                                                    : (users[msg.replyToSenderId!]?.name ??
-                                                        msg.replyToSenderId!),
-                                                replyToText: msg.replyToText,
-                                                onTapReplyPreview: () {
-                                                  final id = msg.replyToMessageId;
-                                                  if (id != null) _jumpToMessageId(id);
-                                                },
-                                                messageType: (msg.type == ChatMessageType.image)
-                                                    ? 'image'
-                                                    : 'text',
-                                                imageUrl: msg.imageUrl,
-                                                onDoubleTapImage: (msg.type == ChatMessageType.image)
-                                                    ? () => _toggleHeartForMessage(msg)
-                                                    : null,
-                                              ),
-                                              Positioned.fill(
-                                                child: IgnorePointer(
-                                                  ignoring: true,
-                                                  child: AnimatedOpacity(
-                                                    opacity: (_highlightByMsgId[msg.id] ?? false)
-                                                        ? 1.0
-                                                        : 0.0,
-                                                    duration: const Duration(milliseconds: 140),
-                                                    curve: Curves.easeOut,
-                                                    child: Container(
-                                                      decoration: BoxDecoration(
-                                                        borderRadius:
-                                                            BorderRadius.circular(18 * uiScale),
-                                                        border: Border.all(
-                                                          color: user.bubbleColor.withOpacity(0.55),
-                                                          width: 1.6 * uiScale,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
+  onDoubleTap: (msg.type == ChatMessageType.image)
+      ? null
+      : () => _toggleHeartForMessage(msg),
+
+  onHorizontalDragStart: (_) {
+    _dragDx = 0.0;
+  },
+  onHorizontalDragUpdate: (details) {
+    _dragDx += details.delta.dx;
+
+    final bool swipeOk = (_dragDx > 28);
+
+    if (swipeOk) {
+      _dragDx = 0.0;
+      _setReplyTarget(msg);
+      _flashHighlight(msg.id);
+      _focusNode.requestFocus();
+    }
+  },
+  onHorizontalDragEnd: (_) {
+    _dragDx = 0.0;
+  },
+
+  child: Stack(
+    children: [
+      // ✅ existing reply/highlight glow (unchanged)
+      Positioned.fill(
+        child: IgnorePointer(
+          ignoring: true,
+          child: AnimatedOpacity(
+            opacity: (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22 * uiScale),
+                color: user.bubbleColor.withOpacity(0.18),
+                boxShadow: [
+                  BoxShadow(
+                    color: user.bubbleColor.withOpacity(0.45),
+                    blurRadius: 22 * uiScale,
+                    spreadRadius: 1.5 * uiScale,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+
+      // ✅ VER103 — armed-delete highlight (subtle tint in user's bubble color)
+      Positioned.fill(
+        child: IgnorePointer(
+          ignoring: true,
+          child: AnimatedOpacity(
+            opacity: _isArmedDelete(msg) ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22 * uiScale),
+                color: user.bubbleColor.withOpacity(0.12),
+                border: Border.all(
+                  color: user.bubbleColor.withOpacity(0.35),
+                  width: 1.2 * uiScale,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+
+      MessageRow(
+        user: user,
+        text: msg.text,
+        isMe: isMe,
+        bubbleTemplate: msg.bubbleTemplate,
+        decor: msg.decor,
+        fontFamily: msg.fontFamily,
+        showName: (widget.roomId == 'group_main'),
+        nameHearts: (widget.roomId == 'group_main')
+            ? _buildHeartIcons(msg.heartReactorIds, uiScale)
+            : const <Widget>[],
+        showTime: (widget.roomId == 'group_main'),
+        timeMs: msg.ts,
+        showNewBadge: showNew,
+        usernameColor: usernameColor,
+        timeColor: timeColor,
+        uiScale: uiScale,
+        replyToSenderName: (msg.replyToSenderId == null)
+            ? null
+            : (users[msg.replyToSenderId!]?.name ?? msg.replyToSenderId!),
+replyToText: (replyId == null)
+    ? null
+    : (replyTargetExists ? msg.replyToText : _deletedReplyLabel),
+
+onTapReplyPreview: () {
+  if (replyId == null) return;
+
+  if (!replyTargetExists) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_deletedReplyLabel),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    return;
+  }
+
+  _jumpToMessageId(replyId);
+},
+
+
+        messageType: (msg.type == ChatMessageType.image) ? 'image' : 'text',
+        imageUrl: msg.imageUrl,
+        onDoubleTapImage: (msg.type == ChatMessageType.image)
+            ? () => _toggleHeartForMessage(msg)
+            : null,
+      ),
+
+      // ✅ existing outline highlight (unchanged)
+      Positioned.fill(
+        child: IgnorePointer(
+          ignoring: true,
+          child: AnimatedOpacity(
+            opacity: (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18 * uiScale),
+                border: Border.all(
+                  color: user.bubbleColor.withOpacity(0.55),
+                  width: 1.6 * uiScale,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+
+      // ✅ VER103 — X button (only for my messages when armed)
+// ✅ VER103 — X button on the EMPTY LEFT SIDE (outside bubble)
+// ✅ VER104 — X centered vertically on the empty LEFT side
+if (_isArmedDelete(msg) && _isMyDeletableMessage(msg))
+  Positioned.fill(
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: EdgeInsets.only(left: 2 * uiScale),
+        child: GestureDetector(
+          onTap: () => _deleteArmedMessage(msg),
+          child: Container(
+            width: 26 * uiScale,
+            height: 26 * uiScale,
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.55),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: user.bubbleColor.withOpacity(0.45),
+                width: 1,
+              ),
+            ),
+            child: Icon(
+              Icons.close,
+              size: 18 * uiScale,
+              color: user.bubbleColor.withOpacity(0.95),
+        ),
+      ),
+    ),
+  ),
+ ),
+  ),
+    ],
+  ),
+),
+
                                       ),
                                     ),
                                   );
