@@ -2199,7 +2199,7 @@ String _hebrewFallbackFor(String? latinFamily) {
     case 'NanumMyeongjo':
       return 'FrankRuhlLibre';
     case 'BMHanna':
-      return 'AmaticSC';
+      return 'Abraham';
     default:
       return 'Heebo';
   }

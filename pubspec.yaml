@@ -78,6 +78,6 @@ flutter:
       fonts:
         - asset: assets/fonts/FrankRuhlLibre-VariableFont_wght.ttf
 
-    - family: AmaticSC
+    - family: Abraham
       fonts:
-        - asset: assets/fonts/AmaticSC-Bold.ttf
+        - asset: assets/fonts/Abraham-Regular.ttf
