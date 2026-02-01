@@ -41,6 +41,18 @@ Future<bool> pickAndSendImage({
   // ✅ משתמשים ב-ts כ-id כדי להתאים לדרך שלך
   final newDoc = messagesRef.doc(ts.toString());
 
+  // ✅ 1) צור placeholder מיד (ככה ה-UI יציג מעטפה מסתובבת)
+  await newDoc.set({
+    'id': newDoc.id,
+    'type': 'image',
+    'senderId': senderId,
+    'text': '', // ✅ כדי ש-fromMap לא ייפול על null
+    'imageUrl': '', // ✅ IMPORTANT: placeholder triggers RotatingEnvelope
+    'fileName': picked.name,
+    'ts': ts,
+    'status': 'uploading', // ✅ אופציונלי (טוב לדיבאג)
+  });
+
   final String ext = _extFromName(picked.name);
 
   final storageRef = _storage
@@ -53,50 +65,56 @@ Future<bool> pickAndSendImage({
   // ignore: avoid_print
   print('UPLOAD PATH: ${storageRef.fullPath}');
 
-  final bytes = await picked.readAsBytes();
+  try {
+    final bytes = await picked.readAsBytes();
 
-  final TaskSnapshot snap = await storageRef.putData(
-    bytes,
-    SettableMetadata(contentType: _guessContentType(ext)),
-  );
+    final TaskSnapshot snap = await storageRef.putData(
+      bytes,
+      SettableMetadata(contentType: _guessContentType(ext)),
+    );
 
-  final String downloadUrl = await snap.ref.getDownloadURL();
+    final String downloadUrl = await snap.ref.getDownloadURL();
 
-  await newDoc.set({
-    'id': newDoc.id,
-    'type': 'image',
-    'senderId': senderId,
-    'text': '', // ✅ כדי ש-fromMap לא ייפול על null
-    'imageUrl': downloadUrl,
-    'fileName': picked.name,
-    'ts': ts, // ✅ זה מה שה-UI שלך קורא
-  });
+    // ✅ 2) עדכן את אותה הודעה (אותו docId) עם ה-URL
+    await newDoc.update({
+      'imageUrl': downloadUrl,
+      'status': 'sent',
+    });
 
-  return true;
+    return true;
+  } catch (e) {
+    // ✅ אם נכשל: או למחוק את ההודעה או לסמן failed
+    await newDoc.update({
+      'status': 'failed',
+    });
+
+    // אם את מעדיפה למחוק placeholder במקום:
+    // await newDoc.delete();
+
+    rethrow;
+  }
+}
+String _extFromName(String name) {
+  final parts = name.split('.');
+  if (parts.length < 2) return 'jpg';
+  final ext = parts.last.toLowerCase().trim();
+  if (ext.isEmpty) return 'jpg';
+  return ext;
 }
 
-
-
-  String _extFromName(String name) {
-    final parts = name.split('.');
-    if (parts.length < 2) return 'jpg';
-    final ext = parts.last.toLowerCase().trim();
-    if (ext.isEmpty) return 'jpg';
-    return ext;
+String _guessContentType(String ext) {
+  switch (ext) {
+    case 'png':
+      return 'image/png';
+    case 'webp':
+      return 'image/webp';
+    case 'gif':
+      return 'image/gif';
+    case 'jpg':
+    case 'jpeg':
+    default:
+      return 'image/jpeg';
   }
+}
 
-  String _guessContentType(String ext) {
-    switch (ext) {
-      case 'png':
-        return 'image/png';
-      case 'webp':
-        return 'image/webp';
-      case 'gif':
-        return 'image/gif';
-      case 'jpg':
-      case 'jpeg':
-      default:
-        return 'image/jpeg';
-    }
-  }
 }

@@ -2,6 +2,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../audio/sfx.dart';
 import 'dart:math' as math;
+import 'rotating_envelope.dart';
+
 
 enum BubbleTemplate {
   normal,
@@ -1027,30 +1029,56 @@ late final Widget messageBody;
 final String msgType = messageType; // 'text' / 'image'
 final String? imgUrl = imageUrl;
 
+final bool isImageMessage = (msgType == 'image');
+final bool hasImageUrl = (imgUrl != null && imgUrl.trim().isNotEmpty);
+
+
 // ✅ Fixed SMALL rectangular preview (same size for all images)
 final double imagePreviewWidth  = math.min(maxBubbleWidth, 140 * uiScale);
 final double imagePreviewHeight = 210 * uiScale;
 
+// ✅ Envelope asset (your icon)
+const String _envelopeAsset = 'assets/ui/DMSmessageUnread.png';
 
-if (msgType == 'image' && imgUrl != null && imgUrl.trim().isNotEmpty) {
-messageBody = GestureDetector(
-    onTap: () => _openImageViewer(context, imgUrl),
-    onDoubleTap: onDoubleTapImage,
-    behavior: HitTestBehavior.opaque,
-    child: ClipRect(
-      child: SizedBox(
-        width: imagePreviewWidth,
-        height: imagePreviewHeight,
-        child: Image.network(
-          imgUrl,
-          fit: BoxFit.cover, // ✅ crop intentional like Mystic
+
+
+// ✅ IMAGE MESSAGE:
+// - if url exists -> show Image.network
+// - else -> show RotatingEnvelope placeholder (sending/loading)
+if (isImageMessage) {
+  if (hasImageUrl) {
+    messageBody = GestureDetector(
+      onTap: () => _openImageViewer(context, imgUrl!),
+      onDoubleTap: onDoubleTapImage,
+      behavior: HitTestBehavior.opaque,
+      child: ClipRect(
+        child: SizedBox(
+          width: imagePreviewWidth,
+          height: imagePreviewHeight,
+          child: Image.network(
+            imgUrl!,
+            fit: BoxFit.cover, // ✅ crop intentional like Mystic
+          ),
         ),
       ),
-    ),
-  );
-
+    );
+  } else {
+    // ✅ Placeholder while the image is "sending / loading"
+    messageBody = SizedBox(
+      width: imagePreviewWidth,
+      height: imagePreviewHeight,
+      child: Center(
+        child: RotatingEnvelope(
+          assetPath: _envelopeAsset,
+          size: 34 * uiScale, // תרגישי חופשי לשנות
+          duration: const Duration(milliseconds: 1800),
+          opacity: 1.0,
+        ),
+      ),
+    );
+  }
 } else {
-  const double _msgFont = 15.0; // ✅ היה 16.0 — תורידי/תעלי פה בקטנה
+  const double _msgFont = 15.0;
 
   messageBody = Directionality(
     textDirection:
@@ -1070,20 +1098,19 @@ messageBody = GestureDetector(
         applyHeightToFirstAscent: false,
         applyHeightToLastDescent: false,
       ),
-style: TextStyle(
-  fontFamily: fontFamily,
-  fontFamilyFallback: [
-    _hebrewFallbackFor(fontFamily),
-    'NotoSans',
-  ],
-  fontSize: _msgFont * uiScale,
-  height: 1.2,
-  color: Colors.black,
-  fontWeight: FontWeight.w400,
-  letterSpacing: -0.15 * uiScale,
-  leadingDistribution: TextLeadingDistribution.even,
-),
-
+      style: TextStyle(
+        fontFamily: fontFamily,
+        fontFamilyFallback: [
+          _hebrewFallbackFor(fontFamily),
+          'NotoSans',
+        ],
+        fontSize: _msgFont * uiScale,
+        height: 1.2,
+        color: Colors.black,
+        fontWeight: FontWeight.w400,
+        letterSpacing: -0.15 * uiScale,
+        leadingDistribution: TextLeadingDistribution.even,
+      ),
     ),
   );
 }
@@ -1210,7 +1237,8 @@ final double minBubbleWidth = math.min(
   math.max(_floorMinBubbleWidth, _minBy3Words),
 );
 
-final Widget bubbleWidget = (msgType == 'image' && imgUrl != null && imgUrl.trim().isNotEmpty)
+final Widget bubbleWidget = isImageMessage
+
     ? imageOnlyWidget
     : ConstrainedBox(
         constraints: BoxConstraints(
@@ -1233,7 +1261,8 @@ final Widget bubbleWidget = (msgType == 'image' && imgUrl != null && imgUrl.trim
 
 
 // ✅ If image: return just the widget (no decors). If text: keep decors stack.
-final Widget bubbleStack = (msgType == 'image' && imgUrl != null && imgUrl.trim().isNotEmpty)
+final Widget bubbleStack = isImageMessage
+
     ? bubbleWidget
     : Stack(
         clipBehavior: Clip.none,
