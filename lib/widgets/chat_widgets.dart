@@ -1063,19 +1063,24 @@ if (isImageMessage) {
       ),
     );
   } else {
-    // ✅ Placeholder while the image is "sending / loading"
-    messageBody = SizedBox(
-      width: imagePreviewWidth,
-      height: imagePreviewHeight,
-      child: Center(
-        child: RotatingEnvelope(
-          assetPath: _envelopeAsset,
-          size: 34 * uiScale, // תרגישי חופשי לשנות
-          duration: const Duration(milliseconds: 1800),
-          opacity: 1.0,
-        ),
-      ),
-    );
+// ✅ Placeholder while the image is "sending / loading"
+// ✅ Placeholder while the image is "sending / loading"
+final double envelopeSize = 50.0;
+
+messageBody = SizedBox(
+  width: imagePreviewWidth,
+  height: imagePreviewHeight,
+  child: Center(
+    child: RotatingEnvelope(
+      assetPath: _envelopeAsset,
+      size: envelopeSize,
+      duration: const Duration(milliseconds: 1800),
+      opacity: 1.0,
+    ),
+  ),
+);
+
+
   }
 } else {
   const double _msgFont = 15.0;
