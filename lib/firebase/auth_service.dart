@@ -1,6 +1,7 @@
 // lib/firebase/auth_service.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'push_service.dart';
 
 class AuthService {
   AuthService._();
@@ -19,14 +20,17 @@ class AuthService {
       await _auth.signInAnonymously();
     }
 
-    // Optional but useful: store a "users/<uid>" doc mapping uid -> currentUserId.
     final u = _auth.currentUser;
     if (u == null) return;
 
+    // Keep mapping uid -> appUserId (your existing behavior)
     await _db.collection('users').doc(u.uid).set({
       'uid': u.uid,
-      'appUserId': currentUserId, // joy/adi...
+      'appUserId': currentUserId,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+
+    // ✅ NEW: register push token for this device/user
+    await PushService.initAndSaveToken(appUserId: currentUserId);
   }
 }

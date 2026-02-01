@@ -13,7 +13,7 @@ import 'bots/daily_fact_bot.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
-
+import 'firebase/push_service.dart';
 class _NoTransitionsBuilder extends PageTransitionsBuilder {
   const _NoTransitionsBuilder();
 
@@ -52,6 +52,7 @@ Future<void> main() async {
 
   // ✅ Firebase (required before any Firestore usage)
   await Firebase.initializeApp();
+  
 try {
   await FirebaseFirestore.instance
       .collection('debug')
@@ -264,26 +265,32 @@ class _UsernameScreenState extends State<UsernameScreen> {
     return null;
   }
 
-  Future<void> _submit() async {
-    final userId = _resolveUserId(_controller.text);
-    if (userId == null) {
-      setState(() => _error = 'שם לא נמצא ברשימה. נסי שוב בדיוק כמו שמופיע.');
-      return;
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(kPrefsCurrentUserId, userId);
-
-    if (!mounted) return;
-Navigator.of(context).pushReplacement(
-  MaterialPageRoute(
-    builder: (_) => ChatModePicker(currentUserId: userId),
-  ),
-);
-await AuthService.ensureSignedIn(currentUserId: userId);
-
-
+Future<void> _submit() async {
+  final userId = _resolveUserId(_controller.text);
+  if (userId == null) {
+    setState(() => _error = 'שם לא נמצא ברשימה. נסי שוב בדיוק כמו שמופיע.');
+    return;
   }
+
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(kPrefsCurrentUserId, userId);
+
+  // 1) ✅ Sign in anonymously + save mapping users/<uid>
+  await AuthService.ensureSignedIn(currentUserId: userId);
+
+  // 2) ✅ Ask permission + get FCM token + save it into users/<uid>.fcmTokens
+  await PushService.initAndSaveToken(appUserId: userId);
+
+  if (!mounted) return;
+
+  // 3) ✅ Now navigate
+  Navigator.of(context).pushReplacement(
+    MaterialPageRoute(
+      builder: (_) => ChatModePicker(currentUserId: userId),
+    ),
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -394,8 +401,8 @@ void initState() {
     // ✅ Home BGM (also used for DMs)
     await Bgm.I.playHomeDm();
 
-    // ✅ DEBUG ONLY
-    // await DailyFactBotScheduler.I.debugSendIn10Seconds();
+    // ✅ PUSH: ask permission + save token
+    await PushService.initAndSaveToken(appUserId: widget.currentUserId);
   });
 }
 
