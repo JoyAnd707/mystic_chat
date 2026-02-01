@@ -133,7 +133,7 @@ const Map<String, ChatUser> users = {
 /// MESSAGE MODEL
 /// =======================
 
-enum ChatMessageType { text, system, image }
+enum ChatMessageType { text, system, image, voice }
 
 class ChatMessage {
   /// Firestore doc id (we use ts.toString())
@@ -147,6 +147,10 @@ class ChatMessage {
 
   /// For image messages
   final String? imageUrl;
+
+  /// For voice messages (local path for now)
+  final String? voicePath;
+  final int? voiceDurationMs;
 
   final int ts;
 
@@ -168,6 +172,11 @@ class ChatMessage {
     required this.text,
     required this.ts,
     this.imageUrl,
+
+    // ✅ voice
+    this.voicePath,
+    this.voiceDurationMs,
+
     this.bubbleTemplate = BubbleTemplate.normal,
     this.decor = BubbleDecor.none,
     this.fontFamily,
@@ -185,6 +194,8 @@ class ChatMessage {
     String? senderId,
     String? text,
     String? imageUrl,
+    String? voicePath,
+    int? voiceDurationMs,
     int? ts,
     BubbleTemplate? bubbleTemplate,
     BubbleDecor? decor,
@@ -200,6 +211,8 @@ class ChatMessage {
       senderId: senderId ?? this.senderId,
       text: text ?? this.text,
       imageUrl: imageUrl ?? this.imageUrl,
+      voicePath: voicePath ?? this.voicePath,
+      voiceDurationMs: voiceDurationMs ?? this.voiceDurationMs,
       ts: ts ?? this.ts,
       bubbleTemplate: bubbleTemplate ?? this.bubbleTemplate,
       decor: decor ?? this.decor,
@@ -217,6 +230,11 @@ class ChatMessage {
         'senderId': senderId,
         'text': text,
         'imageUrl': imageUrl,
+
+        // ✅ voice
+        'voicePath': voicePath,
+        'voiceDurationMs': voiceDurationMs,
+
         'ts': ts,
         'bubbleTemplate': bubbleTemplate.name,
         'decor': decor.name,
@@ -260,9 +278,19 @@ class ChatMessage {
         ? rawId.toString()
         : '${ts}_${m['senderId'] ?? ''}_${(m['text'] ?? '').toString().hashCode}';
 
-    final img = (m['imageUrl'] == null || m['imageUrl'].toString().trim().isEmpty)
-        ? null
-        : m['imageUrl'].toString();
+    final img =
+        (m['imageUrl'] == null || m['imageUrl'].toString().trim().isEmpty)
+            ? null
+            : m['imageUrl'].toString();
+
+    final vp =
+        (m['voicePath'] == null || m['voicePath'].toString().trim().isEmpty)
+            ? null
+            : m['voicePath'].toString();
+
+    final int? vDur = (m['voiceDurationMs'] is int)
+        ? (m['voiceDurationMs'] as int)
+        : int.tryParse((m['voiceDurationMs'] ?? '').toString());
 
     return ChatMessage(
       id: id,
@@ -270,6 +298,11 @@ class ChatMessage {
       senderId: (m['senderId'] ?? '').toString(),
       text: (m['text'] ?? '').toString(),
       imageUrl: img,
+
+      // ✅ voice
+      voicePath: vp,
+      voiceDurationMs: vDur,
+
       ts: ts,
       bubbleTemplate: bt,
       decor: decor,
@@ -281,6 +314,7 @@ class ChatMessage {
     );
   }
 }
+
 
 
 

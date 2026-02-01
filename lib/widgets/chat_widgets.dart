@@ -1,8 +1,18 @@
+import 'dart:io';
 import 'dart:ui' as ui;
+import '../audio/bgm.dart';
+
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+
 import '../audio/sfx.dart';
 import 'dart:math' as math;
 import 'rotating_envelope.dart';
+
 
 
 enum BubbleTemplate {
@@ -343,8 +353,11 @@ class ActiveUsersBar extends StatelessWidget {
   /// ✅ opens the bubble-style menu
   final VoidCallback onOpenBubbleMenu;
 
-  /// ✅ NEW: pick image (camera button)
+  /// ✅ pick image (camera button)
   final VoidCallback onPickImage;
+
+  /// ✅ NEW: hold-to-record voice, release to send
+  final Future<void> Function(String filePath, int durationMs) onSendVoice;
 
   /// ✅ title text to display in the center
   final String titleText;
@@ -360,10 +373,10 @@ class ActiveUsersBar extends StatelessWidget {
     required this.onBack,
     required this.onOpenBubbleMenu,
     required this.onPickImage,
+    required this.onSendVoice,
     required this.titleText,
     required this.uiScale,
   });
-
 
   static const double barHeight = 64;
 
@@ -429,14 +442,13 @@ class ActiveUsersBar extends StatelessWidget {
             ),
           ),
 
-          // ✅ Active users text (center) — זה מה שאת רוצה להשאיר
+          // ✅ Active users text (center)
           Positioned.fill(
             child: Center(
               child: Builder(
                 builder: (context) {
                   final ids = onlineUserIds.toList();
 
-                  // Mystic-like: sorted + show current user too
                   ids.sort((a, b) {
                     final an = usersById[a]?.name ?? a;
                     final bn = usersById[b]?.name ?? b;
@@ -465,60 +477,66 @@ class ActiveUsersBar extends StatelessWidget {
             ),
           ),
 
-          // ❌ הוסר: Active users row (bottom center)
-          // זה בדיוק מה שצייר את ה-A הקטנה
-
-// ✅ Right-side actions: [Camera] [Bubble menu]
-Positioned(
-  right: s(6),
-  top: 0,
-  bottom: 0,
-  child: Center(
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 📷 Camera button
-        GestureDetector(
-          onTap: onPickImage,
-          behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            width: tapSize,
-            height: tapSize,
+          // ✅ Right-side actions: [Mic] [Camera] [Bubble menu]
+          Positioned(
+            right: s(6),
+            top: 0,
+            bottom: 0,
             child: Center(
-              child: Image.asset(
-                'assets/ui/CameraIcon.png',
-                width: s(32),
-                height: s(32),
-                fit: BoxFit.contain,
-                color: Colors.white.withOpacity(0.92),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 🎙️ Mic (LEFT of camera) — NEW
+                  HoldToRecordMicButton(
+                    size: tapSize,
+                    iconSize: s(32),
+                    uiScale: uiScale,
+                    onSendVoice: onSendVoice,
+                  ),
+
+                  SizedBox(width: s(6)),
+
+                  // 📷 Camera button
+                  GestureDetector(
+                    onTap: onPickImage,
+                    behavior: HitTestBehavior.opaque,
+                    child: SizedBox(
+                      width: tapSize,
+                      height: tapSize,
+                      child: Center(
+                        child: Image.asset(
+                          'assets/ui/CameraIcon.png',
+                          width: s(32),
+                          height: s(32),
+                          fit: BoxFit.contain,
+                          color: Colors.white.withOpacity(0.92),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(width: s(6)),
+
+                  // ✨ Bubble menu button
+                  GestureDetector(
+                    onTap: onOpenBubbleMenu,
+                    behavior: HitTestBehavior.opaque,
+                    child: SizedBox(
+                      width: tapSize,
+                      height: tapSize,
+                      child: Center(
+                        child: Icon(
+                          Icons.auto_awesome,
+                          size: s(20),
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ),
-
-        SizedBox(width: s(6)),
-
-        // ✨ Bubble menu button (existing)
-        GestureDetector(
-          onTap: onOpenBubbleMenu,
-          behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            width: tapSize,
-            height: tapSize,
-            child: Center(
-              child: Icon(
-                Icons.auto_awesome,
-                size: s(20),
-                color: Colors.white.withOpacity(0.9),
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  ),
-),
-
         ],
       ),
     );
@@ -630,8 +648,13 @@ class MessageRow extends StatelessWidget {
 final String? replyToText;
 final VoidCallback? onTapReplyPreview;
   /// ✅ NEW: message type + image url
-  final String messageType; // 'text' / 'image'
+  final String messageType; // 'text' / 'image' / 'voice'
   final String? imageUrl;
+
+  /// ✅ NEW: voice messages
+  final String? voicePath;
+  final int? voiceDurationMs;
+
 
   /// ✅ NEW: allow heart reaction on images even when outer detector can't win
   final VoidCallback? onDoubleTapImage;
@@ -755,7 +778,13 @@ MessageRow({
   /// ✅ NEW
   this.messageType = 'text',
   this.imageUrl,
+
+  // ✅ voice
+  this.voicePath,
+  this.voiceDurationMs,
+
   this.onDoubleTapImage,
+
 
   // ✅ reply preview
   this.replyToSenderName,
@@ -1026,12 +1055,18 @@ final String displayText = _avoidOrphanLastWord(_softWrapLongTokens(text));
 // ✅ Decide what the row shows: image OR text
 late final Widget messageBody;
 
-final String msgType = messageType; // 'text' / 'image'
+final String msgType = messageType; // 'text' / 'image' / 'voice'
 final String? imgUrl = imageUrl;
 
-final bool isImageMessage = (msgType == 'image');
-final bool hasImageUrl = (imgUrl != null && imgUrl.trim().isNotEmpty);
+// ✅ voice data
+final String? vPath = voicePath;
+final bool hasVoicePath = (vPath != null && vPath.trim().isNotEmpty);
+final int vDurMs = voiceDurationMs ?? 0;
 
+final bool isImageMessage = (msgType == 'image');
+final bool isVoiceMessage = (msgType == 'voice');
+
+final bool hasImageUrl = (imgUrl != null && imgUrl.trim().isNotEmpty);
 
 // ✅ Fixed SMALL rectangular preview (same size for all images)
 final double imagePreviewWidth  = math.min(maxBubbleWidth, 140 * uiScale);
@@ -1040,11 +1075,6 @@ final double imagePreviewHeight = 210 * uiScale;
 // ✅ Envelope asset (your icon)
 const String _envelopeAsset = 'assets/ui/DMSmessageUnread.png';
 
-
-
-// ✅ IMAGE MESSAGE:
-// - if url exists -> show Image.network
-// - else -> show RotatingEnvelope placeholder (sending/loading)
 if (isImageMessage) {
   if (hasImageUrl) {
     messageBody = GestureDetector(
@@ -1057,30 +1087,41 @@ if (isImageMessage) {
           height: imagePreviewHeight,
           child: Image.network(
             imgUrl!,
-            fit: BoxFit.cover, // ✅ crop intentional like Mystic
+            fit: BoxFit.cover,
           ),
         ),
       ),
     );
   } else {
-// ✅ Placeholder while the image is "sending / loading"
-// ✅ Placeholder while the image is "sending / loading"
-final double envelopeSize = 50.0;
+    final double envelopeSize = 50.0;
 
-messageBody = SizedBox(
-  width: imagePreviewWidth,
-  height: imagePreviewHeight,
-  child: Center(
-    child: RotatingEnvelope(
+    messageBody = SizedBox(
+      width: imagePreviewWidth,
+      height: imagePreviewHeight,
+      child: Center(
+        child: RotatingEnvelope(
+          assetPath: _envelopeAsset,
+          size: envelopeSize,
+          duration: const Duration(milliseconds: 1800),
+          opacity: 1.0,
+        ),
+      ),
+    );
+  }
+} else if (isVoiceMessage) {
+  if (hasVoicePath) {
+    messageBody = VoiceMessageTile(
+      filePath: vPath!,
+      durationMs: vDurMs,
+      uiScale: uiScale,
+    );
+  } else {
+    messageBody = RotatingEnvelope(
       assetPath: _envelopeAsset,
-      size: envelopeSize,
+      size: 34 * uiScale,
       duration: const Duration(milliseconds: 1800),
       opacity: 1.0,
-    ),
-  ),
-);
-
-
+    );
   }
 } else {
   const double _msgFont = 15.0;
@@ -1119,6 +1160,7 @@ messageBody = SizedBox(
     ),
   );
 }
+
 
 
 
@@ -2436,3 +2478,359 @@ class MysticNewBadge extends StatelessWidget {
   }
 }
 
+class HoldToRecordMicButton extends StatefulWidget {
+  final double size;
+  final double iconSize;
+  final double uiScale;
+  final Future<void> Function(String filePath, int durationMs) onSendVoice;
+
+  const HoldToRecordMicButton({
+    super.key,
+    required this.size,
+    required this.iconSize,
+    required this.uiScale,
+    required this.onSendVoice,
+  });
+
+  @override
+  State<HoldToRecordMicButton> createState() => _HoldToRecordMicButtonState();
+}
+
+class _HoldToRecordMicButtonState extends State<HoldToRecordMicButton> {
+  final AudioRecorder _recorder = AudioRecorder();
+
+  bool _isRecording = false;
+  int _startedAtMs = 0;
+  String? _currentPath;
+
+  // ✅ remember if we paused BGM because of recording
+  bool _didPauseBgm = false;
+
+  static const String _micAsset = 'assets/ui/MicReacordIcon.png';
+
+  Future<String> _makeTempPath() async {
+    final dir = await getTemporaryDirectory();
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    return '${dir.path}/voice_$ts.m4a';
+  }
+
+  Future<bool> _ensureMicPermission() async {
+    final status = await Permission.microphone.request();
+    return status.isGranted;
+  }
+
+  Future<void> _start() async {
+    if (_isRecording) return;
+
+    final ok = await _ensureMicPermission();
+    if (!ok) return;
+
+    // ✅ Pause BGM while recording (Android audio focus)
+    try {
+      await Bgm.I.pause();
+      _didPauseBgm = true;
+    } catch (_) {
+      _didPauseBgm = false;
+    }
+
+    final path = await _makeTempPath();
+
+    _startedAtMs = DateTime.now().millisecondsSinceEpoch;
+    _currentPath = path;
+
+    await _recorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 128000,
+        sampleRate: 44100,
+      ),
+      path: path,
+    );
+
+    if (!mounted) return;
+    setState(() => _isRecording = true);
+  }
+
+  Future<void> _stopAndSend() async {
+    if (!_isRecording) return;
+
+    final stoppedPath = await _recorder.stop();
+    final endMs = DateTime.now().millisecondsSinceEpoch;
+
+    final path = stoppedPath ?? _currentPath;
+    final durationMs = endMs - _startedAtMs;
+
+    _startedAtMs = 0;
+    _currentPath = null;
+
+    if (!mounted) return;
+    setState(() => _isRecording = false);
+
+    // ✅ Resume BGM after recording ends
+    if (_didPauseBgm) {
+      try {
+        await Bgm.I.resumeIfPossible();
+
+
+      } catch (_) {}
+      _didPauseBgm = false;
+    }
+
+    if (path == null) return;
+
+    // ✅ block “tap” recordings
+    if (durationMs < 250) {
+      try {
+        final f = File(path);
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
+      return;
+    }
+
+    await widget.onSendVoice(path, durationMs);
+  }
+
+  Future<void> _cancel() async {
+    if (!_isRecording) return;
+
+    final stoppedPath = await _recorder.stop();
+    final path = stoppedPath ?? _currentPath;
+
+    _startedAtMs = 0;
+    _currentPath = null;
+
+    if (!mounted) return;
+    setState(() => _isRecording = false);
+
+    // ✅ Resume BGM after cancel
+    if (_didPauseBgm) {
+      try {
+        await Bgm.I.resumeIfPossible();
+
+
+      } catch (_) {}
+      _didPauseBgm = false;
+    }
+
+    if (path == null) return;
+
+    try {
+      final f = File(path);
+      if (await f.exists()) await f.delete();
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _recorder.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => _start(),
+      onPointerUp: (_) => _stopAndSend(),
+      onPointerCancel: (_) => _cancel(),
+      child: SizedBox(
+        width: widget.size,
+        height: widget.size,
+        child: Center(
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 80),
+            scale: _isRecording ? 1.15 : 1.0,
+            child: Image.asset(
+              _micAsset,
+              width: widget.iconSize,
+              height: widget.iconSize,
+              fit: BoxFit.contain,
+              color: Colors.white.withOpacity(_isRecording ? 1.0 : 0.92),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+
+class VoiceMessageTile extends StatefulWidget {
+  final String filePath;
+  final int durationMs;
+  final double uiScale;
+
+  const VoiceMessageTile({
+    super.key,
+    required this.filePath,
+    required this.durationMs,
+    required this.uiScale,
+  });
+
+  @override
+  State<VoiceMessageTile> createState() => _VoiceMessageTileState();
+}
+
+class _VoiceMessageTileState extends State<VoiceMessageTile> {
+  final AudioPlayer _player = AudioPlayer();
+
+  Duration _pos = Duration.zero;
+  Duration _dur = Duration.zero;
+  bool _ready = false;
+
+  String _fmt(Duration d) {
+    final m = d.inMinutes;
+    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+Future<void> _ensureLoaded() async {
+  if (_ready) return;
+
+  final String path = widget.filePath.trim();
+  if (path.isEmpty) return;
+
+  final bool isRemote =
+      path.startsWith('http://') || path.startsWith('https://');
+
+  try {
+    if (isRemote) {
+      await _player.setUrl(path);
+    } else {
+      final f = File(path);
+      if (!await f.exists()) return;
+      await _player.setFilePath(path);
+    }
+
+    // duration might not be known immediately for remote; keep fallback
+    _dur = _player.duration ?? Duration(milliseconds: widget.durationMs);
+    _ready = true;
+
+    _player.positionStream.listen((p) {
+      if (!mounted) return;
+      setState(() => _pos = p);
+    });
+
+    _player.playerStateStream.listen((_) {
+      if (!mounted) return;
+      setState(() {});
+    });
+
+    // update duration later if it arrives (esp. for URL)
+    _player.durationStream.listen((d) {
+      if (!mounted) return;
+      if (d == null) return;
+      setState(() => _dur = d);
+    });
+  } catch (_) {
+    // if load fails, keep _ready=false so user can retry
+    _ready = false;
+    return;
+  }
+
+  if (!mounted) return;
+  setState(() {});
+}
+
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.uiScale;
+    final bool playing = _player.playing;
+
+    final Duration total =
+        (_ready ? (_player.duration ?? _dur) : Duration(milliseconds: widget.durationMs));
+    final double maxMs = total.inMilliseconds.toDouble().clamp(1.0, double.infinity);
+    final double curMs = _pos.inMilliseconds.toDouble().clamp(0.0, maxMs);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // אם ההורה לא מגביל רוחב (נדיר), ניפול חזרה לרוחב המקורי
+        final bool bounded = constraints.maxWidth.isFinite;
+
+        final double playW = 34 * s;
+        final double gap1 = 10 * s;
+        final double gap2 = 8 * s;
+
+        // רוחב קבוע קטן לטקסט זמן כדי שהסליידר יקבל את השאר
+        final double timeW = 44 * s;
+
+        final double sliderW = bounded
+            ? (constraints.maxWidth - playW - gap1 - gap2 - timeW)
+                .clamp(60 * s, 240 * s)
+            : (140 * s);
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              onTap: () async {
+                await _ensureLoaded();
+                if (!_ready) return;
+
+                if (_player.playing) {
+                  await _player.pause();
+                } else {
+                  await _player.play();
+                }
+                if (!mounted) return;
+                setState(() {});
+              },
+              child: Container(
+                width: playW,
+                height: playW,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10 * s),
+                ),
+                child: Icon(
+                  playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  size: 22 * s,
+                  color: Colors.black.withOpacity(0.75),
+                ),
+              ),
+            ),
+            SizedBox(width: gap1),
+
+            SizedBox(
+              width: sliderW,
+              child: Slider(
+                value: curMs,
+                min: 0.0,
+                max: maxMs,
+                onChangeStart: (_) async => _ensureLoaded(),
+                onChanged: (v) async {
+                  if (!_ready) return;
+                  await _player.seek(Duration(milliseconds: v.round()));
+                },
+              ),
+            ),
+
+            SizedBox(width: gap2),
+
+            SizedBox(
+              width: timeW,
+              child: Text(
+                _fmt(total),
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 12 * s,
+                  color: Colors.black.withOpacity(0.65),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+}

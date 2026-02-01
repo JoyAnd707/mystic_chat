@@ -5,6 +5,15 @@ enum BubbleStyle { normal, glow }
 
 class _ChatScreenState extends State<ChatScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+String _titleTextForRoom(String roomId) {
+  switch (roomId) {
+    case 'group_main':
+      return 'Mystic Messenger';
+
+    default:
+      return 'Chat';
+  }
+}
 
   static const double _topBarHeight = 0;
   static const double _bottomBarHeight = 80;
@@ -35,30 +44,30 @@ late final AnimationController _wiggleCtrl;
 late final Animation<double> _wiggleAnim;
 Timer? _wiggleTimer;
 
-  // איפה שמכניסים את המילים לטריגר:
-  static const List<String> _creepyTriggers = <String>[
-    'glitch',
-    'Bug',
-    'Saeran',
-    'saeran'
-        "סארן",
-    "סיירן",
-    "גליץ'",
-    "'גליץ",
-    "מנטה",
-    "Mint",
-    "Mint eye",
-    "מינט איי",
-    "גן עדן",
-    "paradise",
-    "searan",
-    "Rika",
-    "ריקה",
-    "באג",
-    "Savior",
-    "סארן",
-    'struct', // דוגמה – תוסיפי/תמחקי מה שבא לך
-  ];
+static const List<String> _creepyTriggers = <String>[
+  'glitch',
+  'bug',
+  'Bug',
+  'Saeran',
+  'saeran',
+  'searan', // typo safety
+  'Rika',
+  'Savior',
+  'Mint',
+  'Mint eye',
+  'paradise',
+  "סארן",
+  "סיירן",
+  "גליץ'",
+  "'גליץ",
+  "באג",
+  "מנטה",
+  "מינט איי",
+  "גן עדן",
+  "ריקה",
+  'struct', // דוגמה – תוסיפי/תמחקי מה שבא לך
+];
+
 
   static const String _heartAsset = 'assets/reactions/HeartReaction.png';
 
@@ -152,10 +161,18 @@ Future<void> _deleteArmedMessage(ChatMessage msg) async {
   setState(() => _armedDeleteMessageId = null);
 
   try {
-    await FirestoreChatService.deleteMessage(
-      roomId: widget.roomId,
-      messageId: msg.id,
-    );
+if (msg.type == ChatMessageType.voice) {
+  await FirestoreChatService.deleteVoiceMessage(
+    roomId: widget.roomId,
+    messageId: msg.id,
+  );
+} else {
+  await FirestoreChatService.deleteMessage(
+    roomId: widget.roomId,
+    messageId: msg.id,
+  );
+}
+
     // no setState needed: stream will remove it
   } catch (e) {
     // If rules block delete or network fails, show small feedback
@@ -2362,6 +2379,28 @@ _wiggleCtrl.dispose();
     _scrollToBottom(animated: true, keepFocus: true);
     _markReadIfAtBottom();
   }
+Future<void> _sendVoiceMessage({
+  required String filePath,
+  required int durationMs,
+}) async {
+  final ts = DateTime.now().millisecondsSinceEpoch;
+  _pendingScrollToBottomTs = ts;
+
+  // ✅ Send via Firebase: creates Firestore doc + uploads to Storage
+  await FirestoreChatService.sendVoiceMessage(
+    roomId: widget.roomId,
+    senderId: widget.currentUserId,
+    localFilePath: filePath,
+    durationMs: durationMs,
+    ts: ts,
+    bubbleTemplate: BubbleTemplate.normal.name,
+    decor: BubbleDecor.none.name,
+  );
+
+  Sfx.I.playSend();
+
+  _scrollToBottom(animated: true, keepFocus: true);
+}
 
   @override
   Widget build(BuildContext context) {
@@ -2418,44 +2457,49 @@ child: Scaffold(
               bottom: false,
               child: ValueListenableBuilder<Set<String>>(
                 valueListenable: _onlineNotifier,
-                builder: (context, onlineIds, _) {
-                  return ActiveUsersBar(
-                    usersById: users,
-                    onlineUserIds: onlineIds,
-                    currentUserId: widget.currentUserId,
-                    onBack: () async {
-                      if (widget.enableBgm) {
-                        await Bgm.I.leaveGroupAndResumeHomeDm();
-                      }
-                      if (!mounted) return;
-                      Navigator.of(context).maybePop();
-                    },
-                    onOpenBubbleMenu: _openBubbleTemplateMenu,
-                    onPickImage: () async {
-                      try {
-                        final roomId = widget.roomId;
+builder: (context, onlineIds, _) {
+  return ActiveUsersBar(
+    usersById: users,
+    onlineUserIds: onlineIds,
+    currentUserId: widget.currentUserId,
+    onBack: () async {
+      if (widget.enableBgm) {
+        await Bgm.I.leaveGroupAndResumeHomeDm();
+      }
+      if (!mounted) return;
+      Navigator.of(context).maybePop();
+    },
+    onOpenBubbleMenu: _openBubbleTemplateMenu,
+    onPickImage: () async {
+      try {
+        final roomId = widget.roomId;
 
-                        final ts = DateTime.now().millisecondsSinceEpoch;
-                        _pendingScrollToBottomTs = ts;
+        final ts = DateTime.now().millisecondsSinceEpoch;
+        _pendingScrollToBottomTs = ts;
 
-                        await _imageService.pickAndSendImage(
-                          roomId: roomId,
-                          senderId: widget.currentUserId,
-                          ts: ts,
-                        );
-                      } catch (e) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to send image: $e')),
-                        );
-                      }
-                    },
-                    titleText: widget.title ??
-                        (users[widget.currentUserId]?.name ??
-                            widget.currentUserId),
-                    uiScale: uiScale,
-                  );
-                },
+        await _imageService.pickAndSendImage(
+          roomId: roomId,
+          senderId: widget.currentUserId,
+          ts: ts,
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to pick/send image: $e')),
+        );
+      }
+    },
+
+    // ✅ NEW: voice
+    onSendVoice: (filePath, durationMs) =>
+        _sendVoiceMessage(filePath: filePath, durationMs: durationMs),
+
+   titleText: widget.roomId,
+
+    uiScale: uiScale,
+  );
+},
+
               ),
             ),
             Expanded(
@@ -2802,11 +2846,21 @@ child: Stack(
 
         _jumpToMessageId(replyId);
       },
-      messageType: (msg.type == ChatMessageType.image) ? 'image' : 'text',
-      imageUrl: msg.imageUrl,
-      onDoubleTapImage: (msg.type == ChatMessageType.image)
-          ? () => _toggleHeartForMessage(msg)
-          : null,
+messageType: (msg.type == ChatMessageType.image)
+    ? 'image'
+    : (msg.type == ChatMessageType.voice)
+        ? 'voice'
+        : 'text',
+imageUrl: msg.imageUrl,
+
+// ✅ voice
+voicePath: msg.voicePath,
+voiceDurationMs: msg.voiceDurationMs,
+
+onDoubleTapImage: (msg.type == ChatMessageType.image)
+    ? () => _toggleHeartForMessage(msg)
+    : null,
+
     ),
 
     // ✅ existing outline highlight (unchanged)
