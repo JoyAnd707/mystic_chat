@@ -750,17 +750,27 @@ Future<void> _deleteArmedMessage(ChatMessage msg) async {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
-  // ✅ Random font picker (English only)
+  // ✅ Random font picker (3 paired fonts: EN + HE)
   final Random _rng = Random();
-  static const List<String> _englishFonts = <String>[
+
+  // Pair 0: NanumGothic  <-> Heebo
+  // Pair 1: NanumMyeongjo <-> FrankRuhlLibre
+  // Pair 2: BMHanna      <-> Abraham
+  static const List<String> _pairEn = <String>[
     'NanumGothic',
     'NanumMyeongjo',
     'BMHanna',
   ];
 
-  bool _containsEnglishLetters(String s) {
-    return RegExp(r'[A-Za-z]').hasMatch(s);
-  }
+  static const List<String> _pairHe = <String>[
+    'Heebo',
+    'FrankRuhlLibre',
+    'Abraham',
+  ];
+
+  bool _containsEnglishLetters(String s) => RegExp(r'[A-Za-z]').hasMatch(s);
+  bool _containsHebrewLetters(String s) => RegExp(r'[\u0590-\u05FF]').hasMatch(s);
+
 
   String _lastReadPrefsKey() =>
       'lastReadMs__${widget.currentUserId}__${widget.roomId}';
@@ -2174,9 +2184,18 @@ _wiggleCtrl.dispose();
     final BubbleTemplate templateForThisMessage = _selectedTemplate;
     final BubbleDecor decorForThisMessage = _selectedDecor;
 
-    final String? fontFamilyForThisMessage = _containsEnglishLetters(text)
-        ? _englishFonts[_rng.nextInt(_englishFonts.length)]
-        : null;
+    final bool hasEng = _containsEnglishLetters(text);
+    final bool hasHeb = _containsHebrewLetters(text);
+
+    // ✅ Choose one PAIR for the whole message
+    final int pairIndex = _rng.nextInt(_pairEn.length);
+
+    // ✅ For now we store a single fontFamily string (backwards-compatible):
+    // - Hebrew-only => store HE pair font
+    // - Otherwise  => store EN pair font (covers English-only + mixed)
+    final String? fontFamilyForThisMessage =
+        (hasHeb && !hasEng) ? _pairHe[pairIndex] : _pairEn[pairIndex];
+
 
     final ts = DateTime.now().millisecondsSinceEpoch;
     _pendingScrollToBottomTs = ts;
