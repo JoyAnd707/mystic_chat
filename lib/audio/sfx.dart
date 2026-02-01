@@ -19,6 +19,8 @@ class Sfx {
       _pool.add(p);
     }
   }
+Future<void> playCloseImage() =>
+    _playOne('assets/fx/CloseImage.mp3', volume: 0.9);
 
   AudioPlayer _take() {
     final p = _pool[_next];

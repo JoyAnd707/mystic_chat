@@ -676,7 +676,10 @@ void _openImageViewer(BuildContext context, String url) {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               TextButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () {
+                  Sfx.I.playCloseImage(); // 🔊 סאונד סגירה
+                  Navigator.of(context).pop();
+                },
                 child: const Text(
                   'Close',
                   style: TextStyle(color: Colors.white, fontSize: 18),

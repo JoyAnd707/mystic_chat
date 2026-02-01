@@ -62,6 +62,58 @@ Timer? _wiggleTimer;
 
   static const String _heartAsset = 'assets/reactions/HeartReaction.png';
 
+Widget _buildImageHeartOverlay({
+  required Set<String> reactorIds,
+  required bool isMe,
+  required double uiScale,
+}) {
+  if (reactorIds.isEmpty) return const SizedBox.shrink();
+
+  final ids = reactorIds.toList()..sort();
+  final shown = ids.take(3).toList();
+
+  final double size = 26 * uiScale;
+  final double gap = 2 * uiScale;
+
+  return IgnorePointer(
+    ignoring: true, // לא חוסם double-tap על התמונה
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < shown.length; i++)
+          Padding(
+            padding: EdgeInsets.only(left: i == 0 ? 0 : gap),
+            child: Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.45),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.18),
+                  width: 1,
+                ),
+              ),
+              child: Center(
+                child: ColorFiltered(
+                  colorFilter: ColorFilter.mode(
+                    _heartColorForUserId(shown[i]),
+                    BlendMode.srcIn,
+                  ),
+                  child: Image.asset(
+                    _heartAsset,
+                    width: size,
+                    height: size,
+                    filterQuality: FilterQuality.high,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
 
 
 
@@ -634,6 +686,59 @@ Future<void> _deleteArmedMessage(ChatMessage msg) async {
 
     const double baseHeartSize = 40; // הגודל הוויזואלי של הלב
     const double baseHeartGap = 2.0;
+Widget _buildImageHeartOverlay({
+  required Set<String> reactorIds,
+  required bool isMe,
+  required double uiScale,
+}) {
+  if (reactorIds.isEmpty) return const SizedBox.shrink();
+
+  // show up to 3 hearts to keep it cute and not messy
+  final ids = reactorIds.toList()..sort();
+  final shown = ids.take(3).toList();
+
+  final double size = 26 * uiScale;
+  final double gap = 2 * uiScale;
+
+  return IgnorePointer(
+    ignoring: true, // ✅ overlay shouldn't block taps/double taps
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < shown.length; i++)
+          Padding(
+            padding: EdgeInsets.only(left: i == 0 ? 0 : gap),
+            child: Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.45),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.18),
+                  width: 1,
+                ),
+              ),
+              child: Center(
+                child: ColorFiltered(
+                  colorFilter: ColorFilter.mode(
+                    _heartColorForUserId(shown[i]),
+                    BlendMode.srcIn,
+                  ),
+                  child: Image.asset(
+                    _heartAsset,
+                    width: size,
+                    height: size,
+                    filterQuality: FilterQuality.high,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
 
     // גובה "שורת שם" בלבד (זה מה שמונע מהבועה לרדת)
     final double lineHeight = 16 * uiScale;
@@ -2609,158 +2714,157 @@ final bool replyTargetExists = (replyId == null)
     _dragDx = 0.0;
   },
 
-  child: Stack(
-    children: [
-      // ✅ existing reply/highlight glow (unchanged)
-      Positioned.fill(
-        child: IgnorePointer(
-          ignoring: true,
-          child: AnimatedOpacity(
-            opacity: (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 140),
-            curve: Curves.easeOut,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22 * uiScale),
-                color: user.bubbleColor.withOpacity(0.18),
-                boxShadow: [
-                  BoxShadow(
-                    color: user.bubbleColor.withOpacity(0.45),
-                    blurRadius: 22 * uiScale,
-                    spreadRadius: 1.5 * uiScale,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-
-      // ✅ VER103 — armed-delete highlight (subtle tint in user's bubble color)
-      Positioned.fill(
-        child: IgnorePointer(
-          ignoring: true,
-          child: AnimatedOpacity(
-            opacity: _isArmedDelete(msg) ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 120),
-            curve: Curves.easeOut,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22 * uiScale),
-                color: user.bubbleColor.withOpacity(0.12),
-                border: Border.all(
-                  color: user.bubbleColor.withOpacity(0.35),
-                  width: 1.2 * uiScale,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-
-      MessageRow(
-        user: user,
-        text: msg.text,
-        isMe: isMe,
-        bubbleTemplate: msg.bubbleTemplate,
-        decor: msg.decor,
-        fontFamily: msg.fontFamily,
-        showName: (widget.roomId == 'group_main'),
-        nameHearts: (widget.roomId == 'group_main')
-            ? _buildHeartIcons(msg.heartReactorIds, uiScale)
-            : const <Widget>[],
-        showTime: (widget.roomId == 'group_main'),
-        timeMs: msg.ts,
-        showNewBadge: showNew,
-        usernameColor: usernameColor,
-        timeColor: timeColor,
-        uiScale: uiScale,
-        replyToSenderName: (msg.replyToSenderId == null)
-            ? null
-            : (users[msg.replyToSenderId!]?.name ?? msg.replyToSenderId!),
-replyToText: (replyId == null)
-    ? null
-    : (replyTargetExists ? msg.replyToText : _deletedReplyLabel),
-
-onTapReplyPreview: () {
-  if (replyId == null) return;
-
-  if (!replyTargetExists) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_deletedReplyLabel),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-    return;
-  }
-
-  _jumpToMessageId(replyId);
-},
-
-
-        messageType: (msg.type == ChatMessageType.image) ? 'image' : 'text',
-        imageUrl: msg.imageUrl,
-        onDoubleTapImage: (msg.type == ChatMessageType.image)
-            ? () => _toggleHeartForMessage(msg)
-            : null,
-      ),
-
-      // ✅ existing outline highlight (unchanged)
-      Positioned.fill(
-        child: IgnorePointer(
-          ignoring: true,
-          child: AnimatedOpacity(
-            opacity: (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 140),
-            curve: Curves.easeOut,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18 * uiScale),
-                border: Border.all(
-                  color: user.bubbleColor.withOpacity(0.55),
-                  width: 1.6 * uiScale,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-
-      // ✅ VER103 — X button (only for my messages when armed)
-// ✅ VER103 — X button on the EMPTY LEFT SIDE (outside bubble)
-// ✅ VER104 — X centered vertically on the empty LEFT side
-if (_isArmedDelete(msg) && _isMyDeletableMessage(msg))
-  Positioned.fill(
-    child: Align(
-      alignment: Alignment.centerLeft,
-      child: Padding(
-        padding: EdgeInsets.only(left: 2 * uiScale),
-        child: GestureDetector(
-          onTap: () => _deleteArmedMessage(msg),
+child: Stack(
+  children: [
+    // ✅ existing reply/highlight glow (unchanged)
+    Positioned.fill(
+      child: IgnorePointer(
+        ignoring: true,
+        child: AnimatedOpacity(
+          opacity: (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOut,
           child: Container(
-            width: 26 * uiScale,
-            height: 26 * uiScale,
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.55),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: user.bubbleColor.withOpacity(0.45),
-                width: 1,
-              ),
+              borderRadius: BorderRadius.circular(22 * uiScale),
+              color: user.bubbleColor.withOpacity(0.18),
+              boxShadow: [
+                BoxShadow(
+                  color: user.bubbleColor.withOpacity(0.45),
+                  blurRadius: 22 * uiScale,
+                  spreadRadius: 1.5 * uiScale,
+                ),
+              ],
             ),
-            child: Icon(
-              Icons.close,
-              size: 18 * uiScale,
-              color: user.bubbleColor.withOpacity(0.95),
+          ),
         ),
       ),
     ),
-  ),
- ),
-  ),
-    ],
-  ),
+
+    // ✅ VER103 — armed-delete highlight (subtle tint in user's bubble color)
+    Positioned.fill(
+      child: IgnorePointer(
+        ignoring: true,
+        child: AnimatedOpacity(
+          opacity: _isArmedDelete(msg) ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22 * uiScale),
+              color: user.bubbleColor.withOpacity(0.12),
+              border: Border.all(
+                color: user.bubbleColor.withOpacity(0.35),
+                width: 1.2 * uiScale,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+
+    MessageRow(
+      user: user,
+      text: msg.text,
+      isMe: isMe,
+      bubbleTemplate: msg.bubbleTemplate,
+      decor: msg.decor,
+      fontFamily: msg.fontFamily,
+      showName: (widget.roomId == 'group_main'),
+      // ✅ KEEP: hearts next to username
+      nameHearts: (widget.roomId == 'group_main')
+          ? _buildHeartIcons(msg.heartReactorIds, uiScale)
+          : const <Widget>[],
+      showTime: (widget.roomId == 'group_main'),
+      timeMs: msg.ts,
+      showNewBadge: showNew,
+      usernameColor: usernameColor,
+      timeColor: timeColor,
+      uiScale: uiScale,
+      replyToSenderName: (msg.replyToSenderId == null)
+          ? null
+          : (users[msg.replyToSenderId!]?.name ?? msg.replyToSenderId!),
+      replyToText: (replyId == null)
+          ? null
+          : (replyTargetExists ? msg.replyToText : _deletedReplyLabel),
+      onTapReplyPreview: () {
+        if (replyId == null) return;
+
+        if (!replyTargetExists) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_deletedReplyLabel),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+
+        _jumpToMessageId(replyId);
+      },
+      messageType: (msg.type == ChatMessageType.image) ? 'image' : 'text',
+      imageUrl: msg.imageUrl,
+      onDoubleTapImage: (msg.type == ChatMessageType.image)
+          ? () => _toggleHeartForMessage(msg)
+          : null,
+    ),
+
+    // ✅ existing outline highlight (unchanged)
+    Positioned.fill(
+      child: IgnorePointer(
+        ignoring: true,
+        child: AnimatedOpacity(
+          opacity: (_highlightByMsgId[msg.id] ?? false) ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOut,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18 * uiScale),
+              border: Border.all(
+                color: user.bubbleColor.withOpacity(0.55),
+                width: 1.6 * uiScale,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+
+    // ✅ VER103 — X button on the EMPTY LEFT SIDE (outside bubble)
+    // ✅ VER104 — X centered vertically on the empty LEFT side
+    if (_isArmedDelete(msg) && _isMyDeletableMessage(msg))
+      Positioned.fill(
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: EdgeInsets.only(left: 2 * uiScale),
+            child: GestureDetector(
+              onTap: () => _deleteArmedMessage(msg),
+              child: Container(
+                width: 26 * uiScale,
+                height: 26 * uiScale,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.55),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: user.bubbleColor.withOpacity(0.45),
+                    width: 1,
+                  ),
+                ),
+                child: Icon(
+                  Icons.close,
+                  size: 18 * uiScale,
+                  color: user.bubbleColor.withOpacity(0.95),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+  ],
+),
+
+
 ),
 
                                       ),
