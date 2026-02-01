@@ -1110,13 +1110,12 @@ if (isImageMessage) {
   }
 } else if (isVoiceMessage) {
   if (hasVoicePath) {
-messageBody = VoiceMessageTile(
-  filePath: vPath!,
-  durationMs: vDurMs,
-  uiScale: uiScale,
-  bubbleColor: bubbleFill, // ✅ אותו צבע שהבועה עצמה משתמשת בו
-);
-
+    messageBody = VoiceMessageTile(
+      filePath: vPath!,
+      durationMs: vDurMs,
+      uiScale: uiScale,
+      bubbleColor: bubbleFill, // ✅ NEW
+    );
   } else {
     messageBody = RotatingEnvelope(
       assetPath: _envelopeAsset,
@@ -1126,6 +1125,8 @@ messageBody = VoiceMessageTile(
     );
   }
 } else {
+
+
   const double _msgFont = 15.0;
 
   messageBody = Directionality(
@@ -2661,7 +2662,7 @@ class VoiceMessageTile extends StatefulWidget {
   final int durationMs;
   final double uiScale;
 
-  // ✅ NEW: color of the sender bubble
+  // ✅ color of the sender bubble
   final Color bubbleColor;
 
   const VoiceMessageTile({
@@ -2676,28 +2677,50 @@ class VoiceMessageTile extends StatefulWidget {
   State<VoiceMessageTile> createState() => _VoiceMessageTileState();
 }
 
-
 class _VoiceMessageTileState extends State<VoiceMessageTile> {
   final AudioPlayer _player = AudioPlayer();
-Color _darken(Color c, [double amount = 0.25]) {
-  final hsl = HSLColor.fromColor(c);
-  return hsl
-      .withLightness((hsl.lightness - amount).clamp(0.0, 1.0))
-      .toColor();
-}
 
   Duration _pos = Duration.zero;
   Duration _dur = Duration.zero;
   bool _ready = false;
-bool _didPauseBgm = false;
 
-  // ✅ NEW: show spinner while loading remote URL / first decode
+  // ✅ show spinner while loading remote URL / first decode
   bool _loading = false;
+
+  // ✅ pause/resume BGM only on THIS phone
+  bool _didPauseBgm = false;
+
+  // ✅ NEW: prevent "completed" firing twice => play finish SFX only once
+  bool _finishSfxPlayed = false;
+
+
+  Color _darken(Color c, [double amount = 0.25]) {
+    final hsl = HSLColor.fromColor(c);
+    return hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0)).toColor();
+  }
 
   String _fmt(Duration d) {
     final m = d.inMinutes;
     final s = (d.inSeconds % 60).toString().padLeft(2, '0');
     return '$m:$s';
+  }
+
+  Future<void> _pauseBgmOnce() async {
+    if (_didPauseBgm) return;
+    try {
+      await Bgm.I.pause();
+      _didPauseBgm = true;
+    } catch (_) {
+      _didPauseBgm = false;
+    }
+  }
+
+  Future<void> _resumeBgmIfPausedByMe() async {
+    if (!_didPauseBgm) return;
+    try {
+      await Bgm.I.resumeIfPossible();
+    } catch (_) {}
+    _didPauseBgm = false;
   }
 
   Future<void> _ensureLoaded() async {
@@ -2706,8 +2729,7 @@ bool _didPauseBgm = false;
     final String path = widget.filePath.trim();
     if (path.isEmpty) return;
 
-    final bool isRemote =
-        path.startsWith('http://') || path.startsWith('https://');
+    final bool isRemote = path.startsWith('http://') || path.startsWith('https://');
 
     try {
       if (isRemote) {
@@ -2718,7 +2740,6 @@ bool _didPauseBgm = false;
         await _player.setFilePath(path);
       }
 
-      // duration might not be known immediately for remote; keep fallback
       _dur = _player.duration ?? Duration(milliseconds: widget.durationMs);
       _ready = true;
 
@@ -2727,21 +2748,34 @@ bool _didPauseBgm = false;
         setState(() => _pos = p);
       });
 
-_player.playerStateStream.listen((state) async {
-  if (!mounted) return;
+      // ✅ when completed: play SFX + resume BGM
+      _player.playerStateStream.listen((st) async {
+        if (!mounted) return;
+        setState(() {});
 
-  if (state.processingState == ProcessingState.completed ||
-      !state.playing) {
-    if (_didPauseBgm) {
-      try {
-        await Bgm.I.resumeIfPossible();
-      } catch (_) {}
-      _didPauseBgm = false;
-    }
-  }
+        if (st.processingState == ProcessingState.completed) {
+          // ✅ guard: prevent double fire
+          if (_finishSfxPlayed) return;
+          _finishSfxPlayed = true;
 
-  setState(() {});
-});
+          // reset UI position to the end (just in case)
+          if (mounted) setState(() => _pos = _player.duration ?? _dur);
+
+          // 🔊 play "finished listening" sound (ONCE)
+          try {
+            await Sfx.I.playStopListeningToVoiceMessage();
+          } catch (_) {}
+
+          // 🎵 resume BGM (only on this phone)
+          await _resumeBgmIfPausedByMe();
+
+          // optional: jump back to start so next tap plays from beginning
+          try {
+            await _player.seek(Duration.zero);
+            await _player.pause();
+          } catch (_) {}
+        }
+      });
 
 
       // update duration later if it arrives (esp. for URL)
@@ -2759,57 +2793,127 @@ _player.playerStateStream.listen((state) async {
     setState(() {});
   }
 
-@override
-void dispose() {
-  if (_didPauseBgm) {
-    try {
-      Bgm.I.resumeIfPossible();
-    } catch (_) {}
+  @override
+  void dispose() {
+    // ✅ if user leaves while playing: restore BGM
+    _resumeBgmIfPausedByMe();
+    _player.dispose();
+    super.dispose();
   }
-
-  _player.dispose();
-  super.dispose();
-}
-
 
   @override
   Widget build(BuildContext context) {
     final s = widget.uiScale;
     final bool playing = _player.playing;
 
-    final Duration total = (_ready
-        ? (_player.duration ?? _dur)
-        : Duration(milliseconds: widget.durationMs));
+    final Duration total = (_ready ? (_player.duration ?? _dur) : Duration(milliseconds: widget.durationMs));
 
     final double maxMs = total.inMilliseconds.toDouble().clamp(1.0, double.infinity);
     final double curMs = _pos.inMilliseconds.toDouble().clamp(0.0, maxMs);
-final Color base = widget.bubbleColor;
-final Color sliderActive = _darken(base, 0.28);
-final Color sliderInactive = sliderActive.withOpacity(0.25);
 
-return LayoutBuilder(
-  builder: (context, constraints) {
-    final bool bounded = constraints.maxWidth.isFinite;
+    final Color base = widget.bubbleColor;
+    final Color sliderActive = _darken(base, 0.28);
+    final Color sliderInactive = sliderActive.withOpacity(0.25);
 
-    final double playW = 34 * s;
-    final double gap1 = 10 * s;
-    final double gap2 = 8 * s;
-    final double timeW = 44 * s;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool bounded = constraints.maxWidth.isFinite;
 
-    // ✅ Give the whole tile a hard width so Row can’t overflow.
-    // If unbounded (rare), use a reasonable fallback width.
-    final double tileW = bounded
-        ? constraints.maxWidth
-        : (playW + gap1 + 170 * s + gap2 + timeW);
+        final double playW = 34 * s;
+        final double gap1 = 10 * s;
+        final double gap2 = 8 * s;
+        final double timeW = 44 * s;
 
-    return SizedBox(
-      width: tileW,
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: _loading
-                ? null
-                : () async {
+        final double sliderW = bounded
+            ? (constraints.maxWidth - playW - gap1 - gap2 - timeW).clamp(60 * s, 240 * s)
+            : (140 * s);
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              onTap: _loading
+                  ? null
+                  : () async {
+                      if (!_ready) {
+                        if (!mounted) return;
+                        setState(() => _loading = true);
+
+                        await _ensureLoaded();
+
+                        if (!mounted) return;
+                        setState(() => _loading = false);
+
+                        if (!_ready) return;
+                      }
+
+                             if (_player.playing) {
+                        await _player.pause();
+                        await _resumeBgmIfPausedByMe();
+                      } else {
+                        // ✅ NEW: new play session => allow finish SFX once
+                        _finishSfxPlayed = false;
+
+                        // ✅ pause BGM while voice plays (this phone only)
+                        await _pauseBgmOnce();
+                        await _player.play();
+                      }
+
+
+                      if (!mounted) return;
+                      setState(() {});
+                    },
+              child: Container(
+                width: playW,
+                height: playW,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10 * s),
+                ),
+                child: _loading
+                    ? SizedBox(
+                        width: 16 * s,
+                        height: 16 * s,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2 * s,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.black.withOpacity(0.55),
+                          ),
+                        ),
+                      )
+                    : Icon(
+                        playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        size: 22 * s,
+                        color: Colors.black.withOpacity(0.75),
+                      ),
+              ),
+            ),
+            SizedBox(width: gap1),
+
+            SizedBox(
+              width: sliderW,
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  activeTrackColor: sliderActive,
+                  inactiveTrackColor: sliderInactive,
+                  thumbColor: sliderActive,
+                  overlayColor: sliderActive.withOpacity(0.12),
+                  trackHeight: 3.2 * s,
+                  thumbShape: RoundSliderThumbShape(
+                    enabledThumbRadius: 6.5 * s,
+                  ),
+                  overlayShape: RoundSliderOverlayShape(
+                    overlayRadius: 12 * s,
+                  ),
+                ),
+                child: Slider(
+                  value: curMs,
+                  min: 0.0,
+                  max: maxMs,
+                  onChangeStart: (_) async {
+                    if (_loading) return;
+
                     if (!_ready) {
                       if (!mounted) return;
                       setState(() => _loading = true);
@@ -2818,113 +2922,33 @@ return LayoutBuilder(
 
                       if (!mounted) return;
                       setState(() => _loading = false);
-
-                      if (!_ready) return;
                     }
-if (!_player.playing) {
-  try {
-    await Bgm.I.pause();
-    _didPauseBgm = true;
-  } catch (_) {}
-}
-
-                    if (_player.playing) {
-                      await _player.pause();
-                    } else {
-                      await _player.play();
-                    }
-                    if (!mounted) return;
-                    setState(() {});
                   },
-            child: Container(
-              width: playW,
-              height: playW,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(10 * s),
-              ),
-              child: _loading
-                  ? SizedBox(
-                      width: 16 * s,
-                      height: 16 * s,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2 * s,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.black.withOpacity(0.55),
-                        ),
-                      ),
-                    )
-                  : Icon(
-                      playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                      size: 22 * s,
-                      color: Colors.black.withOpacity(0.75),
-                    ),
-            ),
-          ),
-
-          SizedBox(width: gap1),
-
-          // ✅ Slider takes remaining width safely (no overflow)
-          Expanded(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                activeTrackColor: sliderActive,
-                inactiveTrackColor: sliderInactive,
-                thumbColor: sliderActive,
-                overlayColor: sliderActive.withOpacity(0.12),
-                trackHeight: 3.2 * s,
-                thumbShape: RoundSliderThumbShape(
-                  enabledThumbRadius: 6.5 * s,
-                ),
-                overlayShape: RoundSliderOverlayShape(
-                  overlayRadius: 12 * s,
+                  onChanged: (v) async {
+                    if (!_ready) return;
+                    await _player.seek(Duration(milliseconds: v.round()));
+                  },
                 ),
               ),
-              child: Slider(
-                value: curMs,
-                min: 0.0,
-                max: maxMs,
-                onChangeStart: (_) async {
-                  if (_loading) return;
+            ),
 
-                  if (!_ready) {
-                    if (!mounted) return;
-                    setState(() => _loading = true);
+            SizedBox(width: gap2),
 
-                    await _ensureLoaded();
-
-                    if (!mounted) return;
-                    setState(() => _loading = false);
-                  }
-                },
-                onChanged: (v) async {
-                  if (!_ready) return;
-                  await _player.seek(Duration(milliseconds: v.round()));
-                },
+            SizedBox(
+              width: timeW,
+              child: Text(
+                _fmt(total),
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 12 * s,
+                  color: Colors.black.withOpacity(0.65),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ),
-
-          SizedBox(width: gap2),
-
-          SizedBox(
-            width: timeW,
-            child: Text(
-              _fmt(total),
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 12 * s,
-                color: Colors.black.withOpacity(0.65),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
-  },
-);
-
   }
 }
