@@ -134,9 +134,9 @@ Future<void> showFromRemoteMessage(RemoteMessage message) async {
   // DM: "ZEN"
   // Group: "ZEN (CHATROOM)"
   final String title = isGroup ? '$sender (CHATROOM)' : sender;
+// Body without sender prefix (name already appears in title)
+final String body = msgText.trim().isEmpty ? '' : msgText;
 
-  // Body like the screenshot: "ZEN: message..."
-  final String body = msgText.trim().isEmpty ? '' : '$sender: $msgText';
 
   // Channel selection
   final String channelId = isGroup ? channelGroup : channelDm;
