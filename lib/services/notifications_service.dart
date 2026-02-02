@@ -9,9 +9,11 @@ class NotificationsService {
 
   final FlutterLocalNotificationsPlugin _local = FlutterLocalNotificationsPlugin();
 
-  // Channel ids
-  static const String channelMessages = 'chat_messages';
-  static const String channelHigh = 'chat_high';
+// Channel ids (v2 so Android actually applies new sound settings)
+static const String channelDm = 'dm_messages_v2';
+static const String channelGroup = 'group_messages_v2';
+static const String channelHigh = 'chat_high_v2';
+
 
   Future<void> init() async {
     await _initLocalPlugin();
@@ -46,29 +48,49 @@ class NotificationsService {
     await _local.initialize(initSettings);
   }
 
-  Future<void> _createAndroidChannels() async {
-    final androidPlugin = _local.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+Future<void> _createAndroidChannels() async {
+  final androidPlugin = _local.resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>();
 
-    if (androidPlugin == null) return;
+  if (androidPlugin == null) return;
 
-    const AndroidNotificationChannel ch1 = AndroidNotificationChannel(
-      channelMessages,
-      'Chat messages',
-      description: 'Notifications for new chat messages',
-      importance: Importance.high,
-    );
+  // file: android/app/src/main/res/raw/notification_sfx.ogg
+  const sound = RawResourceAndroidNotificationSound('notification_sfx');
 
-    const AndroidNotificationChannel ch2 = AndroidNotificationChannel(
-      channelHigh,
-      'High priority chat',
-      description: 'High priority notifications',
-      importance: Importance.high,
-    );
+  const AndroidNotificationChannel dm = AndroidNotificationChannel(
+    channelDm,
+    'DM messages',
+    description: 'Direct messages notifications',
+    importance: Importance.high,
+    playSound: true,
+    sound: sound,
+    enableVibration: true,
+  );
 
-    await androidPlugin.createNotificationChannel(ch1);
-    await androidPlugin.createNotificationChannel(ch2);
-  }
+  const AndroidNotificationChannel group = AndroidNotificationChannel(
+    channelGroup,
+    'Chatroom messages',
+    description: 'Group chat notifications',
+    importance: Importance.high,
+    playSound: true,
+    sound: sound,
+    enableVibration: true,
+  );
+
+  const AndroidNotificationChannel high = AndroidNotificationChannel(
+    channelHigh,
+    'High priority chat',
+    description: 'High priority notifications',
+    importance: Importance.high,
+    playSound: true,
+    sound: sound,
+    enableVibration: true,
+  );
+
+  await androidPlugin.createNotificationChannel(dm);
+  await androidPlugin.createNotificationChannel(group);
+  await androidPlugin.createNotificationChannel(high);
+}
 
   Future<void> _requestPermissionsIfNeeded() async {
     if (kIsWeb) return;
@@ -90,52 +112,83 @@ class NotificationsService {
   }
 
 Future<void> showFromRemoteMessage(RemoteMessage message) async {
-  final String? title = message.notification?.title ?? message.data['title']?.toString();
-  final String? body = message.notification?.body ?? message.data['body']?.toString();
+  // We prefer data fields for chat formatting
+  final String sender =
+      message.data['sender']?.toString() ??
+      message.notification?.title ??
+      'New message';
 
-  // ✅ אם אין שום תוכן אמיתי — לא מציגים בכלל.
-  // זה מונע "NEW MESSAGE" / התראות ריקות.
-  final bool hasTitle = title != null && title.trim().isNotEmpty;
-  final bool hasBody = body != null && body.trim().isNotEmpty;
-  if (!hasTitle && !hasBody) return;
+  final String msgText =
+      message.data['body']?.toString() ??
+      message.notification?.body ??
+      '';
 
-  // ✅ תני title נורמלי אם יש רק body
-  final String safeTitle = hasTitle ? title!.trim() : 'New message';
-  final String safeBody = hasBody ? body!.trim() : '';
+  // If truly empty, don’t show (prevents "NEW MESSAGE" / empty notifications)
+  if (sender.trim().isEmpty && msgText.trim().isEmpty) return;
 
-  // ✅ משתמשים רק בערוצים שאת יצרת, לא בערוצים אקראיים שמגיעים מ-FCM.
-  final String rawRequestedChannel =
-      message.notification?.android?.channelId ??
-      message.data['android_channel_id']?.toString() ??
-      channelMessages;
+  // kind: "dm" | "group"
+  final String kind = (message.data['kind']?.toString() ?? 'group').toLowerCase();
+  final bool isGroup = kind == 'group';
 
-  final String channelId =
-      (rawRequestedChannel == channelHigh || rawRequestedChannel == channelMessages)
-          ? rawRequestedChannel
-          : channelMessages;
+  // Title rules you asked:
+  // DM: "ZEN"
+  // Group: "ZEN (CHATROOM)"
+  final String title = isGroup ? '$sender (CHATROOM)' : sender;
+
+  // Body like the screenshot: "ZEN: message..."
+  final String body = msgText.trim().isEmpty ? '' : '$sender: $msgText';
+
+  // Channel selection
+  final String channelId = isGroup ? channelGroup : channelDm;
 
   final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
     channelId,
-    channelId == channelHigh ? 'High priority chat' : 'Chat messages',
-    channelDescription: channelId == channelHigh
-        ? 'High priority notifications'
-        : 'Notifications for new chat messages',
+    isGroup ? 'Chatroom messages' : 'DM messages',
+    channelDescription:
+        isGroup ? 'Group chat notifications' : 'Direct messages notifications',
     importance: Importance.high,
     priority: Priority.high,
   );
 
   final NotificationDetails details = NotificationDetails(android: androidDetails);
 
-  // ✅ ID יציב יותר (עדיף על זמן בשניות) כדי להקטין כפילויות
+  // Stable-ish id to reduce accidental duplicates
   final int notificationId =
       (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString()).hashCode;
 
   await _local.show(
     notificationId,
-    safeTitle,
-    safeBody,
+    title,
+    body,
     details,
   );
 }
+Future<void> showTest({required bool isGroup}) async {
+  final String sender = isGroup ? 'Yoosung★' : 'ZEN';
+  final String msgText = isGroup ? 'group sound test' : 'sound test';
+
+  final String title = isGroup ? '$sender (CHATROOM)' : sender;
+  final String body = '$sender: $msgText';
+  final String channelId = isGroup ? channelGroup : channelDm;
+
+  final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    channelId,
+    isGroup ? 'Chatroom messages' : 'DM messages',
+    channelDescription:
+        isGroup ? 'Group chat notifications' : 'Direct messages notifications',
+    importance: Importance.high,
+    priority: Priority.high,
+  );
+
+  final NotificationDetails details = NotificationDetails(android: androidDetails);
+
+  await _local.show(
+    DateTime.now().microsecondsSinceEpoch.hashCode,
+    title,
+    body,
+    details,
+  );
+}
+
 
 }

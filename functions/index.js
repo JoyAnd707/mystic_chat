@@ -78,32 +78,36 @@ usersSnap.forEach((doc) => {
     if (type === "voice") body = "🎤 Voice message";
     if (type === "image") body = "🖼️ Image";
 
-    // 4) Visible push + data for deep link
-    const multicast = {
-      tokens: uniqueTokens,
-      notification: { title, body },
-      data: {
-        roomId: String(roomId),
-        messageId: String(messageId),
-        type: String(type),
-        senderId: String(senderAppUserId || ""),
+// 4) Data-only push (NO notification payload) so Android won't create its own notification.
+// The app will render exactly one local notification with your custom sound + formatting.
+const multicast = {
+  tokens: uniqueTokens,
+  data: {
+    kind: "group",
+    sender: String(senderAppUserId || "New message"),
+    body: String(body || ""),
+    roomId: String(roomId),
+    messageId: String(messageId),
+    type: String(type),
+    senderId: String(senderAppUserId || ""),
+  },
+  android: {
+    priority: "high",
+  },
+  apns: {
+    headers: {
+      "apns-priority": "10",
+    },
+    payload: {
+      aps: {
+        "content-available": 1,
       },
-      android: {
-        priority: "high",
-        notification: {
-          channelId: "chat_high",
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: "default",
-          },
-        },
-      },
-    };
+    },
+  },
+};
 
-    const res = await admin.messaging().sendEachForMulticast(multicast);
+const res = await admin.messaging().sendEachForMulticast(multicast);
+
 
     // 5) Clean up dead tokens
     const deadTokens = [];
