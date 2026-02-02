@@ -341,7 +341,7 @@ class ReplyPreviewBar extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onClose;
 
-  const ReplyPreviewBar({
+  const ReplyPreviewBar({super.key, 
     required this.uiScale,
     required this.stripeColor,
     required this.title,
@@ -711,7 +711,7 @@ class SystemMessageBar extends StatelessWidget {
   final String text;
   final double uiScale;
 
-  const SystemMessageBar({
+  const SystemMessageBar({super.key, 
     required this.text,
     required this.uiScale,
   });

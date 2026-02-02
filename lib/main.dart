@@ -14,6 +14,12 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase/push_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'services/notifications_service.dart';
+
+
+
+
 class _NoTransitionsBuilder extends PageTransitionsBuilder {
   const _NoTransitionsBuilder();
 
@@ -36,6 +42,33 @@ class _NoTransitionsBuilder extends PageTransitionsBuilder {
 /// =======================================
 /// Mystic Chat — App Entry
 /// =======================================
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+
+  debugPrint(
+    'BG FCM | hasNotification=${message.notification != null} | data=${message.data}',
+  );
+
+  @pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+
+  await NotificationsService.instance.initForBackground();
+
+  debugPrint(
+    'BG FCM | hasNotification=${message.notification != null} | data=${message.data}',
+  );
+
+  await NotificationsService.instance.showFromRemoteMessage(message);
+}
+
+}
+
+
 Future<void> _enableImmersiveSticky() async {
   // Hide Android navigation bar + status bar until user swipes.
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -50,22 +83,23 @@ Future<void> _enableImmersiveSticky() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Must be registered before runApp (and before messages arrive)
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
   // ✅ Firebase (required before any Firestore usage)
   await Firebase.initializeApp();
-  
-try {
-  await FirebaseFirestore.instance
-      .collection('debug')
-      .doc('ping')
-      .set({
-    'ok': true,
-    'ts': DateTime.now().millisecondsSinceEpoch,
-  });
-} catch (e) {
-  debugPrint('Firestore ping failed: $e');
-}
 
+  // ✅ Init notifications (creates channel for Android 8–12 + requests permission for 13+)
+  await NotificationsService.instance.init();
 
+  try {
+    await FirebaseFirestore.instance.collection('debug').doc('ping').set({
+      'ok': true,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    });
+  } catch (e) {
+    debugPrint('Firestore ping failed: $e');
+  }
 
   await Hive.initFlutter();
 
@@ -87,7 +121,6 @@ try {
         usage: AndroidAudioUsage.media,
       ),
       androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransientMayDuck,
-
       androidWillPauseWhenDucked: false,
     ));
   } catch (e) {

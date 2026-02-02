@@ -703,7 +703,7 @@ if (msg.type == ChatMessageType.voice) {
 
     const double baseHeartSize = 40; // הגודל הוויזואלי של הלב
     const double baseHeartGap = 2.0;
-Widget _buildImageHeartOverlay({
+Widget buildImageHeartOverlay({
   required Set<String> reactorIds,
   required bool isMe,
   required double uiScale,
@@ -2315,7 +2315,7 @@ _wiggleCtrl.dispose();
     // ✅ For now we store a single fontFamily string (backwards-compatible):
     // - Hebrew-only => store HE pair font
     // - Otherwise  => store EN pair font (covers English-only + mixed)
-    final String? fontFamilyForThisMessage =
+    final String fontFamilyForThisMessage =
         (hasHeb && !hasEng) ? _pairHe[pairIndex] : _pairEn[pairIndex];
 
 

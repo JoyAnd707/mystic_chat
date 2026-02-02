@@ -12,8 +12,7 @@ import 'dart:ui';
 import '../firebase/firestore_chat_service.dart';
 import '../firebase/auth_service.dart';
 import '../services/presence_service.dart';
-import '../widgets/new_messages_badge.dart'; // ✅ ADD THIS
-import '../widgets/reply_preview_bar.dart';
+// ✅ ADD THIS
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../services/image_message_service.dart';
 part 'chat_screen_state.dart';

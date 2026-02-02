@@ -211,7 +211,7 @@ Widget _inactiveSendButton({
   // TYPING MODE
   // =====================
   Widget _typingBar(double Function(double) s) {
-    void _scrollTypeFieldToEndForDirection(TextDirection dir) {
+    void scrollTypeFieldToEndForDirection(TextDirection dir) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!_typeFieldScrollController.hasClients) return;
 
@@ -224,7 +224,7 @@ Widget _inactiveSendButton({
       });
     }
 
-    void _handleChanged(String text) {
+    void handleChanged(String text) {
       final nextDir = _containsRtl(text) ? TextDirection.rtl : TextDirection.ltr;
 
       if (nextDir != _inputDirection) {
@@ -233,7 +233,7 @@ Widget _inactiveSendButton({
         });
       }
 
-      _scrollTypeFieldToEndForDirection(nextDir);
+      scrollTypeFieldToEndForDirection(nextDir);
       // ✅ canSend updates via controller listener (_syncCanSend)
     }
 
@@ -267,7 +267,7 @@ Widget _inactiveSendButton({
                         : TextAlign.left,
 
                     textAlignVertical: TextAlignVertical.center,
-                    onChanged: _handleChanged,
+                    onChanged: handleChanged,
                     style: TextStyle(
                       color: Colors.black,
                       fontSize: s(14),
@@ -760,7 +760,7 @@ String _plainForMentions(String s) => s; // keep it simple for now
   final bool showTime;
   final int timeMs;
 
-MessageRow({
+const MessageRow({
   super.key,
   required this.user,
   required this.text,
@@ -1073,12 +1073,12 @@ final double imagePreviewWidth  = math.min(maxBubbleWidth, 140 * uiScale);
 final double imagePreviewHeight = 210 * uiScale;
 
 // ✅ Envelope asset (your icon)
-const String _envelopeAsset = 'assets/ui/DMSmessageUnread.png';
+const String envelopeAsset = 'assets/ui/DMSmessageUnread.png';
 
 if (isImageMessage) {
   if (hasImageUrl) {
     messageBody = GestureDetector(
-      onTap: () => _openImageViewer(context, imgUrl!),
+      onTap: () => _openImageViewer(context, imgUrl),
       onDoubleTap: onDoubleTapImage,
       behavior: HitTestBehavior.opaque,
       child: ClipRect(
@@ -1086,7 +1086,7 @@ if (isImageMessage) {
           width: imagePreviewWidth,
           height: imagePreviewHeight,
           child: Image.network(
-            imgUrl!,
+            imgUrl,
             fit: BoxFit.cover,
           ),
         ),
@@ -1100,7 +1100,7 @@ if (isImageMessage) {
       height: imagePreviewHeight,
       child: Center(
         child: RotatingEnvelope(
-          assetPath: _envelopeAsset,
+          assetPath: envelopeAsset,
           size: envelopeSize,
           duration: const Duration(milliseconds: 1800),
           opacity: 1.0,
@@ -1111,14 +1111,14 @@ if (isImageMessage) {
 } else if (isVoiceMessage) {
   if (hasVoicePath) {
     messageBody = VoiceMessageTile(
-      filePath: vPath!,
+      filePath: vPath,
       durationMs: vDurMs,
       uiScale: uiScale,
       bubbleColor: bubbleFill, // ✅ NEW
     );
   } else {
     messageBody = RotatingEnvelope(
-      assetPath: _envelopeAsset,
+      assetPath: envelopeAsset,
       size: 34 * uiScale,
       duration: const Duration(milliseconds: 1800),
       opacity: 1.0,
@@ -1127,7 +1127,7 @@ if (isImageMessage) {
 } else {
 
 
-  const double _msgFont = 15.0;
+  const double msgFont = 15.0;
 
   messageBody = Directionality(
     textDirection:
@@ -1139,7 +1139,7 @@ if (isImageMessage) {
       maxLines: null,
       overflow: TextOverflow.visible,
       strutStyle: StrutStyle(
-        fontSize: _msgFont * uiScale,
+        fontSize: msgFont * uiScale,
         height: 1.2,
         forceStrutHeight: true,
       ),
@@ -1153,7 +1153,7 @@ if (isImageMessage) {
           _hebrewFallbackFor(fontFamily),
           'NotoSans',
         ],
-        fontSize: _msgFont * uiScale,
+        fontSize: msgFont * uiScale,
         height: 1.2,
         color: Colors.black,
         fontWeight: FontWeight.w400,
@@ -1168,7 +1168,7 @@ if (isImageMessage) {
 
 
 // ✅ Reply preview builder (shared)
-Widget _replyPreview() {
+Widget replyPreview() {
   if (!((replyToText != null && replyToText!.trim().isNotEmpty) ||
       (replyToSenderName != null && replyToSenderName!.trim().isNotEmpty))) {
     return const SizedBox.shrink();
@@ -1228,7 +1228,7 @@ final Widget imageOnlyWidget = Column(
   mainAxisSize: MainAxisSize.min,
   crossAxisAlignment: CrossAxisAlignment.start,
   children: [
-    _replyPreview(),
+    replyPreview(),
     messageBody,
   ],
 );
@@ -1243,7 +1243,7 @@ final bubbleInner = Padding(
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      _replyPreview(),
+      replyPreview(),
       messageBody,
     ],
   ),
@@ -1251,40 +1251,40 @@ final bubbleInner = Padding(
 
 // ✅ Mystic-like minimum width so short messages don't wrap weirdly
 // ✅ PLUS: require at least 3 words on the first line before wrapping down
-final double _floorMinBubbleWidth = 18 * uiScale; // רצפה מינימלית (גם למילה אחת)
+final double floorMinBubbleWidth = 18 * uiScale; // רצפה מינימלית (גם למילה אחת)
 
 // Horizontal padding inside bubbleInner: 10 left + 10 right
-final double _bubbleInnerHPad = 20 * uiScale;
+final double bubbleInnerHPad = 20 * uiScale;
 
 // Use the SAME text style as the message Text (so measurement matches reality)
-const double _msgFont = 15.0; // keep identical to the one used above
-final TextStyle _measureStyle = TextStyle(
+const double msgFont = 15.0; // keep identical to the one used above
+final TextStyle measureStyle = TextStyle(
   fontFamily: fontFamily,
   fontFamilyFallback: [
     _hebrewFallbackFor(fontFamily),
     'NotoSans',
   ],
-  fontSize: _msgFont * uiScale,
+  fontSize: msgFont * uiScale,
   height: 1.2,
   fontWeight: FontWeight.w400,
   letterSpacing: -0.15 * uiScale,
 );
 
 // Measure using the ORIGINAL "text" (not displayText) so it respects real words
-final double _minBy3Words = _minBubbleWidthForFirstWords(
+final double minBy3Words = _minBubbleWidthForFirstWords(
   context: context,
   text: text,
-  style: _measureStyle,
+  style: measureStyle,
   uiScale: uiScale,
   minWords: 3,
   maxBubbleWidth: maxBubbleWidth,
-  horizontalPadding: _bubbleInnerHPad,
+  horizontalPadding: bubbleInnerHPad,
 );
 
 // Final min width = max(floor, 3-words width) and never above maxBubbleWidth
 final double minBubbleWidth = math.min(
   maxBubbleWidth,
-  math.max(_floorMinBubbleWidth, _minBy3Words),
+  math.max(floorMinBubbleWidth, minBy3Words),
 );
 
 final Widget bubbleWidget = isImageMessage
