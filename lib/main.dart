@@ -88,8 +88,7 @@ Future<void> main() async {
 
   // ✅ Init notifications (creates channel for Android 8–12 + requests permission for 13+)
   await NotificationsService.instance.init();
-await NotificationsService.instance.showTest(isGroup: false); // DM test
-await NotificationsService.instance.showTest(isGroup: true);  // Group test
+
 
   try {
     await FirebaseFirestore.instance.collection('debug').doc('ping').set({

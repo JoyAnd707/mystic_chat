@@ -163,32 +163,7 @@ Future<void> showFromRemoteMessage(RemoteMessage message) async {
     details,
   );
 }
-Future<void> showTest({required bool isGroup}) async {
-  final String sender = isGroup ? 'Yoosung★' : 'ZEN';
-  final String msgText = isGroup ? 'group sound test' : 'sound test';
 
-  final String title = isGroup ? '$sender (CHATROOM)' : sender;
-  final String body = '$sender: $msgText';
-  final String channelId = isGroup ? channelGroup : channelDm;
-
-  final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-    channelId,
-    isGroup ? 'Chatroom messages' : 'DM messages',
-    channelDescription:
-        isGroup ? 'Group chat notifications' : 'Direct messages notifications',
-    importance: Importance.high,
-    priority: Priority.high,
-  );
-
-  final NotificationDetails details = NotificationDetails(android: androidDetails);
-
-  await _local.show(
-    DateTime.now().microsecondsSinceEpoch.hashCode,
-    title,
-    body,
-    details,
-  );
-}
 
 
 }
