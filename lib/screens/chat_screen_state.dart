@@ -534,9 +534,16 @@ if (msg.type == ChatMessageType.voice) {
   // =======================
   // Scroll position restore
   // =======================
-  bool _didRestoreScroll = false;
-  double _savedScrollOffset = 0.0;
-  Timer? _scrollSaveDebounce;
+bool _didRestoreScroll = false;
+double _savedScrollOffset = 0.0;
+Timer? _scrollSaveDebounce;
+
+// ✅ While opening the room: block any auto-scroll triggers from snapshots.
+bool _openingLock = true;
+
+// ✅ Used for hiding list until initial jump is applied (prevents "flash at top")
+bool _initialOpenPositionApplied = false;
+
 
   // ✅ IMPORTANT: don't save offset until we've restored/jumped once
   bool _allowScrollOffsetSaves = false;
@@ -1786,26 +1793,30 @@ Widget buildImageHeartOverlay({
     return u?.name ?? userId;
   }
 
-  Future<void> _emitSystemLine(
-    String line, {
-    bool showInUi = true,
-    bool scroll = true,
-  }) async {
-    final ts = DateTime.now().millisecondsSinceEpoch;
+Future<void> _emitSystemLine(
+  String line, {
+  bool showInUi = true,
+  bool scroll = true,
+}) async {
+  final ts = DateTime.now().millisecondsSinceEpoch;
 
-    // ✅ Force scroll when THIS exact system line appears in the Firestore snapshot
+  // ✅ ONLY arm "pending scroll" if we actually want auto-scroll for this line.
+  // This prevents "entered chatroom" from triggering a bottom scroll via snapshot.
+  if (scroll) {
     _pendingScrollToBottomTs = ts;
-
-    await FirestoreChatService.sendSystemLine(
-      roomId: widget.roomId,
-      text: line,
-      ts: ts,
-    );
-
-    if (scroll && mounted) {
-      _scrollToBottom();
-    }
   }
+
+  await FirestoreChatService.sendSystemLine(
+    roomId: widget.roomId,
+    text: line,
+    ts: ts,
+  );
+
+  if (scroll && mounted) {
+    _scrollToBottom(animated: true, keepFocus: false);
+  }
+}
+
 
   Future<void> _emitEntered() async {
     final name = _displayNameForId(widget.currentUserId);
@@ -2076,27 +2087,34 @@ _wiggleCtrl.dispose();
           }
         }
 
-        final bool snapshotContainsMyPendingMessage =
-            (_pendingScrollToBottomTs > 0) &&
-                next.any((m) =>
-                    m.ts == _pendingScrollToBottomTs &&
-                    m.senderId == widget.currentUserId);
+final bool snapshotContainsMyPendingMessage =
+    (_pendingScrollToBottomTs > 0) &&
+        next.any((m) =>
+            m.ts == _pendingScrollToBottomTs &&
+            m.senderId == widget.currentUserId);
 
-        if (wasNearBottomBefore || snapshotContainsMyPendingMessage) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
+// ✅ During initial open, do NOT auto-scroll based on snapshot.
+// We only allow ONE initial jump (to UNREAD or bottom) in firstLoad.
+if (!_openingLock) {
+  if (wasNearBottomBefore || snapshotContainsMyPendingMessage) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
 
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
+      // ✅ one frame is enough; avoid double post-frame
+      _scrollToBottom(animated: true, keepFocus: true);
 
-              _scrollToBottom(animated: true, keepFocus: true);
+      if (snapshotContainsMyPendingMessage) {
+        _pendingScrollToBottomTs = 0;
+      }
+    });
+  }
+} else {
+  // ✅ Still clear pending ts if we already saw it (prevents later surprise scroll)
+  if (snapshotContainsMyPendingMessage) {
+    _pendingScrollToBottomTs = 0;
+  }
+}
 
-              if (snapshotContainsMyPendingMessage) {
-                _pendingScrollToBottomTs = 0;
-              }
-            });
-          });
-        }
 
         await _loadLastReadTsOnce();
 
@@ -2173,21 +2191,30 @@ _wiggleCtrl.dispose();
           }
         }
 
-        final bool firstLoad = (oldCount == 0 && !_didRestoreScroll);
+final bool firstLoad = (oldCount == 0 && !_didRestoreScroll);
 
-        if (firstLoad && next.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
+if (firstLoad && next.isNotEmpty) {
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    if (!mounted) return;
 
-            _scrollToBottom(animated: false);
+    // ✅ One initial positioning, NO animation.
+    await _jumpToFirstUnreadIfAny(animated: false);
 
-            _didRestoreScroll = true;
+    if (!mounted) return;
 
-            if (mounted) {
-              setState(() => _hideUnreadDivider = true);
-            }
-          });
-        }
+    setState(() {
+      _initialOpenPositionApplied = true;
+      _openingLock = false; // ✅ allow auto-scroll only AFTER initial positioning
+    });
+
+    _didRestoreScroll = true;
+
+    // Do NOT force-hide unread divider here.
+    // Let _onPositionsChanged decide based on near-bottom state.
+  });
+}
+
+
       },
     );
   }
@@ -2240,39 +2267,50 @@ _wiggleCtrl.dispose();
     });
   }
 
-  Future<void> _jumpToFirstUnreadIfAny() async {
-    final int lastReadTs = await _loadLastReadTs();
+Future<void> _jumpToFirstUnreadIfAny({bool animated = false}) async {
+  final int lastReadTs = await _loadLastReadTs();
+if (mounted) {
+  setState(() => _initialOpenPositionApplied = true);
+}
 
-    int targetIndex = -1;
+  int targetIndex = -1;
 
-    for (int i = 0; i < _messages.length; i++) {
-      final m = _messages[i];
-      if (m.type != ChatMessageType.text) continue;
-      if (m.ts <= 0) continue;
-      if (m.senderId == widget.currentUserId) continue;
+  for (int i = 0; i < _messages.length; i++) {
+    final m = _messages[i];
+    if (m.type != ChatMessageType.text) continue;
+    if (m.ts <= 0) continue;
+    if (m.senderId == widget.currentUserId) continue;
 
-      if (m.ts > lastReadTs) {
-        targetIndex = i;
-        break;
-      }
+    if (m.ts > lastReadTs) {
+      targetIndex = i;
+      break;
     }
+  }
 
-    if (targetIndex < 0) {
-      _scrollToBottom(animated: false);
-      return;
-    }
+  if (!_itemScrollController.isAttached) return;
 
-    if (!_itemScrollController.isAttached) return;
+  if (targetIndex < 0) {
+    _scrollToBottom(animated: false);
+    return;
+  }
 
+  if (animated) {
     await _itemScrollController.scrollTo(
       index: targetIndex,
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeOut,
       alignment: 0.0,
     );
-
-    _allowScrollOffsetSaves = true;
+  } else {
+    _itemScrollController.jumpTo(
+      index: targetIndex,
+      alignment: 0.0,
+    );
   }
+
+  _allowScrollOffsetSaves = true;
+}
+
 
   Future<void> _debugSimulateIncomingMessage() async {
     final ts = DateTime.now().millisecondsSinceEpoch;
@@ -2595,7 +2633,12 @@ builder: (context, onlineIds, _) {
 
                               final limitedTyping = typingList.take(3).toList();
 
-                              return ScrollablePositionedList.builder(
+                              return Opacity(
+  opacity: (_initialOpenPositionApplied || _messages.isEmpty) ? 1.0 : 0.0,
+  child: IgnorePointer(
+    ignoring: !(_initialOpenPositionApplied || _messages.isEmpty),
+    child: ScrollablePositionedList.builder(
+
                                 itemScrollController: _itemScrollController,
                                 itemPositionsListener: _itemPositionsListener,
                                 padding: EdgeInsets.only(
@@ -2930,7 +2973,11 @@ onDoubleTapImage: (msg.type == ChatMessageType.image)
                                     children: pieces,
                                   );
                                 },
-                              );
+                                  ),
+  ),
+);
+
+                              
                             },
                           ),
                         ),
