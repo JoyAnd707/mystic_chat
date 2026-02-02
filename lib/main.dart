@@ -48,24 +48,21 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
-  debugPrint(
-    'BG FCM | hasNotification=${message.notification != null} | data=${message.data}',
-  );
-
-  @pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-
+  // חובה כדי ש-local notifications יעבדו באיזולייט של BG
   await NotificationsService.instance.initForBackground();
 
   debugPrint(
     'BG FCM | hasNotification=${message.notification != null} | data=${message.data}',
   );
 
-  await NotificationsService.instance.showFromRemoteMessage(message);
-}
+  // ✅ אם זו הודעה עם notification payload, אנדרואיד כבר מציג התראה לבד.
+  // אחרת תקבלי כפילות (מערכת + local).
+  if (message.notification != null) {
+    return;
+  }
 
+  // ✅ data-only: פה כן מציגים local
+  await NotificationsService.instance.showFromRemoteMessage(message);
 }
 
 

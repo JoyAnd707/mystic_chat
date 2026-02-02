@@ -89,32 +89,53 @@ class NotificationsService {
     }
   }
 
-  Future<void> showFromRemoteMessage(RemoteMessage message) async {
-    final String title =
-        message.notification?.title ?? message.data['title']?.toString() ?? 'New message';
-    final String body =
-        message.notification?.body ?? message.data['body']?.toString() ?? '';
+Future<void> showFromRemoteMessage(RemoteMessage message) async {
+  final String? title = message.notification?.title ?? message.data['title']?.toString();
+  final String? body = message.notification?.body ?? message.data['body']?.toString();
 
-    // If server/FCM requested a channel, respect it. Otherwise use default.
-    final String requestedChannel =
-        message.notification?.android?.channelId ??
-        message.data['android_channel_id']?.toString() ??
-        channelMessages;
+  // ✅ אם אין שום תוכן אמיתי — לא מציגים בכלל.
+  // זה מונע "NEW MESSAGE" / התראות ריקות.
+  final bool hasTitle = title != null && title.trim().isNotEmpty;
+  final bool hasBody = body != null && body.trim().isNotEmpty;
+  if (!hasTitle && !hasBody) return;
 
-    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      requestedChannel,
-      requestedChannel == channelHigh ? 'High priority chat' : 'Chat messages',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
+  // ✅ תני title נורמלי אם יש רק body
+  final String safeTitle = hasTitle ? title!.trim() : 'New message';
+  final String safeBody = hasBody ? body!.trim() : '';
 
-    final NotificationDetails details = NotificationDetails(android: androidDetails);
+  // ✅ משתמשים רק בערוצים שאת יצרת, לא בערוצים אקראיים שמגיעים מ-FCM.
+  final String rawRequestedChannel =
+      message.notification?.android?.channelId ??
+      message.data['android_channel_id']?.toString() ??
+      channelMessages;
 
-    await _local.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title,
-      body,
-      details,
-    );
-  }
+  final String channelId =
+      (rawRequestedChannel == channelHigh || rawRequestedChannel == channelMessages)
+          ? rawRequestedChannel
+          : channelMessages;
+
+  final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    channelId,
+    channelId == channelHigh ? 'High priority chat' : 'Chat messages',
+    channelDescription: channelId == channelHigh
+        ? 'High priority notifications'
+        : 'Notifications for new chat messages',
+    importance: Importance.high,
+    priority: Priority.high,
+  );
+
+  final NotificationDetails details = NotificationDetails(android: androidDetails);
+
+  // ✅ ID יציב יותר (עדיף על זמן בשניות) כדי להקטין כפילויות
+  final int notificationId =
+      (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString()).hashCode;
+
+  await _local.show(
+    notificationId,
+    safeTitle,
+    safeBody,
+    details,
+  );
+}
+
 }
