@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 class NotificationsService {
   NotificationsService._();
   static final NotificationsService instance = NotificationsService._();
@@ -126,17 +126,41 @@ Future<void> showFromRemoteMessage(RemoteMessage message) async {
   // If truly empty, don’t show (prevents "NEW MESSAGE" / empty notifications)
   if (sender.trim().isEmpty && msgText.trim().isEmpty) return;
 
+  // Optional: ignore "system" messages if your backend sends them
+  // (prevents enter/left/presence lines from triggering chatroom-open)
+  final String msgType = (message.data['type']?.toString() ?? '').toLowerCase();
+  if (msgType == 'system') return;
+
   // kind: "dm" | "group"
   final String kind = (message.data['kind']?.toString() ?? 'group').toLowerCase();
   final bool isGroup = kind == 'group';
 
-  // Title rules you asked:
-  // DM: "ZEN"
-  // Group: "ZEN (CHATROOM)"
-  final String title = isGroup ? '$sender (CHATROOM)' : sender;
-// Body without sender prefix (name already appears in title)
-final String body = msgText.trim().isEmpty ? '' : msgText;
+  // Body without sender prefix (name already appears in title)
+  final String cleanBody = msgText.trim().isEmpty ? '' : msgText.trim();
 
+  // --- "Chatroom opened" logic (4h gap) ---
+  final String roomKey = _roomKeyFrom(message, isGroup: isGroup);
+  final int nowMs = DateTime.now().millisecondsSinceEpoch;
+
+  final int? lastMs = await _getLastNotifyMs(roomKey);
+  final bool isNewChatroom = lastMs == null
+      ? true
+      : (nowMs - lastMs) >= _chatroomGap.inMilliseconds;
+
+  String title;
+  String body;
+
+  if (isGroup && isNewChatroom) {
+    // Special first notification after a long gap (Mystic-style)
+    title = 'A new chatroom has opened!';
+    body = cleanBody.isEmpty ? '' : '[new chatroom] $cleanBody';
+  } else {
+    // Normal title rules you asked:
+    // DM: "ZEN"
+    // Group: "ZEN (CHATROOM)"
+    title = isGroup ? '$sender (CHATROOM)' : sender;
+    body = cleanBody;
+  }
 
   // Channel selection
   final String channelId = isGroup ? channelGroup : channelDm;
@@ -162,8 +186,44 @@ final String body = msgText.trim().isEmpty ? '' : msgText;
     body,
     details,
   );
+
+  // Update last notification time for this room scope
+  await _setLastNotifyMs(roomKey, nowMs);
 }
 
+
+  // "Chatroom opened" threshold
+  static const Duration _chatroomGap = Duration(hours: 4);
+
+  Future<SharedPreferences> get _prefs async => SharedPreferences.getInstance();
+
+  /// Prefer per-room tracking if backend sends roomId/chatId.
+  /// Falls back to kind-only tracking.
+  String _roomKeyFrom(RemoteMessage message, {required bool isGroup}) {
+    final String roomId =
+        (message.data['roomId']?.toString() ??
+                message.data['chatId']?.toString() ??
+                message.data['dmId']?.toString() ??
+                '')
+            .trim();
+
+    if (roomId.isNotEmpty) {
+      return roomId;
+    }
+
+    // fallback: group/dm scope only
+    return isGroup ? 'group' : 'dm';
+  }
+
+  Future<int?> _getLastNotifyMs(String roomKey) async {
+    final p = await _prefs;
+    return p.getInt('last_notify_ms_$roomKey');
+  }
+
+  Future<void> _setLastNotifyMs(String roomKey, int ms) async {
+    final p = await _prefs;
+    await p.setInt('last_notify_ms_$roomKey', ms);
+  }
 
 
 }
