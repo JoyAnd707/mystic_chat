@@ -1888,6 +1888,10 @@ Future<void> _emitSystemLine(
   @override
   void initState() {
     super.initState();
+
+  // ✅ NEW: mark this room as currently open (so FG notifications are suppressed)
+  NotificationsService.instance.setActiveRoomId(widget.roomId);
+
 _wiggleCtrl = AnimationController(
   vsync: this,
   duration: const Duration(milliseconds: 420),
@@ -2001,6 +2005,10 @@ _wiggleTimer = Timer.periodic(const Duration(seconds: 2), (_) {
 
   @override
   void dispose() {
+
+
+      // ✅ NEW: leaving chat -> allow notifications again (menu/background etc.)
+  NotificationsService.instance.setActiveRoomId(null);
     _emitLeft(showInUi: false);
 
     PresenceService.I.leaveRoom(

@@ -12,6 +12,8 @@ import 'dart:ui';
 import '../firebase/firestore_chat_service.dart';
 import '../firebase/auth_service.dart';
 import '../services/presence_service.dart';
+import '../services/notifications_service.dart'; // ✅ ADD THIS
+
 // ✅ ADD THIS
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../services/image_message_service.dart';

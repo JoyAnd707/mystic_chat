@@ -1,18 +1,38 @@
 import 'dart:io';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-class NotificationsService {
+
+class NotificationsService with WidgetsBindingObserver {
   NotificationsService._();
   static final NotificationsService instance = NotificationsService._();
 
   final FlutterLocalNotificationsPlugin _local = FlutterLocalNotificationsPlugin();
 
-// Channel ids (v2 so Android actually applies new sound settings)
-static const String channelDm = 'dm_messages_v2';
-static const String channelGroup = 'group_messages_v2';
-static const String channelHigh = 'chat_high_v2';
+  // Channel ids (v2 so Android actually applies new sound settings)
+  static const String channelDm = 'dm_messages_v2';
+  static const String channelGroup = 'group_messages_v2';
+  static const String channelHigh = 'chat_high_v2';
+
+
+
+  
+
+  // ✅ NEW: runtime state for gating
+  bool _isInForeground = true;
+
+  // null => not currently inside a chat screen
+  String? _activeRoomId;
+
+  /// ✅ Call when entering/leaving a chat screen
+  void setActiveRoomId(String? roomId) {
+    final trimmed = roomId?.trim() ?? '';
+    _activeRoomId = trimmed.isEmpty ? null : trimmed;
+    debugPrint('NotificationsService | activeRoomId=$_activeRoomId');
+  }
 
 
   Future<void> init() async {
@@ -20,11 +40,32 @@ static const String channelHigh = 'chat_high_v2';
     await _createAndroidChannels();
     await _requestPermissionsIfNeeded();
 
+    // ✅ NEW: track foreground/background
+    WidgetsBinding.instance.addObserver(this);
+
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       debugPrint(
         'FG FCM | hasNotification=${message.notification != null} | data=${message.data}',
       );
-      await showFromRemoteMessage(message);
+
+      // ✅ NEW: foreground + inside the same room? -> NO notification
+      final bool shouldShow = await _shouldShowNotificationFor(message);
+      if (!shouldShow) {
+        debugPrint('FG FCM | suppressed (user is viewing this room)');
+        return;
+      }
+
+      final String kind = (message.data['kind']?.toString() ?? 'group').toLowerCase();
+final bool isGroup = kind == 'group';
+final String incomingRoomKey = _roomKeyFrom(message, isGroup: isGroup);
+
+if (_activeRoomId != null && incomingRoomKey == _activeRoomId) {
+  debugPrint('FG FCM | suppressed (user is viewing this room)');
+  return;
+}
+
+await showFromRemoteMessage(message);
+
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
@@ -48,49 +89,49 @@ static const String channelHigh = 'chat_high_v2';
     await _local.initialize(initSettings);
   }
 
-Future<void> _createAndroidChannels() async {
-  final androidPlugin = _local.resolvePlatformSpecificImplementation<
-      AndroidFlutterLocalNotificationsPlugin>();
+  Future<void> _createAndroidChannels() async {
+    final androidPlugin = _local.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
 
-  if (androidPlugin == null) return;
+    if (androidPlugin == null) return;
 
-  // file: android/app/src/main/res/raw/notification_sfx.ogg
-  const sound = RawResourceAndroidNotificationSound('notification_sfx');
+    // file: android/app/src/main/res/raw/notification_sfx.ogg
+    const sound = RawResourceAndroidNotificationSound('notification_sfx');
 
-  const AndroidNotificationChannel dm = AndroidNotificationChannel(
-    channelDm,
-    'DM messages',
-    description: 'Direct messages notifications',
-    importance: Importance.high,
-    playSound: true,
-    sound: sound,
-    enableVibration: true,
-  );
+    const AndroidNotificationChannel dm = AndroidNotificationChannel(
+      channelDm,
+      'DM messages',
+      description: 'Direct messages notifications',
+      importance: Importance.high,
+      playSound: true,
+      sound: sound,
+      enableVibration: true,
+    );
 
-  const AndroidNotificationChannel group = AndroidNotificationChannel(
-    channelGroup,
-    'Chatroom messages',
-    description: 'Group chat notifications',
-    importance: Importance.high,
-    playSound: true,
-    sound: sound,
-    enableVibration: true,
-  );
+    const AndroidNotificationChannel group = AndroidNotificationChannel(
+      channelGroup,
+      'Chatroom messages',
+      description: 'Group chat notifications',
+      importance: Importance.high,
+      playSound: true,
+      sound: sound,
+      enableVibration: true,
+    );
 
-  const AndroidNotificationChannel high = AndroidNotificationChannel(
-    channelHigh,
-    'High priority chat',
-    description: 'High priority notifications',
-    importance: Importance.high,
-    playSound: true,
-    sound: sound,
-    enableVibration: true,
-  );
+    const AndroidNotificationChannel high = AndroidNotificationChannel(
+      channelHigh,
+      'High priority chat',
+      description: 'High priority notifications',
+      importance: Importance.high,
+      playSound: true,
+      sound: sound,
+      enableVibration: true,
+    );
 
-  await androidPlugin.createNotificationChannel(dm);
-  await androidPlugin.createNotificationChannel(group);
-  await androidPlugin.createNotificationChannel(high);
-}
+    await androidPlugin.createNotificationChannel(dm);
+    await androidPlugin.createNotificationChannel(group);
+    await androidPlugin.createNotificationChannel(high);
+  }
 
   Future<void> _requestPermissionsIfNeeded() async {
     if (kIsWeb) return;
@@ -102,6 +143,8 @@ Future<void> _createAndroidChannels() async {
     );
     debugPrint('Notification permission: ${settings.authorizationStatus}');
 
+    // NOTE: On Android this API isn't really needed like iOS,
+    // but keeping it doesn't hurt.
     if (Platform.isAndroid) {
       await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
         alert: true,
@@ -111,86 +154,104 @@ Future<void> _createAndroidChannels() async {
     }
   }
 
-Future<void> showFromRemoteMessage(RemoteMessage message) async {
-  // We prefer data fields for chat formatting
-  final String sender =
-      message.data['sender']?.toString() ??
-      message.notification?.title ??
-      'New message';
+  /// ✅ NEW: single gate for "should notify?"
+  Future<bool> _shouldShowNotificationFor(RemoteMessage message) async {
+    // If not foreground -> always allow notification (this listener is FG,
+    // but keeping logic future-proof)
+    if (!_isInForeground) return true;
 
-  final String msgText =
-      message.data['body']?.toString() ??
-      message.notification?.body ??
-      '';
+    // If not inside any chat screen -> allow (Main Menu / other screens)
+    final String? active = _activeRoomId;
+    if (active == null) return true;
 
-  // If truly empty, don’t show (prevents "NEW MESSAGE" / empty notifications)
-  if (sender.trim().isEmpty && msgText.trim().isEmpty) return;
+    // Parse message kind + roomKey same way as showFromRemoteMessage
+    final String kind = (message.data['kind']?.toString() ?? 'group').toLowerCase();
+    final bool isGroup = kind == 'group';
+    final String incomingRoomKey = _roomKeyFrom(message, isGroup: isGroup);
 
-  // Optional: ignore "system" messages if your backend sends them
-  // (prevents enter/left/presence lines from triggering chatroom-open)
-  final String msgType = (message.data['type']?.toString() ?? '').toLowerCase();
-  if (msgType == 'system') return;
+    // If backend didn’t send roomId/chatId/dmId, we cannot safely suppress.
+    // (Otherwise we might suppress notifications for the wrong room.)
+    if (incomingRoomKey.trim().isEmpty) return true;
 
-  // kind: "dm" | "group"
-  final String kind = (message.data['kind']?.toString() ?? 'group').toLowerCase();
-  final bool isGroup = kind == 'group';
-
-  // Body without sender prefix (name already appears in title)
-  final String cleanBody = msgText.trim().isEmpty ? '' : msgText.trim();
-
-  // --- "Chatroom opened" logic (4h gap) ---
-  final String roomKey = _roomKeyFrom(message, isGroup: isGroup);
-  final int nowMs = DateTime.now().millisecondsSinceEpoch;
-
-  final int? lastMs = await _getLastNotifyMs(roomKey);
-  final bool isNewChatroom = lastMs == null
-      ? true
-      : (nowMs - lastMs) >= _chatroomGap.inMilliseconds;
-
-  String title;
-  String body;
-
-  if (isGroup && isNewChatroom) {
-    // Special first notification after a long gap (Mystic-style)
-    title = 'A new chatroom has opened!';
-    body = cleanBody.isEmpty ? '' : '[new chatroom] $cleanBody';
-  } else {
-    // Normal title rules you asked:
-    // DM: "ZEN"
-    // Group: "ZEN (CHATROOM)"
-    title = isGroup ? '$sender (CHATROOM)' : sender;
-    body = cleanBody;
+    // If user is currently viewing THIS room -> suppress
+    return incomingRoomKey != active;
   }
 
-  // Channel selection
-  final String channelId = isGroup ? channelGroup : channelDm;
+  Future<void> showFromRemoteMessage(RemoteMessage message) async {
+    // We prefer data fields for chat formatting
+    final String sender =
+        message.data['sender']?.toString() ??
+        message.notification?.title ??
+        'New message';
 
-  final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-    channelId,
-    isGroup ? 'Chatroom messages' : 'DM messages',
-    channelDescription:
-        isGroup ? 'Group chat notifications' : 'Direct messages notifications',
-    importance: Importance.high,
-    priority: Priority.high,
-  );
+    final String msgText =
+        message.data['body']?.toString() ??
+        message.notification?.body ??
+        '';
 
-  final NotificationDetails details = NotificationDetails(android: androidDetails);
+    // If truly empty, don’t show (prevents "NEW MESSAGE" / empty notifications)
+    if (sender.trim().isEmpty && msgText.trim().isEmpty) return;
 
-  // Stable-ish id to reduce accidental duplicates
-  final int notificationId =
-      (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString()).hashCode;
+    // Optional: ignore "system" messages if your backend sends them
+    final String msgType = (message.data['type']?.toString() ?? '').toLowerCase();
+    if (msgType == 'system') return;
 
-  await _local.show(
-    notificationId,
-    title,
-    body,
-    details,
-  );
+    // kind: "dm" | "group"
+    final String kind = (message.data['kind']?.toString() ?? 'group').toLowerCase();
+    final bool isGroup = kind == 'group';
 
-  // Update last notification time for this room scope
-  await _setLastNotifyMs(roomKey, nowMs);
-}
+    // Body without sender prefix (name already appears in title)
+    final String cleanBody = msgText.trim().isEmpty ? '' : msgText.trim();
 
+    // --- "Chatroom opened" logic (4h gap) ---
+    final String roomKey = _roomKeyFrom(message, isGroup: isGroup);
+    final int nowMs = DateTime.now().millisecondsSinceEpoch;
+
+    final int? lastMs = await _getLastNotifyMs(roomKey);
+    final bool isNewChatroom =
+        lastMs == null ? true : (nowMs - lastMs) >= _chatroomGap.inMilliseconds;
+
+    String title;
+    String body;
+
+    if (isGroup && isNewChatroom) {
+      title = 'A new chatroom has opened!';
+      body = cleanBody.isEmpty ? '' : '[new chatroom] $cleanBody';
+    } else {
+      title = isGroup ? '$sender (CHATROOM)' : sender;
+      body = cleanBody;
+    }
+
+    // Channel selection
+    final String channelId = isGroup ? channelGroup : channelDm;
+
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      channelId,
+      isGroup ? 'Chatroom messages' : 'DM messages',
+      channelDescription:
+          isGroup ? 'Group chat notifications' : 'Direct messages notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+
+    final NotificationDetails details =
+        NotificationDetails(android: androidDetails);
+
+    // Stable-ish id to reduce accidental duplicates
+    final int notificationId =
+        (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString())
+            .hashCode;
+
+    await _local.show(
+      notificationId,
+      title,
+      body,
+      details,
+    );
+
+    // Update last notification time for this room scope
+    await _setLastNotifyMs(roomKey, nowMs);
+  }
 
   // "Chatroom opened" threshold
   static const Duration _chatroomGap = Duration(hours: 4);
@@ -224,6 +285,4 @@ Future<void> showFromRemoteMessage(RemoteMessage message) async {
     final p = await _prefs;
     await p.setInt('last_notify_ms_$roomKey', ms);
   }
-
-
 }
