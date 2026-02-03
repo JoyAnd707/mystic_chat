@@ -2341,78 +2341,88 @@ if (mounted) {
     );
   }
 
-  Future<void> _sendMessage() async {
-    final text = _controller.text.trim();
-    final bool triggerCreepy = _shouldTriggerCreepyEgg(text);
+Future<void> _sendMessage() async {
+  final text = _controller.text.trim();
+  final bool triggerCreepy = _shouldTriggerCreepyEgg(text);
 
-    if (text.isEmpty) return;
+  if (text.isEmpty) return;
 
-    final bool triggerEgg = _shouldTrigger707Egg(text);
+  // ✅ IMPORTANT: remember if keyboard was actually open
+  final bool hadKeyboardFocus = _focusNode.hasFocus;
 
-    final BubbleTemplate templateForThisMessage = _selectedTemplate;
-    final BubbleDecor decorForThisMessage = _selectedDecor;
+  final bool triggerEgg = _shouldTrigger707Egg(text);
 
-    final bool hasEng = _containsEnglishLetters(text);
-    final bool hasHeb = _containsHebrewLetters(text);
+  final BubbleTemplate templateForThisMessage = _selectedTemplate;
+  final BubbleDecor decorForThisMessage = _selectedDecor;
 
-    // ✅ Choose one PAIR for the whole message
-    final int pairIndex = _rng.nextInt(_pairEn.length);
+  final bool hasEng = _containsEnglishLetters(text);
+  final bool hasHeb = _containsHebrewLetters(text);
 
-    // ✅ For now we store a single fontFamily string (backwards-compatible):
-    // - Hebrew-only => store HE pair font
-    // - Otherwise  => store EN pair font (covers English-only + mixed)
-    final String fontFamilyForThisMessage =
-        (hasHeb && !hasEng) ? _pairHe[pairIndex] : _pairEn[pairIndex];
+  // ✅ Choose one PAIR for the whole message
+  final int pairIndex = _rng.nextInt(_pairEn.length);
 
+  // ✅ For now we store a single fontFamily string (backwards-compatible):
+  // - Hebrew-only => store HE pair font
+  // - Otherwise  => store EN pair font (covers English-only + mixed)
+  final String fontFamilyForThisMessage =
+      (hasHeb && !hasEng) ? _pairHe[pairIndex] : _pairEn[pairIndex];
 
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    _pendingScrollToBottomTs = ts;
+  final ts = DateTime.now().millisecondsSinceEpoch;
+  _pendingScrollToBottomTs = ts;
 
-    final ChatMessage? reply = _replyTarget;
-    final String? replyToId = reply?.id;
-    final String? replyToSenderId = reply?.senderId;
-    final String? replyToText = reply?.text;
+  final ChatMessage? reply = _replyTarget;
+  final String? replyToId = reply?.id;
+  final String? replyToSenderId = reply?.senderId;
+  final String? replyToText = reply?.text;
 
-    setState(() {
-      _controller.clear();
+  setState(() {
+    _controller.clear();
 
-      _isTyping = true;
+    // ✅ If user sent while keyboard is CLOSED (preview), keep it closed.
+    _isTyping = hadKeyboardFocus;
 
-      _selectedTemplate = BubbleTemplate.normal;
-      _selectedDecor = BubbleDecor.none;
+    _selectedTemplate = BubbleTemplate.normal;
+    _selectedDecor = BubbleDecor.none;
 
-      _replyTarget = null;
-    });
+    _replyTarget = null;
+  });
 
-    _sendTypingToFirestore(false);
+  _sendTypingToFirestore(false);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusNode.requestFocus();
-    });
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
 
-    await FirestoreChatService.sendTextMessage(
-      roomId: widget.roomId,
-      senderId: widget.currentUserId,
-      text: text,
-      ts: ts,
-      bubbleTemplate: templateForThisMessage.name,
-      decor: decorForThisMessage.name,
-      fontFamily: fontFamilyForThisMessage,
-      replyToMessageId: replyToId,
-      replyToSenderId: replyToSenderId,
-      replyToText: replyToText,
-    );
-
-    Sfx.I.playSend();
-
-    if (triggerEgg) {
-      Sfx.I.play707VoiceLine();
+    if (hadKeyboardFocus) {
+      _focusNode.requestFocus(); // keep open only if it was open
+    } else {
+      _focusNode.unfocus(); // make sure it stays closed
     }
+  });
 
-    if (triggerCreepy) {
-      _playCreepyEggFx();
-    }
+  await FirestoreChatService.sendTextMessage(
+    roomId: widget.roomId,
+    senderId: widget.currentUserId,
+    text: text,
+    ts: ts,
+    bubbleTemplate: templateForThisMessage.name,
+    decor: decorForThisMessage.name,
+    fontFamily: fontFamilyForThisMessage,
+    replyToMessageId: replyToId,
+    replyToSenderId: replyToSenderId,
+    replyToText: replyToText,
+  );
+
+  Sfx.I.playSend();
+
+  if (triggerEgg) {
+    Sfx.I.play707VoiceLine();
   }
+
+  if (triggerCreepy) {
+    _playCreepyEggFx();
+  }
+}
+
 
   void _onTapScrollToBottomButton() {
     if (mounted) {

@@ -108,7 +108,7 @@ class _BottomBorderBarState extends State<BottomBorderBar> {
     return RegExp(r'[\u0590-\u05FF\u0600-\u06FF]').hasMatch(s);
   }
 
-  // ✅ NEW: whether there is at least 1 real char to send
+  // ✅ whether there is at least 1 real char to send
   bool _canSend = false;
 
   void _syncCanSend() {
@@ -138,23 +138,25 @@ class _BottomBorderBarState extends State<BottomBorderBar> {
 
     double s(double v) => v * widget.uiScale;
 
+    // ✅ NEW: show preview bar if there is text even when keyboard is closed
+    final bool showTypingUi = widget.isTyping || _canSend;
+
     return Container(
       height: widget.height,
       width: double.infinity,
       color: Colors.black,
       padding: EdgeInsets.only(bottom: s(10)),
-      child: widget.isTyping ? _typingBar(s) : _typeMessageBar(s),
+      child: showTypingUi ? _typingOrPreviewBar(s) : _typeMessageBar(s),
     );
   }
 
   // =====================
-  // BEFORE TYPING
+  // BEFORE TYPING (no text)
   // =====================
   Widget _typeMessageBar(double Function(double) s) {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Type Message button
         GestureDetector(
           onTap: widget.onTapTypeMessage,
           child: SizedBox(
@@ -171,51 +173,52 @@ class _BottomBorderBarState extends State<BottomBorderBar> {
     );
   }
 
-Widget _inactiveSendButton({
-  required bool left,
-  required double Function(double) s,
-}) {
-  return Positioned(
-    left: left ? s(BottomBorderBar._sendInset) : null,
-    right: left ? null : s(BottomBorderBar._sendInset),
-    child: Transform.translate(
-      offset: Offset(0, s(BottomBorderBar._sendDown)),
-      child: IgnorePointer(
-        ignoring: true,
-        child: SizedBox(
-          width: s(BottomBorderBar._sendBoxSize),
-          height: s(BottomBorderBar._sendBoxSize),
-          child: Transform.scale(
-            scale: BottomBorderBar._sendScale,
-            child: left
-                ? Transform.flip(
-                    flipX: true,
-                    child: Image.asset(
+  Widget _inactiveSendButton({
+    required bool left,
+    required double Function(double) s,
+  }) {
+    return Positioned(
+      left: left ? s(BottomBorderBar._sendInset) : null,
+      right: left ? null : s(BottomBorderBar._sendInset),
+      child: Transform.translate(
+        offset: Offset(0, s(BottomBorderBar._sendDown)),
+        child: IgnorePointer(
+          ignoring: true,
+          child: SizedBox(
+            width: s(BottomBorderBar._sendBoxSize),
+            height: s(BottomBorderBar._sendBoxSize),
+            child: Transform.scale(
+              scale: BottomBorderBar._sendScale,
+              child: left
+                  ? Transform.flip(
+                      flipX: true,
+                      child: Image.asset(
+                        'assets/ui/SendMessageButton.png',
+                        fit: BoxFit.contain,
+                      ),
+                    )
+                  : Image.asset(
                       'assets/ui/SendMessageButton.png',
                       fit: BoxFit.contain,
                     ),
-                  )
-                : Image.asset(
-                    'assets/ui/SendMessageButton.png',
-                    fit: BoxFit.contain,
-                  ),
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
-
+    );
+  }
 
   // =====================
-  // TYPING MODE
+  // TYPING MODE OR PREVIEW MODE
   // =====================
-  Widget _typingBar(double Function(double) s) {
+  Widget _typingOrPreviewBar(double Function(double) s) {
+    // ✅ if keyboard is closed but there is text => PREVIEW mode
+    final bool previewMode = !widget.isTyping && _canSend;
+
     void scrollTypeFieldToEndForDirection(TextDirection dir) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!_typeFieldScrollController.hasClients) return;
 
-        // ב-LTR "סוף" הוא max, ב-RTL "סוף" מבחינת מה שרוצים לראות הוא min
         final target = (dir == TextDirection.rtl)
             ? _typeFieldScrollController.position.minScrollExtent
             : _typeFieldScrollController.position.maxScrollExtent;
@@ -237,6 +240,16 @@ Widget _inactiveSendButton({
       // ✅ canSend updates via controller listener (_syncCanSend)
     }
 
+    // ✅ in preview mode we still want correct direction for display
+    if (previewMode) {
+      final txt = widget.controller.text;
+      final nextDir = _containsRtl(txt) ? TextDirection.rtl : TextDirection.ltr;
+      if (nextDir != _inputDirection) {
+        // safe: do it without setState storm
+        _inputDirection = nextDir;
+      }
+    }
+
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -248,99 +261,127 @@ Widget _inactiveSendButton({
                 'assets/ui/TypeBar.png',
                 fit: BoxFit.fitWidth,
               ),
+
+              // ✅ Tap anywhere on the bar to open keyboard (even in preview)
               Positioned.fill(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: s(18),
-                    vertical: s(8),
-                  ),
-                  child: TextField(
-                    controller: widget.controller,
-                    focusNode: widget.focusNode,
-                    maxLines: 1,
-                    scrollController: _typeFieldScrollController,
-
-                    // ✅ זה החלק שעושה את ההבדל בעברית
-                    textDirection: _inputDirection,
-                    textAlign: _inputDirection == TextDirection.rtl
-                        ? TextAlign.right
-                        : TextAlign.left,
-
-                    textAlignVertical: TextAlignVertical.center,
-                    onChanged: handleChanged,
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: s(14),
-                      height: 1.2,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: widget.onTapTypeMessage,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: s(18),
+                      vertical: s(8),
                     ),
-                    cursorColor: Colors.black,
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                      hintText: 'Type...',
-                      hintStyle: TextStyle(
-                        color: Colors.black54,
-                        fontSize: s(14),
-                        height: 1.2,
-                      ),
-                      hintTextDirection: TextDirection.ltr, // ✅ תמיד LTR
-                    ),
+
+                    // ✅ Preview: show text but don't require focus/keyboard
+                    // ✅ Typing: normal TextField
+                    child: previewMode
+                        ? Align(
+                            alignment: _inputDirection == TextDirection.rtl
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Text(
+                              widget.controller.text,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textDirection: _inputDirection,
+                              textAlign: _inputDirection == TextDirection.rtl
+                                  ? TextAlign.right
+                                  : TextAlign.left,
+                      style: TextStyle(
+  color: Colors.black, // ✅ תואם ל-TextField
+  fontSize: s(14),
+  height: 1.2,
+),
+
+                            ),
+                          )
+                        : TextField(
+                            controller: widget.controller,
+                            focusNode: widget.focusNode,
+                            maxLines: 1,
+                            scrollController: _typeFieldScrollController,
+                            textDirection: _inputDirection,
+                            textAlign: _inputDirection == TextDirection.rtl
+                                ? TextAlign.right
+                                : TextAlign.left,
+                            textAlignVertical: TextAlignVertical.center,
+                            onChanged: handleChanged,
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontSize: s(14),
+                              height: 1.2,
+                            ),
+                            cursorColor: Colors.black,
+                            decoration: InputDecoration(
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                              hintText: 'Type...',
+                              hintStyle: TextStyle(
+                                color: Colors.black54,
+                                fontSize: s(14),
+                                height: 1.2,
+                              ),
+                              hintTextDirection: TextDirection.ltr,
+                            ),
+                          ),
                   ),
                 ),
               ),
             ],
           ),
         ),
+
+        // ✅ Send buttons are now usable in preview too
         _activeSendButton(left: true, s: s),
         _activeSendButton(left: false, s: s),
       ],
     );
   }
 
-Widget _activeSendButton({
-  required bool left,
-  required double Function(double) s,
-}) {
-  final String asset = _canSend
-      ? 'assets/ui/SendMessageButtonActive.png'
-      : 'assets/ui/SendMessageButton.png';
+  Widget _activeSendButton({
+    required bool left,
+    required double Function(double) s,
+  }) {
+    final String asset = _canSend
+        ? 'assets/ui/SendMessageButtonActive.png'
+        : 'assets/ui/SendMessageButton.png';
 
-  return Positioned(
-    left: left ? s(BottomBorderBar._sendInset) : null,
-    right: left ? null : s(BottomBorderBar._sendInset),
-    child: Transform.translate(
-      offset: Offset(0, s(BottomBorderBar._sendDown)),
-      child: GestureDetector(
-        onTap: () {
-          if (!_canSend) return; // ✅ block empty/whitespace-only
-          widget.onSend();
-        },
-        behavior: HitTestBehavior.opaque,
-        child: SizedBox(
-          width: s(BottomBorderBar._sendBoxSize),
-          height: s(BottomBorderBar._sendBoxSize),
-          child: Transform.scale(
-            scale: BottomBorderBar._sendScale,
-            child: left
-                ? Transform.flip(
-                    flipX: true,
-                    child: Image.asset(
+    return Positioned(
+      left: left ? s(BottomBorderBar._sendInset) : null,
+      right: left ? null : s(BottomBorderBar._sendInset),
+      child: Transform.translate(
+        offset: Offset(0, s(BottomBorderBar._sendDown)),
+        child: GestureDetector(
+          onTap: () {
+            if (!_canSend) return;
+            widget.onSend();
+          },
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: s(BottomBorderBar._sendBoxSize),
+            height: s(BottomBorderBar._sendBoxSize),
+            child: Transform.scale(
+              scale: BottomBorderBar._sendScale,
+              child: left
+                  ? Transform.flip(
+                      flipX: true,
+                      child: Image.asset(
+                        asset,
+                        fit: BoxFit.contain,
+                      ),
+                    )
+                  : Image.asset(
                       asset,
                       fit: BoxFit.contain,
                     ),
-                  )
-                : Image.asset(
-                    asset,
-                    fit: BoxFit.contain,
-                  ),
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
-
+    );
+  }
 }
 
 
