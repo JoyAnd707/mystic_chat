@@ -1815,7 +1815,7 @@ if (decor == BubbleDecor.flowersRibbon) ...[
     // ✅ Reserve vertical space so the list spacing stays like the old "time-under-bubble" layout.
 // This compensates for the fact that Positioned() does NOT affect Stack height.
 final double reservedTimeHeight =
-    (showTime && tLabel.isNotEmpty) ? (22 * uiScale) : 0.0;
+    (showTime && tLabel.isNotEmpty) ? (5 * uiScale) : 0.0;
 
 final bubbleWithName = Column(
   mainAxisSize: MainAxisSize.min,
@@ -1900,11 +1900,13 @@ Text(
     ],
   );
 }
+// ✅ TUNING: baseline gap between messages (Group Chat density)
+final double rowBottomGap = 2 * uiScale; // was 6 * uiScale (try 2.5–4)
+
 // ✅ אחרים (isMe=false): avatar + time on the LEFT, bubble on the RIGHT
 if (!isMe) {
   return Padding(
-    padding: EdgeInsets.only(bottom: reservedTimeHeight + 6 * uiScale),
-
+    padding: EdgeInsets.only(bottom: reservedTimeHeight + rowBottomGap),
     child: Stack(
       clipBehavior: Clip.none,
       children: [
@@ -1915,12 +1917,35 @@ if (!isMe) {
         Positioned(
           left: 0,
           top: 0,
-          child: avatarWithTime(rightSide: false), // ✅ USE IT
+          child: avatarWithTime(rightSide: false),
         ),
       ],
     ),
   );
 }
+
+// ✅ אני (isMe=true): avatar + time on the RIGHT, bubble on the LEFT
+return Padding(
+  padding: EdgeInsets.only(bottom: reservedTimeHeight + rowBottomGap),
+  child: Stack(
+    clipBehavior: Clip.none,
+    children: [
+      Padding(
+        padding: EdgeInsets.only(right: avatarSize + gap),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: bubbleWithName,
+        ),
+      ),
+      Positioned(
+        right: 0,
+        top: 0,
+        child: avatarWithTime(rightSide: true),
+      ),
+    ],
+  ),
+);
+
 
 // ✅ אני (isMe=true): avatar + time on the RIGHT, bubble on the LEFT
 return Padding(
