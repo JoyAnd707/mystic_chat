@@ -968,15 +968,16 @@ String _maybeAvoidOrphanLastLine({
   )..layout(maxWidth: maxTextWidth);
 
   final lines = tp.computeLineMetrics();
-  if (lines.length <= 1) return text; // אין wrap בכלל, לא צריך כלום
+  if (lines.length <= 1) return text; // אין wrap בכלל
+
+  // ✅ NEW: אל תנסה "לתקן יתום" כשיש רק 2 שורות.
+  // זה המקרה שמייצר שורה ראשונה קצרה כמו אצל Adi.
+  if (lines.length == 2) return text;
 
   final last = lines.last;
   final bool lastLineIsOrphan = last.width < (maxTextWidth * orphanWidthFactor);
 
-  if (!lastLineIsOrphan) {
-    // השורה האחרונה לא קצרה מדי => לא עושים NBSP שמכריח wrap מוקדם
-    return text;
-  }
+  if (!lastLineIsOrphan) return text;
 
   // ✅ כן יתום -> נדביק רק את שתי המילים האחרונות
   final lastSpace = raw.lastIndexOf(' ');
@@ -986,6 +987,7 @@ String _maybeAvoidOrphanLastLine({
   final after = raw.substring(lastSpace + 1);
   return '$before\u00A0$after';
 }
+
 
 
 // ✅ NEW: force wrap by WORD COUNT (max N words per line)
@@ -1300,14 +1302,13 @@ final bubbleInner = Padding(
   ),
 );
 
-// ✅ Mystic-like minimum width so short messages don't wrap weirdly
-// ✅ PLUS: require at least 3 words on the first line before wrapping down
-final double floorMinBubbleWidth = 18 * uiScale; // רצפה מינימלית (גם למילה אחת)
+// ✅ Mystic-like minimum width so short messages don't shrink too much
+final double floorMinBubbleWidth = 18 * uiScale;
 
 // Horizontal padding inside bubbleInner: 10 left + 10 right
 final double bubbleInnerHPadMin = 20 * uiScale;
 
-// Use the SAME text style as the message Text (so measurement matches reality)
+// Use SAME style as the actual Text (so measurement matches reality)
 final TextStyle measureStyleForMin = TextStyle(
   fontFamily: fontFamily,
   fontFamilyFallback: [
@@ -1320,10 +1321,16 @@ final TextStyle measureStyleForMin = TextStyle(
   letterSpacing: -0.15 * uiScale,
 );
 
-// ✅ Minimum width based on the first 3 words (so it doesn't wrap too early)
+// Count words (based on the original text, not displayText)
+final String _rawForWords = text.trim();
+final int wordCount = _rawForWords.isEmpty
+    ? 0
+    : _rawForWords.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+
+// Measure a “minimum” width based on the first 3 words
 final double minBy3Words = _minBubbleWidthForFirstWords(
   context: context,
-  text: softText, // חשוב: אותו הטקסט אחרי _softWrapLongTokens
+  text: text,
   style: measureStyleForMin,
   uiScale: uiScale,
   minWords: 3,
@@ -1331,10 +1338,18 @@ final double minBy3Words = _minBubbleWidthForFirstWords(
   horizontalPadding: bubbleInnerHPadMin,
 );
 
-// Final min width = max(floor, 3-words width) and never above maxBubbleWidth
+// ✅ NEW: for longer messages, force a wider minimum (prevents “Not even worth” width)
+// tweak 0.72–0.82 to taste (0.76 is a good Mystic-ish default)
+final double minByPercent =
+    (wordCount >= 6) ? (maxBubbleWidth * 0.76) : 0.0;
+
+// Final min width = max(floor, 3-words width, percent floor) and never above maxBubbleWidth
 final double minBubbleWidth = math.min(
   maxBubbleWidth,
-  math.max(floorMinBubbleWidth, minBy3Words),
+  math.max(
+    floorMinBubbleWidth,
+    math.max(minBy3Words, minByPercent),
+  ),
 );
 
 
