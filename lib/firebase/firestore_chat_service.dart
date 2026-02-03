@@ -37,6 +37,7 @@ class FirestoreChatService {
     required int ts,
     required String bubbleTemplate,
     required String decor,
+    
     String? fontFamily,
 
     // ✅ must match ChatScreenState named params
