@@ -22,7 +22,7 @@ class NotificationsService with WidgetsBindingObserver {
   
 
   // ✅ NEW: runtime state for gating
-  bool _isInForeground = true;
+  final bool _isInForeground = true;
 
   // null => not currently inside a chat screen
   String? _activeRoomId;

@@ -108,7 +108,7 @@ class _BottomBorderBarState extends State<BottomBorderBar> {
     return RegExp(r'[\u0590-\u05FF\u0600-\u06FF]').hasMatch(s);
   }
 
-  // ✅ whether there is at least 1 real char to send
+  // ✅ NEW: whether there is at least 1 real char to send
   bool _canSend = false;
 
   void _syncCanSend() {
@@ -138,25 +138,23 @@ class _BottomBorderBarState extends State<BottomBorderBar> {
 
     double s(double v) => v * widget.uiScale;
 
-    // ✅ NEW: show preview bar if there is text even when keyboard is closed
-    final bool showTypingUi = widget.isTyping || _canSend;
-
     return Container(
       height: widget.height,
       width: double.infinity,
       color: Colors.black,
       padding: EdgeInsets.only(bottom: s(10)),
-      child: showTypingUi ? _typingOrPreviewBar(s) : _typeMessageBar(s),
+      child: widget.isTyping ? _typingBar(s) : _typeMessageBar(s),
     );
   }
 
   // =====================
-  // BEFORE TYPING (no text)
+  // BEFORE TYPING
   // =====================
   Widget _typeMessageBar(double Function(double) s) {
     return Stack(
       alignment: Alignment.center,
       children: [
+        // Type Message button
         GestureDetector(
           onTap: widget.onTapTypeMessage,
           child: SizedBox(
@@ -173,52 +171,51 @@ class _BottomBorderBarState extends State<BottomBorderBar> {
     );
   }
 
-  Widget _inactiveSendButton({
-    required bool left,
-    required double Function(double) s,
-  }) {
-    return Positioned(
-      left: left ? s(BottomBorderBar._sendInset) : null,
-      right: left ? null : s(BottomBorderBar._sendInset),
-      child: Transform.translate(
-        offset: Offset(0, s(BottomBorderBar._sendDown)),
-        child: IgnorePointer(
-          ignoring: true,
-          child: SizedBox(
-            width: s(BottomBorderBar._sendBoxSize),
-            height: s(BottomBorderBar._sendBoxSize),
-            child: Transform.scale(
-              scale: BottomBorderBar._sendScale,
-              child: left
-                  ? Transform.flip(
-                      flipX: true,
-                      child: Image.asset(
-                        'assets/ui/SendMessageButton.png',
-                        fit: BoxFit.contain,
-                      ),
-                    )
-                  : Image.asset(
+Widget _inactiveSendButton({
+  required bool left,
+  required double Function(double) s,
+}) {
+  return Positioned(
+    left: left ? s(BottomBorderBar._sendInset) : null,
+    right: left ? null : s(BottomBorderBar._sendInset),
+    child: Transform.translate(
+      offset: Offset(0, s(BottomBorderBar._sendDown)),
+      child: IgnorePointer(
+        ignoring: true,
+        child: SizedBox(
+          width: s(BottomBorderBar._sendBoxSize),
+          height: s(BottomBorderBar._sendBoxSize),
+          child: Transform.scale(
+            scale: BottomBorderBar._sendScale,
+            child: left
+                ? Transform.flip(
+                    flipX: true,
+                    child: Image.asset(
                       'assets/ui/SendMessageButton.png',
                       fit: BoxFit.contain,
                     ),
-            ),
+                  )
+                : Image.asset(
+                    'assets/ui/SendMessageButton.png',
+                    fit: BoxFit.contain,
+                  ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   // =====================
-  // TYPING MODE OR PREVIEW MODE
+  // TYPING MODE
   // =====================
-  Widget _typingOrPreviewBar(double Function(double) s) {
-    // ✅ if keyboard is closed but there is text => PREVIEW mode
-    final bool previewMode = !widget.isTyping && _canSend;
-
+  Widget _typingBar(double Function(double) s) {
     void scrollTypeFieldToEndForDirection(TextDirection dir) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!_typeFieldScrollController.hasClients) return;
 
+        // ב-LTR "סוף" הוא max, ב-RTL "סוף" מבחינת מה שרוצים לראות הוא min
         final target = (dir == TextDirection.rtl)
             ? _typeFieldScrollController.position.minScrollExtent
             : _typeFieldScrollController.position.maxScrollExtent;
@@ -240,16 +237,6 @@ class _BottomBorderBarState extends State<BottomBorderBar> {
       // ✅ canSend updates via controller listener (_syncCanSend)
     }
 
-    // ✅ in preview mode we still want correct direction for display
-    if (previewMode) {
-      final txt = widget.controller.text;
-      final nextDir = _containsRtl(txt) ? TextDirection.rtl : TextDirection.ltr;
-      if (nextDir != _inputDirection) {
-        // safe: do it without setState storm
-        _inputDirection = nextDir;
-      }
-    }
-
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -261,127 +248,99 @@ class _BottomBorderBarState extends State<BottomBorderBar> {
                 'assets/ui/TypeBar.png',
                 fit: BoxFit.fitWidth,
               ),
-
-              // ✅ Tap anywhere on the bar to open keyboard (even in preview)
               Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: widget.onTapTypeMessage,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: s(18),
-                      vertical: s(8),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: s(18),
+                    vertical: s(8),
+                  ),
+                  child: TextField(
+                    controller: widget.controller,
+                    focusNode: widget.focusNode,
+                    maxLines: 1,
+                    scrollController: _typeFieldScrollController,
+
+                    // ✅ זה החלק שעושה את ההבדל בעברית
+                    textDirection: _inputDirection,
+                    textAlign: _inputDirection == TextDirection.rtl
+                        ? TextAlign.right
+                        : TextAlign.left,
+
+                    textAlignVertical: TextAlignVertical.center,
+                    onChanged: handleChanged,
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: s(14),
+                      height: 1.2,
                     ),
-
-                    // ✅ Preview: show text but don't require focus/keyboard
-                    // ✅ Typing: normal TextField
-                    child: previewMode
-                        ? Align(
-                            alignment: _inputDirection == TextDirection.rtl
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
-                            child: Text(
-                              widget.controller.text,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textDirection: _inputDirection,
-                              textAlign: _inputDirection == TextDirection.rtl
-                                  ? TextAlign.right
-                                  : TextAlign.left,
-                      style: TextStyle(
-  color: Colors.black, // ✅ תואם ל-TextField
-  fontSize: s(14),
-  height: 1.2,
-),
-
-                            ),
-                          )
-                        : TextField(
-                            controller: widget.controller,
-                            focusNode: widget.focusNode,
-                            maxLines: 1,
-                            scrollController: _typeFieldScrollController,
-                            textDirection: _inputDirection,
-                            textAlign: _inputDirection == TextDirection.rtl
-                                ? TextAlign.right
-                                : TextAlign.left,
-                            textAlignVertical: TextAlignVertical.center,
-                            onChanged: handleChanged,
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: s(14),
-                              height: 1.2,
-                            ),
-                            cursorColor: Colors.black,
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
-                              hintText: 'Type...',
-                              hintStyle: TextStyle(
-                                color: Colors.black54,
-                                fontSize: s(14),
-                                height: 1.2,
-                              ),
-                              hintTextDirection: TextDirection.ltr,
-                            ),
-                          ),
+                    cursorColor: Colors.black,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: 'Type...',
+                      hintStyle: TextStyle(
+                        color: Colors.black54,
+                        fontSize: s(14),
+                        height: 1.2,
+                      ),
+                      hintTextDirection: TextDirection.ltr, // ✅ תמיד LTR
+                    ),
                   ),
                 ),
               ),
             ],
           ),
         ),
-
-        // ✅ Send buttons are now usable in preview too
         _activeSendButton(left: true, s: s),
         _activeSendButton(left: false, s: s),
       ],
     );
   }
 
-  Widget _activeSendButton({
-    required bool left,
-    required double Function(double) s,
-  }) {
-    final String asset = _canSend
-        ? 'assets/ui/SendMessageButtonActive.png'
-        : 'assets/ui/SendMessageButton.png';
+Widget _activeSendButton({
+  required bool left,
+  required double Function(double) s,
+}) {
+  final String asset = _canSend
+      ? 'assets/ui/SendMessageButtonActive.png'
+      : 'assets/ui/SendMessageButton.png';
 
-    return Positioned(
-      left: left ? s(BottomBorderBar._sendInset) : null,
-      right: left ? null : s(BottomBorderBar._sendInset),
-      child: Transform.translate(
-        offset: Offset(0, s(BottomBorderBar._sendDown)),
-        child: GestureDetector(
-          onTap: () {
-            if (!_canSend) return;
-            widget.onSend();
-          },
-          behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            width: s(BottomBorderBar._sendBoxSize),
-            height: s(BottomBorderBar._sendBoxSize),
-            child: Transform.scale(
-              scale: BottomBorderBar._sendScale,
-              child: left
-                  ? Transform.flip(
-                      flipX: true,
-                      child: Image.asset(
-                        asset,
-                        fit: BoxFit.contain,
-                      ),
-                    )
-                  : Image.asset(
+  return Positioned(
+    left: left ? s(BottomBorderBar._sendInset) : null,
+    right: left ? null : s(BottomBorderBar._sendInset),
+    child: Transform.translate(
+      offset: Offset(0, s(BottomBorderBar._sendDown)),
+      child: GestureDetector(
+        onTap: () {
+          if (!_canSend) return; // ✅ block empty/whitespace-only
+          widget.onSend();
+        },
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: s(BottomBorderBar._sendBoxSize),
+          height: s(BottomBorderBar._sendBoxSize),
+          child: Transform.scale(
+            scale: BottomBorderBar._sendScale,
+            child: left
+                ? Transform.flip(
+                    flipX: true,
+                    child: Image.asset(
                       asset,
                       fit: BoxFit.contain,
                     ),
-            ),
+                  )
+                : Image.asset(
+                    asset,
+                    fit: BoxFit.contain,
+                  ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 }
 
 
@@ -987,27 +946,47 @@ String _softWrapLongTokens(String s) {
     (m) => '${m.group(1)}$zwsp',
   );
 }
-String _avoidOrphanLastWord(String s) {
-  // עובד גם אם יש כבר '\n' (עובר שורה-שורה)
-  final lines = s.split('\n');
-  final out = <String>[];
+String _maybeAvoidOrphanLastLine({
+  required BuildContext context,
+  required String text,
+  required TextStyle style,
+  required double maxTextWidth,
+  double orphanWidthFactor = 0.42, // כמה "קצר" נחשב יתום (0.35–0.50 זה טווח טוב)
+}) {
+  final raw = text.trim();
+  if (raw.isEmpty) return text;
 
-  for (final line in lines) {
-    final trimmed = line.trimRight();
-    final idx = trimmed.lastIndexOf(' ');
-    if (idx <= 0) {
-      out.add(line);
-      continue;
-    }
+  // חייבים לפחות 2 מילים כדי להדביק "2 מילים אחרונות"
+  final parts = raw.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  if (parts.length < 2) return text;
 
-    // החלף רק את הרווח האחרון ב-NBSP כדי ששתי המילים האחרונות יישארו יחד
-    final before = trimmed.substring(0, idx);
-    final after = trimmed.substring(idx + 1);
-    out.add('$before\u00A0$after');
+  // מודדים כמה שורות יוצאות בפועל ברוחב הנתון
+  final tp = TextPainter(
+    text: TextSpan(text: raw, style: style),
+    textDirection: Directionality.of(context),
+    maxLines: null,
+  )..layout(maxWidth: maxTextWidth);
+
+  final lines = tp.computeLineMetrics();
+  if (lines.length <= 1) return text; // אין wrap בכלל, לא צריך כלום
+
+  final last = lines.last;
+  final bool lastLineIsOrphan = last.width < (maxTextWidth * orphanWidthFactor);
+
+  if (!lastLineIsOrphan) {
+    // השורה האחרונה לא קצרה מדי => לא עושים NBSP שמכריח wrap מוקדם
+    return text;
   }
 
-  return out.join('\n');
+  // ✅ כן יתום -> נדביק רק את שתי המילים האחרונות
+  final lastSpace = raw.lastIndexOf(' ');
+  if (lastSpace <= 0) return text;
+
+  final before = raw.substring(0, lastSpace);
+  final after = raw.substring(lastSpace + 1);
+  return '$before\u00A0$after';
 }
+
 
 // ✅ NEW: force wrap by WORD COUNT (max N words per line)
 String _wrapByWordCount(String s, {int maxWordsPerLine = 5}) {
@@ -1089,7 +1068,38 @@ final double maxBubbleWidth = math.min(hardCap, mysticMax);
     const String cornerStarsRightAsset =
         'assets/decors/TextBubble4CornerStarsRightpng.png';
 
-final String displayText = _avoidOrphanLastWord(_softWrapLongTokens(text));
+// קודם כל: soft wrap ל-URL/טוקנים ארוכים
+final String softText = _softWrapLongTokens(text);
+
+// טקסט-סטייל למדידה (חייב להיות תואם למה שה-Text משתמש)
+const double msgFontMeasure = 15.0;
+final TextStyle measureStyleForWrap = TextStyle(
+  fontFamily: fontFamily,
+  fontFamilyFallback: [
+    _hebrewFallbackFor(fontFamily),
+    'NotoSans',
+  ],
+  fontSize: msgFontMeasure * uiScale,
+  height: 1.2,
+  fontWeight: FontWeight.w400,
+  letterSpacing: -0.15 * uiScale,
+);
+
+// רוחב הטקסט נטו בתוך הבועה (בלי padding פנימי של bubbleInner)
+final double bubbleInnerHPadMeasure = 20 * uiScale; // 10+10 (כמו אצלך)
+final double maxTextWidth =
+    (maxBubbleWidth - bubbleInnerHPadMeasure).clamp(0.0, maxBubbleWidth);
+
+
+final String displayText = _maybeAvoidOrphanLastLine(
+  context: context,
+  text: softText,
+  style: measureStyleForWrap,
+  maxTextWidth: maxTextWidth,
+  orphanWidthFactor: 0.42,
+);
+
+
 
 
 
@@ -1295,31 +1305,30 @@ final bubbleInner = Padding(
 final double floorMinBubbleWidth = 18 * uiScale; // רצפה מינימלית (גם למילה אחת)
 
 // Horizontal padding inside bubbleInner: 10 left + 10 right
-final double bubbleInnerHPad = 20 * uiScale;
+final double bubbleInnerHPadMin = 20 * uiScale;
 
 // Use the SAME text style as the message Text (so measurement matches reality)
-const double msgFont = 15.0; // keep identical to the one used above
-final TextStyle measureStyle = TextStyle(
+final TextStyle measureStyleForMin = TextStyle(
   fontFamily: fontFamily,
   fontFamilyFallback: [
     _hebrewFallbackFor(fontFamily),
     'NotoSans',
   ],
-  fontSize: msgFont * uiScale,
+  fontSize: msgFontMeasure * uiScale,
   height: 1.2,
   fontWeight: FontWeight.w400,
   letterSpacing: -0.15 * uiScale,
 );
 
-// Measure using the ORIGINAL "text" (not displayText) so it respects real words
+// ✅ Minimum width based on the first 3 words (so it doesn't wrap too early)
 final double minBy3Words = _minBubbleWidthForFirstWords(
   context: context,
-  text: text,
-  style: measureStyle,
+  text: softText, // חשוב: אותו הטקסט אחרי _softWrapLongTokens
+  style: measureStyleForMin,
   uiScale: uiScale,
   minWords: 3,
   maxBubbleWidth: maxBubbleWidth,
-  horizontalPadding: bubbleInnerHPad,
+  horizontalPadding: bubbleInnerHPadMin,
 );
 
 // Final min width = max(floor, 3-words width) and never above maxBubbleWidth
@@ -1328,8 +1337,9 @@ final double minBubbleWidth = math.min(
   math.max(floorMinBubbleWidth, minBy3Words),
 );
 
-final Widget bubbleWidget = isImageMessage
 
+
+final Widget bubbleWidget = isImageMessage
     ? imageOnlyWidget
     : ConstrainedBox(
         constraints: BoxConstraints(
@@ -1349,6 +1359,7 @@ final Widget bubbleWidget = isImageMessage
           child: bubbleInner,
         ),
       );
+
 
 
 // ✅ If image: return just the widget (no decors). If text: keep decors stack.
