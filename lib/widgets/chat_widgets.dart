@@ -8,6 +8,8 @@ import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../widgets/fullscreen_video_player.dart';
+import '../widgets/video_preview_tile.dart';
 
 
 import '../audio/sfx.dart';
@@ -1147,7 +1149,7 @@ const String envelopeAsset = 'assets/ui/DMSmessageUnread.png';
 if (isImageMessage) {
   if (hasImageUrl) {
     messageBody = GestureDetector(
-      onTap: () => _openImageViewer(context, imgUrl!),
+      onTap: () => _openImageViewer(context, imgUrl),
       onDoubleTap: onDoubleTapImage,
       behavior: HitTestBehavior.opaque,
       child: ClipRect(
@@ -1155,7 +1157,7 @@ if (isImageMessage) {
           width: imagePreviewWidth,
           height: imagePreviewHeight,
           child: Image.network(
-            imgUrl!,
+            imgUrl,
             fit: BoxFit.cover,
           ),
         ),
@@ -1179,32 +1181,45 @@ if (isImageMessage) {
   }
 } else if (isVideoMessage) {
   if (hasVideoUrl) {
-    messageBody = VideoMessageTile(
-      url: vidUrl!,
-      uiScale: uiScale,
-      width: imagePreviewWidth,
-      height: imagePreviewHeight,
+    messageBody = GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => FullscreenVideoPlayer(videoUrl: vidUrl!),
+          ),
+        );
+      },
+      behavior: HitTestBehavior.opaque,
+      child: ClipRect(
+        child: VideoPreviewTile(
+          videoUrl: vidUrl!,
+          width: imagePreviewWidth,
+          height: imagePreviewHeight,
+          uiScale: uiScale,
+        ),
+      ),
     );
   } else {
-    final double envelopeSize = 50.0;
-
+    // placeholder בזמן upload
     messageBody = SizedBox(
       width: imagePreviewWidth,
       height: imagePreviewHeight,
       child: Center(
         child: RotatingEnvelope(
           assetPath: envelopeAsset,
-          size: envelopeSize,
+          size: 50.0,
           duration: const Duration(milliseconds: 1800),
           opacity: 1.0,
         ),
       ),
     );
   }
+
 } else if (isVoiceMessage) {
   if (hasVoicePath) {
     messageBody = VoiceMessageTile(
-      filePath: vPath!,
+      filePath: vPath,
       durationMs: vDurMs,
       uiScale: uiScale,
       bubbleColor: bubbleFill,
@@ -1254,7 +1269,6 @@ if (isImageMessage) {
     ),
   );
 }
-
 
 
 
