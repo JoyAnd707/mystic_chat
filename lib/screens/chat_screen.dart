@@ -134,7 +134,7 @@ const Map<String, ChatUser> users = {
 /// MESSAGE MODEL
 /// =======================
 
-enum ChatMessageType { text, system, image, voice }
+enum ChatMessageType { text, system, image, voice, video }
 
 class ChatMessage {
   /// Firestore doc id (we use ts.toString())
@@ -148,6 +148,9 @@ class ChatMessage {
 
   /// For image messages
   final String? imageUrl;
+
+  /// For video messages
+  final String? videoUrl;
 
   /// For voice messages (local path for now)
   final String? voicePath;
@@ -173,17 +176,13 @@ class ChatMessage {
     required this.text,
     required this.ts,
     this.imageUrl,
-
-    // ✅ voice
+    this.videoUrl,
     this.voicePath,
     this.voiceDurationMs,
-
     this.bubbleTemplate = BubbleTemplate.normal,
     this.decor = BubbleDecor.none,
     this.fontFamily,
     Set<String>? heartReactorIds,
-
-    // ✅ reply
     this.replyToMessageId,
     this.replyToSenderId,
     this.replyToText,
@@ -195,6 +194,7 @@ class ChatMessage {
     String? senderId,
     String? text,
     String? imageUrl,
+    String? videoUrl,
     String? voicePath,
     int? voiceDurationMs,
     int? ts,
@@ -212,6 +212,7 @@ class ChatMessage {
       senderId: senderId ?? this.senderId,
       text: text ?? this.text,
       imageUrl: imageUrl ?? this.imageUrl,
+      videoUrl: videoUrl ?? this.videoUrl,
       voicePath: voicePath ?? this.voicePath,
       voiceDurationMs: voiceDurationMs ?? this.voiceDurationMs,
       ts: ts ?? this.ts,
@@ -231,11 +232,9 @@ class ChatMessage {
         'senderId': senderId,
         'text': text,
         'imageUrl': imageUrl,
-
-        // ✅ voice
+        'videoUrl': videoUrl,
         'voicePath': voicePath,
         'voiceDurationMs': voiceDurationMs,
-
         'ts': ts,
         'bubbleTemplate': bubbleTemplate.name,
         'decor': decor.name,
@@ -284,6 +283,11 @@ class ChatMessage {
             ? null
             : m['imageUrl'].toString();
 
+    final vid =
+        (m['videoUrl'] == null || m['videoUrl'].toString().trim().isEmpty)
+            ? null
+            : m['videoUrl'].toString();
+
     final vp =
         (m['voicePath'] == null || m['voicePath'].toString().trim().isEmpty)
             ? null
@@ -299,11 +303,9 @@ class ChatMessage {
       senderId: (m['senderId'] ?? '').toString(),
       text: (m['text'] ?? '').toString(),
       imageUrl: img,
-
-      // ✅ voice
+      videoUrl: vid,
       voicePath: vp,
       voiceDurationMs: vDur,
-
       ts: ts,
       bubbleTemplate: bt,
       decor: decor,
@@ -315,7 +317,6 @@ class ChatMessage {
     );
   }
 }
-
 
 
 

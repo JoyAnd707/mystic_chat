@@ -2532,12 +2532,12 @@ return ActiveUsersBar(
 
       final ts = DateTime.now().millisecondsSinceEpoch;
       _pendingScrollToBottomTs = ts;
+await _imageService.pickAndSendMedia(
+  roomId: roomId,
+  senderId: widget.currentUserId,
+  ts: ts,
+);
 
-      await _imageService.pickAndSendImage(
-        roomId: roomId,
-        senderId: widget.currentUserId,
-        ts: ts,
-      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2913,8 +2913,12 @@ messageType: (msg.type == ChatMessageType.image)
     ? 'image'
     : (msg.type == ChatMessageType.voice)
         ? 'voice'
-        : 'text',
+        : (msg.type == ChatMessageType.video)
+            ? 'video'
+            : 'text',
 imageUrl: msg.imageUrl,
+videoUrl: msg.videoUrl,
+
 
 // ✅ voice
 voicePath: msg.voicePath,

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import '../audio/bgm.dart';
+import 'video_message_tile.dart';
 
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
@@ -656,6 +657,8 @@ final VoidCallback? onTapReplyPreview;
   /// ✅ NEW: message type + image url
   final String messageType; // 'text' / 'image' / 'voice'
   final String? imageUrl;
+  /// ✅ NEW: video messages
+  final String? videoUrl;
 
   /// ✅ NEW: voice messages
   final String? voicePath;
@@ -784,6 +787,7 @@ const MessageRow({
   /// ✅ NEW
   this.messageType = 'text',
   this.imageUrl,
+  this.videoUrl,
 
   // ✅ voice
   this.voicePath,
@@ -1124,8 +1128,14 @@ final int vDurMs = voiceDurationMs ?? 0;
 
 final bool isImageMessage = (msgType == 'image');
 final bool isVoiceMessage = (msgType == 'voice');
+final bool isVideoMessage = (msgType == 'video'); // ✅ NEW
 
 final bool hasImageUrl = (imgUrl != null && imgUrl.trim().isNotEmpty);
+
+// ✅ NEW: video url data
+final String? vidUrl = videoUrl;
+final bool hasVideoUrl = (vidUrl != null && vidUrl.trim().isNotEmpty);
+
 
 // ✅ Fixed SMALL rectangular preview (same size for all images)
 final double imagePreviewWidth  = math.min(maxBubbleWidth, 140 * uiScale);
@@ -1137,7 +1147,7 @@ const String envelopeAsset = 'assets/ui/DMSmessageUnread.png';
 if (isImageMessage) {
   if (hasImageUrl) {
     messageBody = GestureDetector(
-      onTap: () => _openImageViewer(context, imgUrl),
+      onTap: () => _openImageViewer(context, imgUrl!),
       onDoubleTap: onDoubleTapImage,
       behavior: HitTestBehavior.opaque,
       child: ClipRect(
@@ -1145,7 +1155,7 @@ if (isImageMessage) {
           width: imagePreviewWidth,
           height: imagePreviewHeight,
           child: Image.network(
-            imgUrl,
+            imgUrl!,
             fit: BoxFit.cover,
           ),
         ),
@@ -1167,13 +1177,37 @@ if (isImageMessage) {
       ),
     );
   }
+} else if (isVideoMessage) {
+  if (hasVideoUrl) {
+    messageBody = VideoMessageTile(
+      url: vidUrl!,
+      uiScale: uiScale,
+      width: imagePreviewWidth,
+      height: imagePreviewHeight,
+    );
+  } else {
+    final double envelopeSize = 50.0;
+
+    messageBody = SizedBox(
+      width: imagePreviewWidth,
+      height: imagePreviewHeight,
+      child: Center(
+        child: RotatingEnvelope(
+          assetPath: envelopeAsset,
+          size: envelopeSize,
+          duration: const Duration(milliseconds: 1800),
+          opacity: 1.0,
+        ),
+      ),
+    );
+  }
 } else if (isVoiceMessage) {
   if (hasVoicePath) {
     messageBody = VoiceMessageTile(
-      filePath: vPath,
+      filePath: vPath!,
       durationMs: vDurMs,
       uiScale: uiScale,
-      bubbleColor: bubbleFill, // ✅ NEW
+      bubbleColor: bubbleFill,
     );
   } else {
     messageBody = RotatingEnvelope(
@@ -1184,8 +1218,6 @@ if (isImageMessage) {
     );
   }
 } else {
-
-
   const double msgFont = 15.0;
 
   messageBody = Directionality(
@@ -1222,6 +1254,7 @@ if (isImageMessage) {
     ),
   );
 }
+
 
 
 
