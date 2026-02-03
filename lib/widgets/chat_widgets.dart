@@ -138,14 +138,20 @@ class _BottomBorderBarState extends State<BottomBorderBar> {
 
     double s(double v) => v * widget.uiScale;
 
+    // ✅ Draft mode:
+    // אם יש טקסט שכבר הוקלד — נשארים ב-typing UI גם כשהמקלדת נסגרה (focus lost)
+    final bool hasDraft = widget.controller.text.isNotEmpty;
+    final bool showTypingUi = widget.isTyping || hasDraft;
+
     return Container(
       height: widget.height,
       width: double.infinity,
       color: Colors.black,
       padding: EdgeInsets.only(bottom: s(10)),
-      child: widget.isTyping ? _typingBar(s) : _typeMessageBar(s),
+      child: showTypingUi ? _typingBar(s) : _typeMessageBar(s),
     );
   }
+
 
   // =====================
   // BEFORE TYPING
