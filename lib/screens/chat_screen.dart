@@ -102,9 +102,9 @@ const ChatUser lian =
 const ChatUser danielle =
     ChatUser(id: 'danielle', name: 'Danielle', bubbleColor: Color(0xFFCFECFF));
 const ChatUser lera =
-    ChatUser(id: 'lera', name: 'Lera', bubbleColor: Color(0xFFFFFDCF));
+    ChatUser(id: 'lera', name: 'Lera', bubbleColor: Color(0xFFFFDDCF));
 const ChatUser lihi =
-    ChatUser(id: 'lihi', name: 'Lihi', bubbleColor: Color(0xFFFFDDCF));
+    ChatUser(id: 'lihi', name: 'Lihi', bubbleColor: Color(0xFFFFFDCF));
 const ChatUser tal =
     ChatUser(id: 'tal', name: 'Tal', bubbleColor: Color(0xFFD7FFCF));
 const ChatUser gacktoFacto = ChatUser(
