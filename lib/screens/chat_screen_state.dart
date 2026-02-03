@@ -2504,46 +2504,48 @@ child: Scaffold(
               child: ValueListenableBuilder<Set<String>>(
                 valueListenable: _onlineNotifier,
 builder: (context, onlineIds, _) {
-  return ActiveUsersBar(
-    usersById: users,
-    onlineUserIds: onlineIds,
-    currentUserId: widget.currentUserId,
-    onBack: () async {
-      if (widget.enableBgm) {
-        await Bgm.I.leaveGroupAndResumeHomeDm();
-      }
+return ActiveUsersBar(
+  usersById: users,
+  onlineUserIds: onlineIds,
+  currentUserId: widget.currentUserId,
+  onBack: () async {
+    if (widget.enableBgm) {
+      await Bgm.I.leaveGroupAndResumeHomeDm();
+    }
+    if (!mounted) return;
+    Navigator.of(context).maybePop();
+  },
+  onOpenBubbleMenu: _openBubbleTemplateMenu,
+  onPickImage: () async {
+    try {
+      final roomId = widget.roomId;
+
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      _pendingScrollToBottomTs = ts;
+
+      await _imageService.pickAndSendImage(
+        roomId: roomId,
+        senderId: widget.currentUserId,
+        ts: ts,
+      );
+    } catch (e) {
       if (!mounted) return;
-      Navigator.of(context).maybePop();
-    },
-    onOpenBubbleMenu: _openBubbleTemplateMenu,
-    onPickImage: () async {
-      try {
-        final roomId = widget.roomId;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pick/send image: $e')),
+      );
+    }
+  },
 
-        final ts = DateTime.now().millisecondsSinceEpoch;
-        _pendingScrollToBottomTs = ts;
+  // ✅ NEW: voice
+  onSendVoice: (filePath, durationMs) =>
+      _sendVoiceMessage(filePath: filePath, durationMs: durationMs),
 
-        await _imageService.pickAndSendImage(
-          roomId: roomId,
-          senderId: widget.currentUserId,
-          ts: ts,
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to pick/send image: $e')),
-        );
-      }
-    },
+  // ✅ show friendly title instead of raw roomId
+  titleText: _titleTextForRoom(widget.roomId),
 
-    // ✅ NEW: voice
-    onSendVoice: (filePath, durationMs) =>
-        _sendVoiceMessage(filePath: filePath, durationMs: durationMs),
+  uiScale: uiScale,
+);
 
-   titleText: widget.roomId,
-
-    uiScale: uiScale,
-  );
 },
 
               ),

@@ -23,75 +23,81 @@ static const Duration onlineTimeout = Duration(seconds: 45);
   }
 
   /// Call when user enters a room (chat screen opened).
-  Future<void> enterRoom({
-    required String roomId,
-    required String userId,
-    required String displayName,
-  }) async {
-    _roomId = roomId;
-    _userId = userId;
+Future<void> enterRoom({
+  required String roomId,
+  required String userId,
+  required String displayName,
+}) async {
+  _roomId = roomId;
+  _userId = userId;
 
-    // Write an "online" snapshot immediately
-    await _presenceDoc(roomId, userId).set(
-      <String, dynamic>{
-        'userId': userId,
-        'displayName': displayName,
-        'state': 'online',
-        'lastSeen': Timestamp.now(),
+  // Write an "online" snapshot immediately
+  await _presenceDoc(roomId, userId).set(
+    <String, dynamic>{
+      'userId': userId,
+      'displayName': displayName,
+      'state': 'online',
 
-      },
-      SetOptions(merge: true),
-    );
+      // ✅ use client timestamp for presence stability
+      'lastSeen': Timestamp.now(),
+    },
+    SetOptions(merge: true),
+  );
 
-    // Start/Restart heartbeat
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(heartbeatEvery, (_) async {
-      final rid = _roomId;
-      final uid = _userId;
-      if (rid == null || uid == null) return;
+  // Start/Restart heartbeat
+  _heartbeatTimer?.cancel();
+  _heartbeatTimer = Timer.periodic(heartbeatEvery, (_) async {
+    final rid = _roomId;
+    final uid = _userId;
+    if (rid == null || uid == null) return;
 
-      try {
-        await _presenceDoc(rid, uid).set(
-          <String, dynamic>{
-            'state': 'online',
-            'lastSeen': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      } catch (_) {
-        // ignore transient errors; next heartbeat will retry
-      }
-    });
-  }
-
-  /// Call when user leaves a room (chat screen disposed / user navigates back).
-  /// Not guaranteed on force-kill; that's why we also have timeout logic.
-  Future<void> leaveRoom({
-    required String roomId,
-    required String userId,
-  }) async {
-    // Stop heartbeat first
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
-
-    // Best-effort "offline" write
     try {
-      await _presenceDoc(roomId, userId).set(
+      await _presenceDoc(rid, uid).set(
         <String, dynamic>{
-          'state': 'offline',
-          'lastSeen': FieldValue.serverTimestamp(),
+          'state': 'online',
+
+          // ✅ IMPORTANT: Timestamp.now() avoids serverTimestamp delays/null
+          'lastSeen': Timestamp.now(),
         },
         SetOptions(merge: true),
       );
     } catch (_) {
-      // If app is closing / offline network - ignore
+      // ignore transient errors; next heartbeat will retry
     }
+  });
+}
 
-    if (_roomId == roomId && _userId == userId) {
-      _roomId = null;
-      _userId = null;
-    }
+  /// Call when user leaves a room (chat screen disposed / user navigates back).
+  /// Not guaranteed on force-kill; that's why we also have timeout logic.
+Future<void> leaveRoom({
+  required String roomId,
+  required String userId,
+}) async {
+  // Stop heartbeat first
+  _heartbeatTimer?.cancel();
+  _heartbeatTimer = null;
+
+  // Best-effort "offline" write
+  try {
+    await _presenceDoc(roomId, userId).set(
+      <String, dynamic>{
+        'state': 'offline',
+
+        // ✅ keep presence timestamps client-side for stability
+        'lastSeen': Timestamp.now(),
+      },
+      SetOptions(merge: true),
+    );
+  } catch (_) {
+    // If app is closing / offline network - ignore
   }
+
+  if (_roomId == roomId && _userId == userId) {
+    _roomId = null;
+    _userId = null;
+  }
+}
+
 
   /// Stream ONLINE userIds in a room using timeout:
   /// online == lastSeen within [onlineTimeout] seconds.

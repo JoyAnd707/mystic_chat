@@ -177,84 +177,95 @@ await showFromRemoteMessage(message);
     return incomingRoomKey != active;
   }
 
-  Future<void> showFromRemoteMessage(RemoteMessage message) async {
-    // We prefer data fields for chat formatting
-    final String sender =
-        message.data['sender']?.toString() ??
-        message.notification?.title ??
-        'New message';
+Future<void> showFromRemoteMessage(RemoteMessage message) async {
+  // We prefer data fields for chat formatting
+  final String rawSender =
+      message.data['sender']?.toString() ??
+      message.notification?.title ??
+      'New message';
 
-    final String msgText =
-        message.data['body']?.toString() ??
-        message.notification?.body ??
-        '';
+  final String msgText =
+      message.data['body']?.toString() ??
+      message.notification?.body ??
+      '';
 
-    // If truly empty, don’t show (prevents "NEW MESSAGE" / empty notifications)
-    if (sender.trim().isEmpty && msgText.trim().isEmpty) return;
+  // If truly empty, don’t show (prevents "NEW MESSAGE" / empty notifications)
+  if (rawSender.trim().isEmpty && msgText.trim().isEmpty) return;
 
-    // Optional: ignore "system" messages if your backend sends them
-    final String msgType = (message.data['type']?.toString() ?? '').toLowerCase();
-    if (msgType == 'system') return;
+  // Optional: ignore "system" messages if your backend sends them
+  final String msgType = (message.data['type']?.toString() ?? '').toLowerCase();
+  if (msgType == 'system') return;
 
-    // kind: "dm" | "group"
-    final String kind = (message.data['kind']?.toString() ?? 'group').toLowerCase();
-    final bool isGroup = kind == 'group';
+  // kind: "dm" | "group"
+  final String kind = (message.data['kind']?.toString() ?? 'group').toLowerCase();
+  final bool isGroup = kind == 'group';
 
-    // Body without sender prefix (name already appears in title)
-    final String cleanBody = msgText.trim().isEmpty ? '' : msgText.trim();
+  // Body without sender prefix (name already appears in title)
+  final String cleanBody = msgText.trim().isEmpty ? '' : msgText.trim();
 
-    // --- "Chatroom opened" logic (4h gap) ---
-    final String roomKey = _roomKeyFrom(message, isGroup: isGroup);
-    final int nowMs = DateTime.now().millisecondsSinceEpoch;
+  // ✅ Capitalize sender for preview titles (joy -> Joy)
+  final String sender = _capitalizeFirst(rawSender);
 
-    final int? lastMs = await _getLastNotifyMs(roomKey);
-    final bool isNewChatroom =
-        lastMs == null ? true : (nowMs - lastMs) >= _chatroomGap.inMilliseconds;
+  // --- "Chatroom opened" logic (4h gap) ---
+  final String roomKey = _roomKeyFrom(message, isGroup: isGroup);
+  final int nowMs = DateTime.now().millisecondsSinceEpoch;
 
-    String title;
-    String body;
+  final int? lastMs = await _getLastNotifyMs(roomKey);
+  final bool isNewChatroom =
+      lastMs == null ? true : (nowMs - lastMs) >= _chatroomGap.inMilliseconds;
 
-    if (isGroup && isNewChatroom) {
-      title = 'A new chatroom has opened!';
-      body = cleanBody.isEmpty ? '' : '[new chatroom] $cleanBody';
-    } else {
-      title = isGroup ? '$sender (CHATROOM)' : sender;
-      body = cleanBody;
-    }
+  String title;
+  String body;
 
-    // Channel selection
-    final String channelId = isGroup ? channelGroup : channelDm;
-
-    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      channelId,
-      isGroup ? 'Chatroom messages' : 'DM messages',
-      channelDescription:
-          isGroup ? 'Group chat notifications' : 'Direct messages notifications',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
-
-    final NotificationDetails details =
-        NotificationDetails(android: androidDetails);
-
-    // Stable-ish id to reduce accidental duplicates
-    final int notificationId =
-        (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString())
-            .hashCode;
-
-    await _local.show(
-      notificationId,
-      title,
-      body,
-      details,
-    );
-
-    // Update last notification time for this room scope
-    await _setLastNotifyMs(roomKey, nowMs);
+  if (isGroup && isNewChatroom) {
+    title = 'A new chatroom has opened!';
+    body = cleanBody.isEmpty ? '' : '[new chatroom] $cleanBody';
+  } else {
+    title = isGroup ? '$sender (CHATROOM)' : sender;
+    body = cleanBody;
   }
 
+  // Channel selection
+  final String channelId = isGroup ? channelGroup : channelDm;
+
+  final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    channelId,
+    isGroup ? 'Chatroom messages' : 'DM messages',
+    channelDescription:
+        isGroup ? 'Group chat notifications' : 'Direct messages notifications',
+    importance: Importance.high,
+    priority: Priority.high,
+  );
+
+  final NotificationDetails details =
+      NotificationDetails(android: androidDetails);
+
+  // Stable-ish id to reduce accidental duplicates
+  final int notificationId =
+      (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString())
+          .hashCode;
+
+  await _local.show(
+    notificationId,
+    title,
+    body,
+    details,
+  );
+
+  // Update last notification time for this room scope
+  await _setLastNotifyMs(roomKey, nowMs);
+}
+
+/// ✅ Capitalize only the first character (safe for already-capitalized)
+String _capitalizeFirst(String s) {
+  final t = s.trim();
+  if (t.isEmpty) return t;
+  return t[0].toUpperCase() + t.substring(1);
+}
+
+
   // "Chatroom opened" threshold
-  static const Duration _chatroomGap = Duration(hours: 4);
+  static const Duration _chatroomGap = Duration(hours: 2);
 
   Future<SharedPreferences> get _prefs async => SharedPreferences.getInstance();
 
