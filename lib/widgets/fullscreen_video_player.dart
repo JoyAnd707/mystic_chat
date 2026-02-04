@@ -187,17 +187,16 @@ class _FullscreenVideoPlayerState extends State<FullscreenVideoPlayer> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _WaveProgressBar(
-                      waveAsset: _waveBarAsset,
-                      thumbAsset: _catThumbAsset,
-                      progress01: _progress01,
-                      enabled: ready,
-                      onSeek01: (t01) => _seekTo01(t01),
-                      onDraggingChanged: (drag) {
-                        if (!mounted) return;
-                        setState(() => _dragging = drag);
-                      },
-                    ),
+_CatVideoProgressBar(
+  controller: _controller,
+  thumbAsset: _catThumbAsset,
+  enabled: ready,
+  onDraggingChanged: (drag) {
+    if (!mounted) return;
+    setState(() => _dragging = drag);
+  },
+),
+
 
                     const SizedBox(height: 10),
 
@@ -256,19 +255,7 @@ class _FullscreenVideoPlayerState extends State<FullscreenVideoPlayer> {
                       ],
                     ),
 
-                    if (_dragging)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          _fmt(pos),
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.75),
-                            fontSize: 12,
-                            height: 1.0,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
+
                   ],
                 ),
               ),
@@ -409,8 +396,9 @@ Future<void> _loadWaveProfile() async {
 @override
 Widget build(BuildContext context) {
   // ✅ thumb size
-  const double thumbW = 64;
-  const double thumbH = 64;
+const double thumbW = 35;
+const double thumbH = 35;
+
 
   // ✅ MUST be >= thumbH, otherwise clamp breaks
   const double hitH = 96;
@@ -459,8 +447,9 @@ Widget build(BuildContext context) {
 
       // ✅ safe clamp bounds
       final double maxTop = (hitH - thumbH).clamp(0.0, hitH);
-      final double thumbTop =
-          (yPx - thumbH / 2).clamp(0.0, maxTop);
+final double thumbTop =
+    (yPx - thumbH / 2 + 8).clamp(0.0, hitH - thumbH);
+
 
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -537,4 +526,151 @@ Widget build(BuildContext context) {
     },
   );
 }
+}
+class _CatVideoProgressBar extends StatefulWidget {
+  final VideoPlayerController controller;
+  final String thumbAsset;
+  final bool enabled;
+  final ValueChanged<bool> onDraggingChanged;
+
+  const _CatVideoProgressBar({
+    required this.controller,
+    required this.thumbAsset,
+    required this.enabled,
+    required this.onDraggingChanged,
+  });
+
+  @override
+  State<_CatVideoProgressBar> createState() => _CatVideoProgressBarState();
+}
+
+class _CatVideoProgressBarState extends State<_CatVideoProgressBar> {
+  double _progress01() {
+    final v = widget.controller.value;
+    if (!v.isInitialized) return 0.0;
+    final total = v.duration.inMilliseconds;
+    if (total <= 0) return 0.0;
+    final p = v.position.inMilliseconds / total;
+    return p.clamp(0.0, 1.0);
+  }
+
+  Future<void> _seekTo01(double t01) async {
+    final v = widget.controller.value;
+    if (!v.isInitialized) return;
+    final totalMs = v.duration.inMilliseconds;
+    final targetMs = (t01.clamp(0.0, 1.0) * totalMs).round();
+    await widget.controller.seekTo(Duration(milliseconds: targetMs));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // ✅ turquoise
+    const Color turquoise = Color(0xFF59EEC6);
+
+    // ✅ BIGGER CAT (שני אלה שולטים על הגודל)
+    const double thumbW = 44;
+    const double thumbH = 44;
+
+    // ✅ touch area (חייב להיות >= מהחתול כדי שלא ייחתך)
+    const double hitH = 76;
+
+    // ✅ bar visuals
+    const double barH = 6;
+
+    // ✅ כמה להוריד את החתול למטה (תשחקי עם זה)
+    const double downOffset = 0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double w = constraints.maxWidth;
+        final double t = _progress01();
+
+        // keep thumb within bounds
+        final double leftPad = thumbW * 0.5;
+        final double rightPad = thumbW * 0.5;
+        final double usableW =
+            (w - leftPad - rightPad).clamp(1.0, double.infinity);
+
+        double xToT01(double localX) {
+          final double clampedX = localX.clamp(leftPad, w - rightPad);
+          final double tt = (clampedX - leftPad) / usableW;
+          return tt.clamp(0.0, 1.0);
+        }
+
+        final double xCenter = leftPad + usableW * t;
+        final double thumbLeft =
+            (xCenter - thumbW / 2).clamp(0.0, w - thumbW);
+
+        // bar position
+        final double barTop = (hitH / 2) - (barH / 2);
+
+        // ✅ החתול “יושב” על מרכז הפס + יורד קצת למטה
+        final double thumbTop =
+            (barTop + (barH / 2) - (thumbH / 2) + downOffset)
+                .clamp(0.0, hitH - thumbH);
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: widget.enabled
+              ? (d) => _seekTo01(xToT01(d.localPosition.dx))
+              : null,
+          onHorizontalDragStart:
+              widget.enabled ? (_) => widget.onDraggingChanged(true) : null,
+          onHorizontalDragUpdate: widget.enabled
+              ? (d) => _seekTo01(xToT01(d.localPosition.dx))
+              : null,
+          onHorizontalDragEnd:
+              widget.enabled ? (_) => widget.onDraggingChanged(false) : null,
+          onHorizontalDragCancel:
+              widget.enabled ? () => widget.onDraggingChanged(false) : null,
+          child: SizedBox(
+            height: hitH,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // ✅ regular bar (turquoise)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: barTop,
+                  height: barH,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: VideoProgressIndicator(
+                      widget.controller,
+                      allowScrubbing: true,
+                      padding: EdgeInsets.zero,
+                      colors: VideoProgressColors(
+                        playedColor: turquoise,
+                        bufferedColor: turquoise.withOpacity(0.35),
+                        backgroundColor: Colors.white.withOpacity(0.18),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ✅ cat thumb
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 120),
+                  curve: Curves.easeOutCubic,
+                  left: thumbLeft,
+                  top: thumbTop,
+                  child: IgnorePointer(
+                    ignoring: true,
+                    child: Image.asset(
+                      widget.thumbAsset,
+                      width: thumbW,
+                      height: thumbH,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
