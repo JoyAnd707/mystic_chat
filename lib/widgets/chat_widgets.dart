@@ -352,6 +352,7 @@ Widget _activeSendButton({
 
 }
 
+const bool kDebugSevenNames = true;
 
 class ActiveUsersBar extends StatelessWidget {
   final Map<String, ChatUser> usersById;
@@ -387,7 +388,7 @@ class ActiveUsersBar extends StatelessWidget {
     required this.uiScale,
   });
 
-  static const double barHeight = 64;
+  static const double barHeight = 76;
 
   @override
   Widget build(BuildContext context) {
@@ -451,40 +452,180 @@ class ActiveUsersBar extends StatelessWidget {
             ),
           ),
 
-          // ✅ Active users text (center)
-          Positioned.fill(
-            child: Center(
-              child: Builder(
-                builder: (context) {
-                  final ids = onlineUserIds.toList();
+// ✅ Active users text (center) — DEBUG 7 NAMES, constrained box
+Builder(
+  builder: (context) {
+    // left cluster: back + max speed
+    final double leftInset = s(44) + s(57) + s(10);
 
-                  ids.sort((a, b) {
-                    final an = usersById[a]?.name ?? a;
-                    final bn = usersById[b]?.name ?? b;
-                    return an.toLowerCase().compareTo(bn.toLowerCase());
-                  });
+    // right cluster: mic + camera + bubble menu
+    final double rightInset =
+        s(6) + (tapSize * 3) + (s(6) * 2) + s(10);
 
-                  final names = ids
-                      .map((id) => usersById[id]?.name ?? id)
-                      .where((n) => n.trim().isNotEmpty)
-                      .toList();
+    final names = kDebugSevenNames
+        ? <String>[
+            'Joy',
+            'Adi!',
+            'Lian',
+            'Danielle',
+            'Tal',
+            'Lihi',
+            'Lera',
+          ]
+        : onlineUserIds
+            .map((id) => usersById[id]?.name ?? id)
+            .where((n) => n.trim().isNotEmpty)
+            .toList();
 
-                  final centerText = names.isEmpty ? titleText : names.join(', ');
+    final centerText = names.isEmpty ? titleText : names.join(', ');
 
-                  return Text(
-                    centerText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: s(15),
-                      fontWeight: FontWeight.w400,
-                    ),
-                  );
-                },
-              ),
+    return Positioned(
+      left: leftInset,
+      right: rightInset,
+      top: 0,
+      bottom: 0,
+child: Center(
+child: Padding(
+  padding: EdgeInsets.symmetric(vertical: s(6)),
+  child: LayoutBuilder(
+    builder: (context, constraints) {
+      final double maxW = constraints.maxWidth;
+      final double maxH = constraints.maxHeight;
+
+      double font = s(14);
+      final double minFont = s(9.5);
+
+      double letter = 0.0;
+      final double minLetter = s(-0.6);
+
+      bool fits2Lines(String text, double f, double ls) {
+        final tp = TextPainter(
+          text: TextSpan(
+            text: text,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: f,
+              height: 1.05,
+              fontWeight: FontWeight.w400,
+              letterSpacing: ls,
             ),
           ),
+          maxLines: 2,
+          textAlign: TextAlign.center,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: maxW);
+
+        return tp.didExceedMaxLines == false && tp.height <= maxH;
+      }
+
+      // 1) קודם ננסה להכניס את כל הטקסט ע"י הקטנת פונט/ריווח
+      int guard = 0;
+      while (!fits2Lines(centerText, font, letter) && font > minFont && guard < 60) {
+        font -= s(0.5);
+        guard++;
+      }
+
+      guard = 0;
+      while (!fits2Lines(centerText, font, letter) && letter > minLetter && guard < 60) {
+        letter -= s(0.1);
+        guard++;
+      }
+
+      // אם הכל נכנס — סיימנו
+      if (fits2Lines(centerText, font, letter)) {
+        return Text(
+          centerText,
+          maxLines: 2,
+          softWrap: true,
+          overflow: TextOverflow.visible,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: font,
+            height: 1.05,
+            fontWeight: FontWeight.w400,
+            letterSpacing: letter,
+          ),
+        );
+      }
+
+      // 2) עדיין לא נכנס? => עוברים למצב "+N" כדי שלא "יאבדו" שמות
+      //    נחשב טקסט שמות שמובטח להכנס ב-2 שורות עם הפונט/ריווח המינימליים.
+      //    (זה הרבה יותר טוב מ-ellipsis כי את מקבלת אינדיקציה מדויקת)
+      final List<String> allNames = centerText
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+
+      // אם זה בכלל לא רשימת שמות (או ריק), נופלים ל-ellipsis רגיל
+      if (allNames.isEmpty) {
+        return Text(
+          centerText,
+          maxLines: 2,
+          softWrap: true,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: minFont,
+            height: 1.05,
+            fontWeight: FontWeight.w400,
+            letterSpacing: minLetter,
+          ),
+        );
+      }
+
+      List<String> shown = List<String>.from(allNames);
+      int hidden = 0;
+
+      String buildLabel() {
+        final base = shown.join(', ');
+        if (hidden <= 0) return base;
+        return '$base +$hidden';
+      }
+
+      String label = buildLabel();
+
+      // מורידים שמות מהסוף עד שזה נכנס, ואז מצרפים +N
+      // (שומרים לפחות שם אחד כדי לא להראות רק "+N")
+      int safeGuard = 0;
+      while (!fits2Lines(label, minFont, minLetter) && shown.length > 1 && safeGuard < 50) {
+        shown.removeLast();
+        hidden++;
+        label = buildLabel();
+        safeGuard++;
+      }
+
+      final bool okPlus = fits2Lines(label, minFont, minLetter);
+
+      return Text(
+        label,
+        maxLines: 2,
+        softWrap: true,
+        overflow: okPlus ? TextOverflow.visible : TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: minFont,
+          height: 1.05,
+          fontWeight: FontWeight.w400,
+          letterSpacing: minLetter,
+        ),
+      );
+    },
+  ),
+),
+
+),
+
+
+
+    );
+  },
+),
+
+
 
           // ✅ Right-side actions: [Mic] [Camera] [Bubble menu]
           Positioned(
