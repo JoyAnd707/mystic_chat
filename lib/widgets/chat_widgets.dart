@@ -352,7 +352,7 @@ Widget _activeSendButton({
 
 }
 
-const bool kDebugSevenNames = true;
+const bool kDebugSevenNames = false;
 
 class ActiveUsersBar extends StatelessWidget {
   final Map<String, ChatUser> usersById;
