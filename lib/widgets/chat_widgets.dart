@@ -452,17 +452,16 @@ class ActiveUsersBar extends StatelessWidget {
             ),
           ),
 
-// ✅ Active users text (center) — DEBUG 7 NAMES, constrained box
+// ✅ Active users text (center) — SHOW ALL (2-line grid + auto scale-down)
 Builder(
   builder: (context) {
     // left cluster: back + max speed
     final double leftInset = s(44) + s(57) + s(10);
 
     // right cluster: mic + camera + bubble menu
-    final double rightInset =
-        s(6) + (tapSize * 3) + (s(6) * 2) + s(10);
+    final double rightInset = s(6) + (tapSize * 3) + (s(6) * 2) + s(10);
 
-    final names = kDebugSevenNames
+    final List<String> names = kDebugSevenNames
         ? <String>[
             'Joy',
             'Adi!',
@@ -477,150 +476,35 @@ Builder(
             .where((n) => n.trim().isNotEmpty)
             .toList();
 
-    final centerText = names.isEmpty ? titleText : names.join(', ');
-
     return Positioned(
       left: leftInset,
       right: rightInset,
       top: 0,
       bottom: 0,
-child: Center(
-child: Padding(
-  padding: EdgeInsets.symmetric(vertical: s(6)),
-  child: LayoutBuilder(
-    builder: (context, constraints) {
-      final double maxW = constraints.maxWidth;
-      final double maxH = constraints.maxHeight;
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: s(6)),
+          child: names.isEmpty
+              ? Text(
+                  titleText,
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: s(14),
+                    height: 1.05,
+                    fontWeight: FontWeight.w400,
+                  ),
+                )
+              : ActiveUsersCompactNames(
+                  names: names,
+                  baseFontSize: s(14),
+                  lineHeight: 1.05,
+                    maxLines: 3,
 
-      double font = s(14);
-      final double minFont = s(9.5);
-
-      double letter = 0.0;
-      final double minLetter = s(-0.6);
-
-      bool fits2Lines(String text, double f, double ls) {
-        final tp = TextPainter(
-          text: TextSpan(
-            text: text,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: f,
-              height: 1.05,
-              fontWeight: FontWeight.w400,
-              letterSpacing: ls,
-            ),
-          ),
-          maxLines: 2,
-          textAlign: TextAlign.center,
-          textDirection: TextDirection.ltr,
-        )..layout(maxWidth: maxW);
-
-        return tp.didExceedMaxLines == false && tp.height <= maxH;
-      }
-
-      // 1) קודם ננסה להכניס את כל הטקסט ע"י הקטנת פונט/ריווח
-      int guard = 0;
-      while (!fits2Lines(centerText, font, letter) && font > minFont && guard < 60) {
-        font -= s(0.5);
-        guard++;
-      }
-
-      guard = 0;
-      while (!fits2Lines(centerText, font, letter) && letter > minLetter && guard < 60) {
-        letter -= s(0.1);
-        guard++;
-      }
-
-      // אם הכל נכנס — סיימנו
-      if (fits2Lines(centerText, font, letter)) {
-        return Text(
-          centerText,
-          maxLines: 2,
-          softWrap: true,
-          overflow: TextOverflow.visible,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: font,
-            height: 1.05,
-            fontWeight: FontWeight.w400,
-            letterSpacing: letter,
-          ),
-        );
-      }
-
-      // 2) עדיין לא נכנס? => עוברים למצב "+N" כדי שלא "יאבדו" שמות
-      //    נחשב טקסט שמות שמובטח להכנס ב-2 שורות עם הפונט/ריווח המינימליים.
-      //    (זה הרבה יותר טוב מ-ellipsis כי את מקבלת אינדיקציה מדויקת)
-      final List<String> allNames = centerText
-          .split(',')
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .toList();
-
-      // אם זה בכלל לא רשימת שמות (או ריק), נופלים ל-ellipsis רגיל
-      if (allNames.isEmpty) {
-        return Text(
-          centerText,
-          maxLines: 2,
-          softWrap: true,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: minFont,
-            height: 1.05,
-            fontWeight: FontWeight.w400,
-            letterSpacing: minLetter,
-          ),
-        );
-      }
-
-      List<String> shown = List<String>.from(allNames);
-      int hidden = 0;
-
-      String buildLabel() {
-        final base = shown.join(', ');
-        if (hidden <= 0) return base;
-        return '$base +$hidden';
-      }
-
-      String label = buildLabel();
-
-      // מורידים שמות מהסוף עד שזה נכנס, ואז מצרפים +N
-      // (שומרים לפחות שם אחד כדי לא להראות רק "+N")
-      int safeGuard = 0;
-      while (!fits2Lines(label, minFont, minLetter) && shown.length > 1 && safeGuard < 50) {
-        shown.removeLast();
-        hidden++;
-        label = buildLabel();
-        safeGuard++;
-      }
-
-      final bool okPlus = fits2Lines(label, minFont, minLetter);
-
-      return Text(
-        label,
-        maxLines: 2,
-        softWrap: true,
-        overflow: okPlus ? TextOverflow.visible : TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: minFont,
-          height: 1.05,
-          fontWeight: FontWeight.w400,
-          letterSpacing: minLetter,
+                ),
         ),
-      );
-    },
-  ),
-),
-
-),
-
-
-
+      ),
     );
   },
 ),
@@ -689,6 +573,113 @@ child: Padding(
           ),
         ],
       ),
+    );
+  }
+}
+
+
+
+
+class ActiveUsersCompactNames extends StatelessWidget {
+  const ActiveUsersCompactNames({
+    super.key,
+    required this.names,
+    this.baseFontSize = 14,
+    this.lineHeight = 1.05,
+    this.maxLines = 3, // ✅ NEW: allow up to 3 lines
+  });
+
+  final List<String> names;
+  final double baseFontSize;
+  final double lineHeight;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final cleaned = names
+        .map((n) => n.trim())
+        .where((n) => n.isNotEmpty)
+        .toList(growable: false);
+
+    if (cleaned.isEmpty) return const SizedBox.shrink();
+
+    // Decide how many lines we want (1..maxLines)
+    // Mystic-like: 1 line for small, 2 lines for medium, 3 lines for 6+.
+    int lines;
+    if (cleaned.length <= 4) {
+      lines = 1;
+    } else if (cleaned.length <= 5) {
+      lines = 2;
+    } else {
+      lines = 3;
+    }
+    lines = lines.clamp(1, maxLines);
+
+    // Split names into N lines as evenly as possible (top line slightly longer)
+    List<List<String>> splitIntoLines(List<String> xs, int lineCount) {
+      if (lineCount <= 1) return [xs];
+
+      final int n = xs.length;
+      final int base = n ~/ lineCount;
+      final int extra = n % lineCount;
+
+      final List<List<String>> out = [];
+      int index = 0;
+
+      for (int i = 0; i < lineCount; i++) {
+        final int take = base + (i < extra ? 1 : 0);
+        if (take <= 0) {
+          out.add(const []);
+          continue;
+        }
+        out.add(xs.sublist(index, index + take));
+        index += take;
+      }
+
+      // Remove any empty trailing lines (just in case)
+      while (out.isNotEmpty && out.last.isEmpty) {
+        out.removeLast();
+      }
+      return out.isEmpty ? [xs] : out;
+    }
+
+    String joinLine(List<String> xs) => xs.join(', ');
+
+    final style = TextStyle(
+      color: Colors.white,
+      fontSize: baseFontSize,
+      height: lineHeight,
+      fontWeight: FontWeight.w400,
+      letterSpacing: 0.0,
+    );
+
+    final linesList = splitIntoLines(cleaned, lines);
+
+    // ✅ scaleDown guarantees it always fits, while still showing ALL names
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SizedBox(
+          width: constraints.maxWidth,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (int i = 0; i < linesList.length; i++) ...[
+                  if (i != 0) const SizedBox(height: 2),
+                  Text(
+                    joinLine(linesList[i]),
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: style,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
