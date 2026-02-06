@@ -482,28 +482,33 @@ Builder(
       top: 0,
       bottom: 0,
       child: Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: s(6)),
-          child: names.isEmpty
-              ? Text(
-                  titleText,
-                  maxLines: 2,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: s(14),
-                    height: 1.05,
-                    fontWeight: FontWeight.w400,
-                  ),
-                )
-              : ActiveUsersCompactNames(
-                  names: names,
-                  baseFontSize: s(14),
-                  lineHeight: 1.05,
-                    maxLines: 3,
-
-                ),
+child: Padding(
+  padding: EdgeInsets.fromLTRB(
+    s(10), // 👈 הזזה עדינה ימינה (שני ל־4 / 6 / 8 לפי טעם)
+    s(6),
+    0,
+    s(6),
+  ),
+  child: names.isEmpty
+      ? Text(
+          titleText,
+          maxLines: 2,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: s(14),
+            height: 1.05,
+            fontWeight: FontWeight.w400,
+          ),
+        )
+      : ActiveUsersCompactNames(
+          names: names,
+          baseFontSize: s(14),
+          lineHeight: 1.05,
+          maxLines: 3,
         ),
+),
+
       ),
     );
   },
