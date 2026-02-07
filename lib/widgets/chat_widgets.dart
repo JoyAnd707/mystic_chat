@@ -525,13 +525,24 @@ child: Padding(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 🎙️ Mic (LEFT of camera) — NEW
-                  HoldToRecordMicButton(
-                    size: tapSize,
-                    iconSize: s(32),
-                    uiScale: uiScale,
-                    onSendVoice: onSendVoice,
-                  ),
+         // 🎙️ Mic (tap to record, tap to send, double-tap to cancel)
+TapToRecordMicButton(
+  size: tapSize,
+  iconSize: s(32),
+  uiScale: uiScale,
+  onSendVoice: onSendVoice,
+
+  // 🔊 אפשר לשנות כאן למה שבא לך (כרגע safe, בלי לשבור קומפילציה)
+  onStartRecordingSfx: () {
+    // TODO: חברי פה סאונד "record start" אמיתי אם יש לך
+    // לדוגמה אם קיים אצלך: Sfx.I.playRecordStart();
+  },
+  onCancelRecordingSfx: () {
+    // TODO: חברי פה סאונד "record cancel" אמיתי אם יש לך
+    // לדוגמה אם קיים אצלך: Sfx.I.playCancelRecord();
+  },
+),
+
 
                   SizedBox(width: s(6)),
 
@@ -1323,14 +1334,14 @@ if (isImageMessage) {
         Navigator.of(context).push(
           MaterialPageRoute(
             fullscreenDialog: true,
-            builder: (_) => FullscreenVideoPlayer(videoUrl: vidUrl!),
+            builder: (_) => FullscreenVideoPlayer(videoUrl: vidUrl),
           ),
         );
       },
       behavior: HitTestBehavior.opaque,
       child: ClipRect(
         child: VideoPreviewTile(
-          videoUrl: vidUrl!,
+          videoUrl: vidUrl,
           width: imagePreviewWidth,
           height: imagePreviewHeight,
           uiScale: uiScale,
@@ -1512,10 +1523,10 @@ final TextStyle measureStyleForMin = TextStyle(
 );
 
 // Count words (based on the original text, not displayText)
-final String _rawForWords = text.trim();
-final int wordCount = _rawForWords.isEmpty
+final String rawForWords = text.trim();
+final int wordCount = rawForWords.isEmpty
     ? 0
-    : _rawForWords.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+    : rawForWords.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
 
 // Measure a “minimum” width based on the first 3 words
 final double minBy3Words = _minBubbleWidthForFirstWords(
@@ -2763,25 +2774,31 @@ class MysticNewBadge extends StatelessWidget {
   }
 }
 
-class HoldToRecordMicButton extends StatefulWidget {
+class TapToRecordMicButton extends StatefulWidget {
   final double size;
   final double iconSize;
   final double uiScale;
   final Future<void> Function(String filePath, int durationMs) onSendVoice;
 
-  const HoldToRecordMicButton({
+  /// 🔊 optional: user-defined sounds (so we don't break compilation)
+  final VoidCallback? onStartRecordingSfx;
+  final VoidCallback? onCancelRecordingSfx;
+
+  const TapToRecordMicButton({
     super.key,
     required this.size,
     required this.iconSize,
     required this.uiScale,
     required this.onSendVoice,
+    this.onStartRecordingSfx,
+    this.onCancelRecordingSfx,
   });
 
   @override
-  State<HoldToRecordMicButton> createState() => _HoldToRecordMicButtonState();
+  State<TapToRecordMicButton> createState() => _TapToRecordMicButtonState();
 }
 
-class _HoldToRecordMicButtonState extends State<HoldToRecordMicButton> {
+class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
   final AudioRecorder _recorder = AudioRecorder();
 
   bool _isRecording = false;
@@ -2792,6 +2809,9 @@ class _HoldToRecordMicButtonState extends State<HoldToRecordMicButton> {
   bool _didPauseBgm = false;
 
   static const String _micAsset = 'assets/ui/MicReacordIcon.png';
+
+  // ✅ turquoise while recording (Mystic-ish)
+  static const Color _recordingTint = Color(0xFF3FE0D0);
 
   Future<String> _makeTempPath() async {
     final dir = await getTemporaryDirectory();
@@ -2832,8 +2852,21 @@ class _HoldToRecordMicButtonState extends State<HoldToRecordMicButton> {
       path: path,
     );
 
+    // 🔊 start-recording sound (optional)
+    try {
+      widget.onStartRecordingSfx?.call();
+    } catch (_) {}
+
     if (!mounted) return;
     setState(() => _isRecording = true);
+  }
+
+  Future<void> _resumeBgmIfPausedByMe() async {
+    if (!_didPauseBgm) return;
+    try {
+      await Bgm.I.resumeIfPossible();
+    } catch (_) {}
+    _didPauseBgm = false;
   }
 
   Future<void> _stopAndSend() async {
@@ -2842,7 +2875,7 @@ class _HoldToRecordMicButtonState extends State<HoldToRecordMicButton> {
     final stoppedPath = await _recorder.stop();
     final endMs = DateTime.now().millisecondsSinceEpoch;
 
-    final path = stoppedPath ?? _currentPath;
+    final path = (stoppedPath ?? _currentPath);
     final durationMs = endMs - _startedAtMs;
 
     _startedAtMs = 0;
@@ -2852,18 +2885,11 @@ class _HoldToRecordMicButtonState extends State<HoldToRecordMicButton> {
     setState(() => _isRecording = false);
 
     // ✅ Resume BGM after recording ends
-    if (_didPauseBgm) {
-      try {
-        await Bgm.I.resumeIfPossible();
-
-
-      } catch (_) {}
-      _didPauseBgm = false;
-    }
+    await _resumeBgmIfPausedByMe();
 
     if (path == null) return;
 
-    // ✅ block “tap” recordings
+    // ✅ block “tap” micro recordings
     if (durationMs < 250) {
       try {
         final f = File(path);
@@ -2887,22 +2913,30 @@ class _HoldToRecordMicButtonState extends State<HoldToRecordMicButton> {
     if (!mounted) return;
     setState(() => _isRecording = false);
 
+    // 🔊 cancel sound (optional)
+    try {
+      widget.onCancelRecordingSfx?.call();
+    } catch (_) {}
+
     // ✅ Resume BGM after cancel
-    if (_didPauseBgm) {
-      try {
-        await Bgm.I.resumeIfPossible();
-
-
-      } catch (_) {}
-      _didPauseBgm = false;
-    }
+    await _resumeBgmIfPausedByMe();
 
     if (path == null) return;
 
+    // delete file
     try {
       final f = File(path);
       if (await f.exists()) await f.delete();
     } catch (_) {}
+  }
+
+  Future<void> _toggleTap() async {
+    // tap: start OR stop+send
+    if (_isRecording) {
+      await _stopAndSend();
+    } else {
+      await _start();
+    }
   }
 
   @override
@@ -2913,23 +2947,34 @@ class _HoldToRecordMicButtonState extends State<HoldToRecordMicButton> {
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      onPointerDown: (_) => _start(),
-      onPointerUp: (_) => _stopAndSend(),
-      onPointerCancel: (_) => _cancel(),
+    final bool recording = _isRecording;
+
+    return GestureDetector(
+      onTap: _toggleTap,
+
+      // ✅ double tap cancels (only meaningful while recording)
+      onDoubleTap: () async {
+        if (!_isRecording) return;
+        await _cancel();
+      },
+      behavior: HitTestBehavior.opaque,
       child: SizedBox(
         width: widget.size,
         height: widget.size,
         child: Center(
           child: AnimatedScale(
-            duration: const Duration(milliseconds: 80),
-            scale: _isRecording ? 1.15 : 1.0,
+            duration: const Duration(milliseconds: 90),
+            scale: recording ? 1.12 : 1.0,
             child: Image.asset(
               _micAsset,
               width: widget.iconSize,
               height: widget.iconSize,
               fit: BoxFit.contain,
-              color: Colors.white.withOpacity(_isRecording ? 1.0 : 0.92),
+
+              // ✅ color change
+              color: recording
+                  ? _recordingTint
+                  : Colors.white.withOpacity(0.92),
             ),
           ),
         ),
