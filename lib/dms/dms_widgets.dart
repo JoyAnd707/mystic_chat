@@ -151,6 +151,7 @@ class _DmRowTile extends StatelessWidget {
     double s(double v) => v * uiScale;
 
     final double tileHeight = s(76);
+final double envelopeRight = s(8);
 
 
     final double avatarSize = s(72);
@@ -283,45 +284,42 @@ fontWeight: FontWeight.w800,
                         ],
                       ),
 
-                      // ✅ envelope
-                      Positioned(
-                        right: s(8),
+// ✅ envelope
+Positioned(
+  right: envelopeRight,
+  bottom: envelopeBottomPad,
+  child: SizedBox(
+    width: envelopeBoxW,
+    height: envelopeSize,
+    child: Align(
+      alignment: Alignment.bottomRight,
+      child: SizedBox(
+        width: envelopeSize,
+        height: envelopeSize,
+        child: Image.asset(
+          envelopeAsset,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (_, __, ___) => Icon(
+            Icons.mail_outline,
+            color: Colors.white.withValues(alpha: 0.8),
+            size: s(22),
+          ),
+        ),
+      ),
+    ),
+  ),
+),
 
-                        bottom: envelopeBottomPad,
-                        child: SizedBox(
-                          width: envelopeBoxW,
-                          height: envelopeSize,
-                          child: Align(
-                            alignment: Alignment.bottomRight,
-                            child: SizedBox(
-                              width: envelopeSize,
-                              height: envelopeSize,
-                              child: Image.asset(
-                                envelopeAsset,
-                                fit: BoxFit.contain,
-                                filterQuality: FilterQuality.high,
-                                errorBuilder: (_, __, ___) => Icon(
-                                  Icons.mail_outline,
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                  size: s(22),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
 
                       // ✅ NEW: align TOP with envelope TOP
-                      if (unread)
-                        Positioned(
-                          // put it to the left of envelope
-                          right: envelopeSize + s(6),
-                          // EXACT same top as envelope top
-                          top: envelopeTop + s(2), // ⬅️ אותו offset כמו המעטפה, נשאר מיושר
+    if (unread)
+  Positioned(
+    right: envelopeRight + envelopeSize + s(6),
+    top: envelopeTop + s(2),
+    child: const _MysticNewBadge(),
+  ),
 
-                          child: const _MysticNewBadge(),
-
-                        ),
                     ],
                   ),
                 ),
