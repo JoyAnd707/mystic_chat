@@ -122,6 +122,11 @@ class _DmTopBar extends StatelessWidget {
   }
 }
 
+String mysticPreviewClamp(String text, int maxChars) {
+  final t = text.trim();
+  if (t.length <= maxChars) return t;
+  return '${t.substring(0, maxChars)}...';
+}
 
 
 /// =======================================
@@ -262,18 +267,23 @@ fontWeight: FontWeight.w800,
                                   ),
 
                                   // ✅ preview a bit higher (less gap)
-                                  SizedBox(height: s(14)),
+                                  SizedBox(height: s(12)),
+
+
 
                                   Text(
-                                    (previewText.trim().isEmpty)
-                                        ? 'Tap to open chat'
-                                        : previewText,
+                                  (previewText.trim().isEmpty)
+    ? 'Tap to open chat'
+    : mysticPreviewClamp(previewText, 15),
+
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: Colors.white.withValues(alpha: 0.70),
-                                      fontSize: s(14),
-                                      fontWeight: FontWeight.w400,
+                                      fontSize: s(12),
+
+                                      fontWeight: FontWeight.w900,
+
                                       height: 1.0,
                                     ),
                                   ),
