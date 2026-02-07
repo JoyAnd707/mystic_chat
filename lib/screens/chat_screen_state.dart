@@ -3012,7 +3012,7 @@ onDoubleTapImage: (msg.type == ChatMessageType.image)
 // ✅ Typing overlay (always visible, even when user is scrolled up)
 Positioned(
   left: 0,
-  right: 0,
+  right: -2,
 
   // ✅ IMPORTANT:
   // The Column already shrinks the Expanded(Stack) when keyboard opens,
