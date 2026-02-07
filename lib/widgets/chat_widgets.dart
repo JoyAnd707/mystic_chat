@@ -2811,7 +2811,8 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
   static const String _micAsset = 'assets/ui/MicReacordIcon.png';
 
   // ✅ turquoise while recording (Mystic-ish)
-  static const Color _recordingTint = Color(0xFF3FE0D0);
+  static const Color _recordingTint = Color(0xFF59EEC6);
+
 
   Future<String> _makeTempPath() async {
     final dir = await getTemporaryDirectory();
