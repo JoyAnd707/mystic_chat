@@ -8,9 +8,44 @@ class FirestoreChatService {
   FirestoreChatService._();
 
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
+  static final FirebaseStorage _storage = FirebaseStorage.instance;
+
+  static DocumentReference<Map<String, dynamic>> _roomDoc(String roomId) {
+    return _db.collection('rooms').doc(roomId);
+  }
 
   static CollectionReference<Map<String, dynamic>> _messagesCol(String roomId) {
-    return _db.collection('rooms').doc(roomId).collection('messages');
+    return _roomDoc(roomId).collection('messages');
+  }
+
+  static bool _isDmRoomId(String roomId) => roomId.startsWith('dm_');
+
+  /// Expects: dm_<idA>_<idB> (IDs are already sorted in your app)
+  static List<String> _dmMemberIdsFromRoomId(String roomId) {
+    final parts = roomId.split('_');
+    if (parts.length < 3) return const [];
+    final a = parts[1].trim();
+    final b = parts[2].trim();
+    if (a.isEmpty || b.isEmpty) return const [];
+    return [a, b];
+  }
+
+  /// ✅ Critical for push notifications:
+  /// Cloud Function needs rooms/{roomId}.memberIds to exist.
+  static Future<void> _ensureDmRoomDocExists(String roomId) async {
+    if (!_isDmRoomId(roomId)) return;
+
+    final members = _dmMemberIdsFromRoomId(roomId);
+    if (members.length != 2) return;
+
+    final ref = _roomDoc(roomId);
+
+    // Use merge so we never overwrite existing fields if you add more later.
+    await ref.set({
+      'kind': 'dm',
+      'memberIds': members,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   /// Stream of messages ordered by ts ascending.
@@ -37,7 +72,6 @@ class FirestoreChatService {
     required int ts,
     required String bubbleTemplate,
     required String decor,
-    
     String? fontFamily,
 
     // ✅ must match ChatScreenState named params
@@ -45,6 +79,9 @@ class FirestoreChatService {
     String? replyToSenderId,
     String? replyToText,
   }) async {
+    // ✅ DM rooms must have a parent room doc so push can resolve recipients
+    await _ensureDmRoomDocExists(roomId);
+
     final docId = ts.toString();
 
     await _messagesCol(roomId).doc(docId).set({
@@ -62,13 +99,23 @@ class FirestoreChatService {
       'replyToSenderId': replyToSenderId,
       'replyToText': replyToText,
     });
+
+    // optional: keep room "fresh"
+    await _roomDoc(roomId).set({
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
+  /// ✅ must match ChatScreenState: sendSystemLine(text: ..., ts: ...)
   static Future<void> sendSystemLine({
     required String roomId,
     required String text,
     required int ts,
   }) async {
+    // not strictly needed for push (system lines don't push),
+    // but keeps DM room docs consistent.
+    await _ensureDmRoomDocExists(roomId);
+
     final docId = ts.toString();
 
     await _messagesCol(roomId).doc(docId).set({
@@ -81,9 +128,13 @@ class FirestoreChatService {
       'fontFamily': null,
       'heartReactorIds': <String>[],
     });
+
+    await _roomDoc(roomId).set({
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
-  /// ✅ NEW: voice message (upload to Storage, then write url into Firestore)
+  /// ✅ Voice message: uploads file to Storage and writes Firestore doc
   static Future<void> sendVoiceMessage({
     required String roomId,
     required String senderId,
@@ -93,45 +144,70 @@ class FirestoreChatService {
     required String bubbleTemplate,
     required String decor,
   }) async {
+    await _ensureDmRoomDocExists(roomId);
+
     final docId = ts.toString();
 
-    // 1) create placeholder doc (shows envelope until url is ready)
+    // We assume m4a (as per your voice format notes)
+    final storagePath = 'rooms/$roomId/voice/$docId.m4a';
+    final ref = _storage.ref(storagePath);
+
+    final file = File(localFilePath);
+    final snap = await ref.putFile(
+      file,
+      SettableMetadata(contentType: 'audio/mp4'),
+    );
+
+    final voiceUrl = await snap.ref.getDownloadURL();
+
     await _messagesCol(roomId).doc(docId).set({
       'type': 'voice',
       'senderId': senderId,
-      'text': '',
       'ts': ts,
+      'durationMs': durationMs,
+
+      // important for playback
+      'voiceUrl': voiceUrl,
+      'storagePath': storagePath, // helps delete
+
+      // keep same style fields as text
       'bubbleTemplate': bubbleTemplate,
       'decor': decor,
       'fontFamily': null,
       'heartReactorIds': <String>[],
-
-      // we reuse "voicePath" for the downloadable URL (backward compatible)
-      'voicePath': '',
-      'voiceDurationMs': durationMs,
     });
 
-    // 2) upload file to Storage
-    final String ext = (localFilePath.contains('.'))
-        ? localFilePath.split('.').last.toLowerCase()
-        : 'm4a';
+    await _roomDoc(roomId).set({
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
 
-    final storagePath = 'rooms/$roomId/voices/$docId.$ext';
-    final ref = FirebaseStorage.instance.ref(storagePath);
+  /// ✅ Delete voice message: deletes storage file (if exists) + deletes Firestore doc
+  static Future<void> deleteVoiceMessage({
+    required String roomId,
+    required String messageId,
+  }) async {
+    final msgRef = _messagesCol(roomId).doc(messageId);
+    final snap = await msgRef.get();
 
-    await ref.putFile(
-      File(localFilePath),
-      SettableMetadata(
-        contentType: (ext == 'm4a' || ext == 'mp4') ? 'audio/mp4' : 'audio/aac',
-      ),
-    );
+    if (snap.exists) {
+      final data = snap.data() ?? {};
+      final storagePath = (data['storagePath'] ?? '').toString();
+      final voiceUrl = (data['voiceUrl'] ?? '').toString();
 
-    final url = await ref.getDownloadURL();
+      try {
+        if (storagePath.isNotEmpty) {
+          await _storage.ref(storagePath).delete();
+        } else if (voiceUrl.isNotEmpty) {
+          // fallback (if older docs saved only URL)
+          await _storage.refFromURL(voiceUrl).delete();
+        }
+      } catch (_) {
+        // ignore: file might already be gone
+      }
+    }
 
-    // 3) update doc with final url
-    await _messagesCol(roomId).doc(docId).update({
-      'voicePath': url,
-    });
+    await msgRef.delete();
   }
 
   static Future<void> toggleHeart({
@@ -149,37 +225,11 @@ class FirestoreChatService {
     });
   }
 
+  /// ✅ delete doc
   static Future<void> deleteMessage({
     required String roomId,
     required String messageId,
   }) async {
-    await _messagesCol(roomId).doc(messageId).delete();
-  }
-
-  /// ✅ NEW: delete voice doc + its Storage file (path is deterministic)
-  static Future<void> deleteVoiceMessage({
-    required String roomId,
-    required String messageId, // same as docId
-  }) async {
-    // Delete Firestore doc first or after - either works.
-    // We'll try Storage delete, then doc delete.
-    try {
-      final ref = FirebaseStorage.instance.ref('rooms/$roomId/voices/$messageId.m4a');
-      await ref.delete();
-    } catch (_) {
-      // ignore: maybe different extension, or already deleted
-    }
-
-    try {
-      final ref2 = FirebaseStorage.instance.ref('rooms/$roomId/voices/$messageId.aac');
-      await ref2.delete();
-    } catch (_) {}
-
-    try {
-      final ref3 = FirebaseStorage.instance.ref('rooms/$roomId/voices/$messageId.mp4');
-      await ref3.delete();
-    } catch (_) {}
-
     await _messagesCol(roomId).doc(messageId).delete();
   }
 }
