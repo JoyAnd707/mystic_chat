@@ -2802,17 +2802,14 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
   final AudioRecorder _recorder = AudioRecorder();
 
   bool _isRecording = false;
+  bool _busy = false; // ✅ prevents rapid double taps during start/stop
   int _startedAtMs = 0;
   String? _currentPath;
 
-  // ✅ remember if we paused BGM because of recording
   bool _didPauseBgm = false;
 
   static const String _micAsset = 'assets/ui/MicReacordIcon.png';
-
-  // ✅ turquoise while recording (Mystic-ish)
   static const Color _recordingTint = Color(0xFF59EEC6);
-
 
   Future<String> _makeTempPath() async {
     final dir = await getTemporaryDirectory();
@@ -2825,41 +2822,13 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
     return status.isGranted;
   }
 
-  Future<void> _start() async {
-    if (_isRecording) return;
-
-    final ok = await _ensureMicPermission();
-    if (!ok) return;
-
-    // ✅ Pause BGM while recording (Android audio focus)
+  Future<void> _pauseBgmOnce() async {
     try {
       await Bgm.I.pause();
       _didPauseBgm = true;
     } catch (_) {
       _didPauseBgm = false;
     }
-
-    final path = await _makeTempPath();
-
-    _startedAtMs = DateTime.now().millisecondsSinceEpoch;
-    _currentPath = path;
-
-    await _recorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        bitRate: 128000,
-        sampleRate: 44100,
-      ),
-      path: path,
-    );
-
-    // 🔊 start-recording sound (optional)
-    try {
-      widget.onStartRecordingSfx?.call();
-    } catch (_) {}
-
-    if (!mounted) return;
-    setState(() => _isRecording = true);
   }
 
   Future<void> _resumeBgmIfPausedByMe() async {
@@ -2870,27 +2839,62 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
     _didPauseBgm = false;
   }
 
+  Future<void> _start() async {
+    if (_isRecording) return;
+
+    final ok = await _ensureMicPermission();
+    if (!ok) return;
+
+    await _pauseBgmOnce();
+
+    final path = await _makeTempPath();
+
+    _startedAtMs = DateTime.now().millisecondsSinceEpoch;
+    _currentPath = path;
+
+    try {
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 44100,
+        ),
+        path: path,
+      );
+    } catch (_) {
+      _startedAtMs = 0;
+      _currentPath = null;
+      await _resumeBgmIfPausedByMe();
+      return;
+    }
+
+    try {
+      widget.onStartRecordingSfx?.call();
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() => _isRecording = true);
+  }
+
   Future<void> _stopAndSend() async {
     if (!_isRecording) return;
 
     final stoppedPath = await _recorder.stop();
     final endMs = DateTime.now().millisecondsSinceEpoch;
 
-    final path = (stoppedPath ?? _currentPath);
-    final durationMs = endMs - _startedAtMs;
+    final path = stoppedPath ?? _currentPath;
+    final durationMs = (_startedAtMs > 0) ? (endMs - _startedAtMs) : 0;
 
     _startedAtMs = 0;
     _currentPath = null;
 
-    if (!mounted) return;
-    setState(() => _isRecording = false);
+    if (mounted) setState(() => _isRecording = false);
 
-    // ✅ Resume BGM after recording ends
     await _resumeBgmIfPausedByMe();
 
     if (path == null) return;
 
-    // ✅ block “tap” micro recordings
+    // ✅ if we somehow got 0ms, treat as cancel (don’t send silent)
     if (durationMs < 250) {
       try {
         final f = File(path);
@@ -2911,20 +2915,16 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
     _startedAtMs = 0;
     _currentPath = null;
 
-    if (!mounted) return;
-    setState(() => _isRecording = false);
+    if (mounted) setState(() => _isRecording = false);
 
-    // 🔊 cancel sound (optional)
     try {
       widget.onCancelRecordingSfx?.call();
     } catch (_) {}
 
-    // ✅ Resume BGM after cancel
     await _resumeBgmIfPausedByMe();
 
     if (path == null) return;
 
-    // delete file
     try {
       final f = File(path);
       if (await f.exists()) await f.delete();
@@ -2932,11 +2932,17 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
   }
 
   Future<void> _toggleTap() async {
-    // tap: start OR stop+send
-    if (_isRecording) {
-      await _stopAndSend();
-    } else {
-      await _start();
+    if (_busy) return;
+    _busy = true;
+
+    try {
+      if (_isRecording) {
+        await _stopAndSend();
+      } else {
+        await _start();
+      }
+    } finally {
+      _busy = false;
     }
   }
 
@@ -2948,15 +2954,19 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
 
   @override
   Widget build(BuildContext context) {
-    final bool recording = _isRecording;
+    final recording = _isRecording;
 
     return GestureDetector(
       onTap: _toggleTap,
-
-      // ✅ double tap cancels (only meaningful while recording)
       onDoubleTap: () async {
+        if (_busy) return;
         if (!_isRecording) return;
-        await _cancel();
+        _busy = true;
+        try {
+          await _cancel();
+        } finally {
+          _busy = false;
+        }
       },
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
@@ -2971,11 +2981,7 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
               width: widget.iconSize,
               height: widget.iconSize,
               fit: BoxFit.contain,
-
-              // ✅ color change
-              color: recording
-                  ? _recordingTint
-                  : Colors.white.withOpacity(0.92),
+              color: recording ? _recordingTint : Colors.white.withOpacity(0.92),
             ),
           ),
         ),
@@ -2983,7 +2989,6 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
     );
   }
 }
-
 
 class VoiceMessageTile extends StatefulWidget {
   final String filePath;
