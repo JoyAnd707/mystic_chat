@@ -48,6 +48,25 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
+
+
+  final messaging = FirebaseMessaging.instance;
+
+// בקשת הרשאה (iOS יציג את הדיאלוג רק על מכשיר אמיתי)
+NotificationSettings settings =
+    await messaging.requestPermission(
+  alert: true,
+  badge: true,
+  sound: true,
+);
+
+print('🔔 Notification permission: ${settings.authorizationStatus}');
+
+// קבלת FCM token
+String? token = await messaging.getToken();
+print('📱 FCM Token: $token');
+
+
   // חובה כדי ש-local notifications יעבדו באיזולייט של BG
   await NotificationsService.instance.initForBackground();
 
