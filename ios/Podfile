@@ -31,17 +31,14 @@ end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
+    # Flutter default iOS settings (חשוב)
     flutter_additional_ios_build_settings(target)
+
     target.build_configurations.each do |config|
+      # Ensure minimum iOS target
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
-    end
-  end
-endsd
 
-
-post_install do |installer|
-  installer.pods_project.targets.each do |target|
-    target.build_configurations.each do |config|
+      # Remove the '-G' flag if it appears anywhere
       %w[OTHER_CFLAGS OTHER_CPLUSPLUSFLAGS OTHER_SWIFT_FLAGS OTHER_LDFLAGS].each do |key|
         v = config.build_settings[key]
         if v.is_a?(String)

@@ -11,14 +11,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Flutter
+      - name: Set up Flutter (pinned, no cache)
         uses: subosito/flutter-action@v2
         with:
+          channel: stable
           flutter-version: "3.22.3"
-          cache: true
+          cache: false
 
-      - name: Show versions
+      - name: Show versions (truth check)
         run: |
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          echo "FLUTTER_ROOT=$FLUTTER_ROOT"
+          which flutter || true
           flutter --version
           xcodebuild -version
           sw_vers
@@ -26,10 +31,21 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      # חשוב: להריץ pod install בנפרד כדי שנוכל לחפש ב-Pods אחרי זה
+      - name: Clean iOS + Pods
+        run: |
+          flutter clean
+          rm -rf ios/Pods ios/Podfile.lock
+          rm -rf ~/Library/Developer/Xcode/DerivedData/* || true
+
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods -N
+          pod --version
+
       - name: Pod install
         run: |
           cd ios
+          pod repo update
           pod install --repo-update
           cd ..
 
@@ -37,8 +53,6 @@ jobs:
         run: |
           echo "---- Searching for '-G' in ios/ ----"
           grep -RIn -- "-G" ios || true
-          echo "---- Searching for '-G' specifically in Pods xcconfig ----"
-          grep -RIn -- "-G" ios/Pods ios/Runner.xcodeproj ios/Flutter || true
 
       - name: Build iOS (verbose)
         run: flutter build ios --release --no-codesign -v
