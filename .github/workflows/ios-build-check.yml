@@ -44,7 +44,16 @@ jobs:
           cd ios
           pod install --repo-update
           cd ..
+      - name: Hunt iOS 10.0 references (Runner/Pods/xcconfig)
+        run: |
+          echo "---- Search any 10.0 ----"
+          grep -RIn -- "10.0" ios | head -n 200 || true
 
+          echo "---- Search IPHONEOS_DEPLOYMENT_TARGET=10 ----"
+          grep -RIn -- "IPHONEOS_DEPLOYMENT_TARGET.*10" ios | head -n 200 || true
+
+          echo "---- Search arm64-apple-ios10.0 ----"
+          grep -RIn -- "arm64-apple-ios10.0" ios | head -n 200 || true
       - name: Verify BoringSSL flag removed
         run: |
           echo "---- Search for GCC_WARN flag in Pods ----"
