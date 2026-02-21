@@ -104,6 +104,7 @@ Future<void> main() async {
 
   // ✅ Firebase (required before any Firestore usage)
   await Firebase.initializeApp();
+  
 
   // ✅ Init notifications (creates channel for Android 8–12 + requests permission for 13+)
   await NotificationsService.instance.init();
