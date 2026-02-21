@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import '../audio/bgm.dart';
-import 'video_message_tile.dart';
 
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
