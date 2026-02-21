@@ -59,7 +59,7 @@ jobs:
           echo "---- Search for GCC_WARN flag in Pods ----"
           grep -RIn -- "GCC_WARN_INHIBIT_ALL_WARNINGS" ios/Pods || true
           echo "---- Search for -G flags in Pods target support files ----"
-          grep -RIn -- " -G" "ios/Pods/Target Support Files" || true
+          grep -RIn -- "-G" ios | head -n 200 || true
       - name: Build iOS (verbose) + capture log
         run: |
           set -o pipefail
