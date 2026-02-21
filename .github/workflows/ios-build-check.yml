@@ -60,6 +60,17 @@ jobs:
           grep -RIn -- "GCC_WARN_INHIBIT_ALL_WARNINGS" ios/Pods || true
           echo "---- Search for -G flags in Pods target support files ----"
           grep -RIn -- " -G" "ios/Pods/Target Support Files" || true
+      - name: Build iOS (verbose) + capture log
+        run: |
+          set -o pipefail
+          flutter build ios --release --no-codesign -v 2>&1 | tee ios_build.log
 
-      - name: Build iOS
-        run: flutter build ios --release --no-codesign
+      - name: Extract -G culprit from log
+        if: always()
+        run: |
+          echo "---- First occurrences of -G / GCC_WARN ----"
+          grep -n -- "-G" ios_build.log | head -n 80 || true
+          grep -n -- "GCC_WARN_INHIBIT_ALL_WARNINGS" ios_build.log | head -n 80 || true
+
+          echo "---- Show area around the error ----"
+          grep -n -- "unsupported option" ios_build.log | head -n 20 || true
