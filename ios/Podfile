@@ -31,20 +31,19 @@ end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
-    # Flutter default iOS settings (חשוב)
     flutter_additional_ios_build_settings(target)
 
     target.build_configurations.each do |config|
-      # Ensure minimum iOS target
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
 
-      # Remove the '-G' flag if it appears anywhere
+      flag_regex = /(^|\s)-G\d*(\s|$)/
+
       %w[OTHER_CFLAGS OTHER_CPLUSPLUSFLAGS OTHER_SWIFT_FLAGS OTHER_LDFLAGS].each do |key|
         v = config.build_settings[key]
         if v.is_a?(String)
-          config.build_settings[key] = v.split(' ').reject { |f| f == '-G' }.join(' ')
+          config.build_settings[key] = v.gsub(flag_regex, ' ').split.join(' ')
         elsif v.is_a?(Array)
-          config.build_settings[key] = v.reject { |f| f == '-G' }
+          config.build_settings[key] = v.reject { |f| f.match?(/\A-G\d*\z/) }
         end
       end
     end
