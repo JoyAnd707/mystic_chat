@@ -50,6 +50,11 @@ jobs:
           cd ios
           pod install --repo-update
           cd ..
-
+      - name: Verify BoringSSL flag removed
+        run: |
+          echo "---- Search for GCC_WARN flag in Pods ----"
+          grep -RIn -- "GCC_WARN_INHIBIT_ALL_WARNINGS" ios/Pods || true
+          echo "---- Search for -G* flags in Pods target support files ----"
+          grep -RIn -- " -G" "ios/Pods/Target Support Files" || true
       - name: Build iOS
         run: flutter build ios --release --no-codesign
