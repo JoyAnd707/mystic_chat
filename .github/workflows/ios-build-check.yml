@@ -17,16 +17,10 @@ jobs:
           echo "$HOME/flutter/bin" >> $GITHUB_PATH
           flutter --version
 
-      - name: Select Xcode 15.x
+      - name: Show Xcode version
         run: |
-          if [ -d "/Applications/Xcode_15.4.app" ]; then
-            sudo xcode-select -s "/Applications/Xcode_15.4.app"
-          elif [ -d "/Applications/Xcode_15.3.app" ]; then
-            sudo xcode-select -s "/Applications/Xcode_15.3.app"
-          elif [ -d "/Applications/Xcode_15.2.app" ]; then
-            sudo xcode-select -s "/Applications/Xcode_15.2.app"
-          fi
           xcodebuild -version
+          sw_vers
 
       - name: Flutter pub get
         run: flutter pub get
@@ -50,11 +44,13 @@ jobs:
           cd ios
           pod install --repo-update
           cd ..
+
       - name: Verify BoringSSL flag removed
         run: |
           echo "---- Search for GCC_WARN flag in Pods ----"
           grep -RIn -- "GCC_WARN_INHIBIT_ALL_WARNINGS" ios/Pods || true
-          echo "---- Search for -G* flags in Pods target support files ----"
+          echo "---- Search for -G flags in Pods target support files ----"
           grep -RIn -- " -G" "ios/Pods/Target Support Files" || true
+
       - name: Build iOS
         run: flutter build ios --release --no-codesign
