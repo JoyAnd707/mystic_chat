@@ -98,38 +98,76 @@ Future<void> _enableImmersiveSticky() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  debugPrint('STEP 1: WidgetsFlutterBinding.ensureInitialized done');
 
   // Must be registered before runApp (and before messages arrive)
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  debugPrint('STEP 2: FirebaseMessaging.onBackgroundMessage registered');
 
   // ✅ Firebase (required before any Firestore usage)
-  await Firebase.initializeApp();
-  
+  try {
+    debugPrint('STEP 3: before Firebase.initializeApp');
+    await Firebase.initializeApp();
+    debugPrint('STEP 4: after Firebase.initializeApp');
+  } catch (e, st) {
+    debugPrint('ERROR in Firebase.initializeApp: $e');
+    debugPrintStack(stackTrace: st);
+  }
 
   // ✅ Init notifications (creates channel for Android 8–12 + requests permission for 13+)
-  await NotificationsService.instance.init();
-
+  try {
+    debugPrint('STEP 5: before NotificationsService.instance.init');
+    await NotificationsService.instance.init();
+    debugPrint('STEP 6: after NotificationsService.instance.init');
+  } catch (e, st) {
+    debugPrint('ERROR in NotificationsService.instance.init: $e');
+    debugPrintStack(stackTrace: st);
+  }
 
   try {
+    debugPrint('STEP 7: before Firestore ping');
     await FirebaseFirestore.instance.collection('debug').doc('ping').set({
       'ok': true,
       'ts': DateTime.now().millisecondsSinceEpoch,
     });
-  } catch (e) {
+    debugPrint('STEP 8: after Firestore ping');
+  } catch (e, st) {
     debugPrint('Firestore ping failed: $e');
+    debugPrintStack(stackTrace: st);
   }
 
-  await Hive.initFlutter();
+  try {
+    debugPrint('STEP 9: before Hive.initFlutter');
+    await Hive.initFlutter();
+    debugPrint('STEP 10: after Hive.initFlutter');
+  } catch (e, st) {
+    debugPrint('ERROR in Hive.initFlutter: $e');
+    debugPrintStack(stackTrace: st);
+  }
 
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  try {
+    debugPrint('STEP 11: before setPreferredOrientations');
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+    debugPrint('STEP 12: after setPreferredOrientations');
+  } catch (e, st) {
+    debugPrint('ERROR in setPreferredOrientations: $e');
+    debugPrintStack(stackTrace: st);
+  }
 
-  // ✅ Hide Android system bars until swipe
-  await _enableImmersiveSticky();
+  try {
+    debugPrint('STEP 13: before _enableImmersiveSticky');
+    await _enableImmersiveSticky();
+    debugPrint('STEP 14: after _enableImmersiveSticky');
+  } catch (e, st) {
+    debugPrint('ERROR in _enableImmersiveSticky: $e');
+    debugPrintStack(stackTrace: st);
+  }
 
   // ✅ ONE global audio session for the whole app
   try {
+    debugPrint('STEP 15: before AudioSession configure');
     final session = await AudioSession.instance;
     await session.configure(AudioSessionConfiguration(
       avAudioSessionCategory: AVAudioSessionCategory.ambient,
@@ -141,24 +179,34 @@ Future<void> main() async {
       androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransientMayDuck,
       androidWillPauseWhenDucked: false,
     ));
-  } catch (e) {
+    debugPrint('STEP 16: after AudioSession configure');
+  } catch (e, st) {
     debugPrint('AudioSession configure failed: $e');
+    debugPrintStack(stackTrace: st);
   }
 
   // ✅ Init audio managers (just_audio)
   try {
+    debugPrint('STEP 17: before Bgm.I.init');
     await Bgm.I.init();
-  } catch (e) {
+    debugPrint('STEP 18: after Bgm.I.init');
+  } catch (e, st) {
     debugPrint('Bgm.init failed: $e');
+    debugPrintStack(stackTrace: st);
   }
 
   try {
+    debugPrint('STEP 19: before Sfx.I.init');
     await Sfx.I.init();
-  } catch (e) {
+    debugPrint('STEP 20: after Sfx.I.init');
+  } catch (e, st) {
     debugPrint('Sfx.init failed: $e');
+    debugPrintStack(stackTrace: st);
   }
 
+  debugPrint('STEP 21: before runApp');
   runApp(const MysticChatApp());
+  debugPrint('STEP 22: after runApp');
 }
 
 
