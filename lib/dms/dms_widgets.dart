@@ -389,18 +389,16 @@ class _DmBottomBar extends StatelessWidget {
 
   static const double _typeButtonWidth = 260;
 
-  // ✅ one send button on the RIGHT only
   static const double _sendBoxSize = 40;
   static const double _sendScale = 0.9;
   static const double _sendInset = 14;
   static const double _sendDown = 3;
 
-  // ✅ NEW assets for DMs
   static const String _answerButtonAsset = 'assets/ui/DmsAnswerButton.png';
   static const String _answerBarAsset = 'assets/ui/DmsAnswerBar.png';
-
-  // ✅ Your new envelope send icon
   static const String _sendEnvelopeAsset = 'assets/ui/DmsSendMessageButton.png';
+
+  bool get _hasText => controller.text.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -412,13 +410,15 @@ class _DmBottomBar extends StatelessWidget {
       width: double.infinity,
       color: Colors.black,
       padding: EdgeInsets.only(bottom: s(0)),
-      child: isTyping ? _typingBar(s) : _answerButtonBar(s),
+      child: AnimatedBuilder(
+        animation: controller,
+        builder: (context, _) {
+          return isTyping ? _typingBar(s) : _answerButtonBar(s);
+        },
+      ),
     );
   }
 
-  // =====================
-  // BEFORE TYPING (ANSWER button)
-  // =====================
   Widget _answerButtonBar(double Function(double) s) {
     return Stack(
       alignment: Alignment.center,
@@ -433,42 +433,14 @@ class _DmBottomBar extends StatelessWidget {
             ),
           ),
         ),
-
-        // ✅ ONLY ONE on the RIGHT (inactive in answer mode)
-        _inactiveSendButtonRightOnly(s: s),
+        _sendButtonRightOnly(
+          s: s,
+          enabled: false,
+        ),
       ],
     );
   }
 
-  Widget _inactiveSendButtonRightOnly({
-    required double Function(double) s,
-  }) {
-    return Positioned(
-      right: s(_sendInset),
-      child: Transform.translate(
-        offset: Offset(0, s(_sendDown)),
-        child: IgnorePointer(
-          ignoring: true,
-          child: SizedBox(
-            width: s(_sendBoxSize),
-            height: s(_sendBoxSize),
-            child: Transform.scale(
-              scale: _sendScale,
-              child: Image.asset(
-                _sendEnvelopeAsset,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // =====================
-  // TYPING MODE (ANSWER bar)
-  // =====================
   Widget _typingBar(double Function(double) s) {
     return Stack(
       alignment: Alignment.center,
@@ -491,19 +463,15 @@ class _DmBottomBar extends StatelessWidget {
                     controller: controller,
                     focusNode: focusNode,
                     maxLines: 1,
-
                     textAlignVertical: TextAlignVertical.center,
                     textInputAction: TextInputAction.done,
-
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: s(18),
                       height: 1.0,
                       fontWeight: FontWeight.w600,
                     ),
-
                     cursorColor: Colors.white,
-
                     decoration: InputDecoration(
                       border: InputBorder.none,
                       hintText: 'Type...',
@@ -521,46 +489,51 @@ class _DmBottomBar extends StatelessWidget {
                         bottom: s(0),
                       ),
                     ),
-
                     onEditingComplete: () {
                       focusNode.unfocus();
                     },
-
-                    onSubmitted: (_) async => await onSend(),
-
+                    onSubmitted: (_) async {
+                      if (_hasText) {
+                        await onSend();
+                      }
+                    },
                   ),
                 ),
               ),
             ],
           ),
         ),
-
-        // ✅ ONLY ONE on the RIGHT (active in typing mode)
-        _activeSendButtonRightOnly(s: s),
+        _sendButtonRightOnly(
+          s: s,
+          enabled: _hasText,
+        ),
       ],
     );
   }
 
-  Widget _activeSendButtonRightOnly({
+  Widget _sendButtonRightOnly({
     required double Function(double) s,
+    required bool enabled,
   }) {
     return Positioned(
       right: s(_sendInset),
       child: Transform.translate(
         offset: Offset(0, s(_sendDown)),
         child: GestureDetector(
-          onTap: () async => await onSend(),
-
+          onTap: enabled ? () async => await onSend() : null,
           behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            width: s(_sendBoxSize),
-            height: s(_sendBoxSize),
-            child: Transform.scale(
-              scale: _sendScale,
-              child: Image.asset(
-                _sendEnvelopeAsset,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
+          child: Opacity(
+            opacity: enabled ? 1.0 : 0.38,
+            child: SizedBox(
+              width: s(_sendBoxSize),
+              height: s(_sendBoxSize),
+              child: Transform.scale(
+                scale: _sendScale,
+                child: Image.asset(
+                  _sendEnvelopeAsset,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                ),
               ),
             ),
           ),
@@ -569,7 +542,6 @@ class _DmBottomBar extends StatelessWidget {
     );
   }
 }
-
 
 
 
