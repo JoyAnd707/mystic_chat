@@ -420,6 +420,8 @@ class _DmBottomBar extends StatelessWidget {
   }
 
   Widget _answerButtonBar(double Function(double) s) {
+    final String previewText = controller.text.trim();
+
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -427,15 +429,57 @@ class _DmBottomBar extends StatelessWidget {
           onTap: onTapTypeMessage,
           child: SizedBox(
             width: s(_typeButtonWidth),
-            child: Image.asset(
-              _answerButtonAsset,
-              fit: BoxFit.fitWidth,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Image.asset(
+                  _answerButtonAsset,
+                  fit: BoxFit.fitWidth,
+                ),
+
+                if (previewText.isNotEmpty)
+                  Positioned.fill(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: s(22),
+                        vertical: s(8),
+                      ),
+                      child: Builder(
+  builder: (context) {
+    final bool isRtl =
+        RegExp(r'[\u0590-\u05FF]').hasMatch(previewText);
+
+    return Align(
+      alignment:
+          isRtl ? Alignment.centerRight : Alignment.centerLeft,
+      child: Text(
+        previewText,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textDirection:
+            isRtl ? TextDirection.rtl : TextDirection.ltr,
+        textAlign:
+            isRtl ? TextAlign.right : TextAlign.left,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: s(18),
+          height: 1.0,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  },
+),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
+
         _sendButtonRightOnly(
           s: s,
-          enabled: false,
+          enabled: _hasText,
         ),
       ],
     );
@@ -462,6 +506,13 @@ class _DmBottomBar extends StatelessWidget {
                   child: TextField(
                     controller: controller,
                     focusNode: focusNode,
+                    textDirection: RegExp(r'[\u0590-\u05FF]').hasMatch(controller.text)
+    ? TextDirection.rtl
+    : TextDirection.ltr,
+
+textAlign: RegExp(r'[\u0590-\u05FF]').hasMatch(controller.text)
+    ? TextAlign.right
+    : TextAlign.left,
                     maxLines: 1,
                     textAlignVertical: TextAlignVertical.center,
                     textInputAction: TextInputAction.done,
@@ -503,6 +554,7 @@ class _DmBottomBar extends StatelessWidget {
             ],
           ),
         ),
+
         _sendButtonRightOnly(
           s: s,
           enabled: _hasText,
@@ -542,7 +594,6 @@ class _DmBottomBar extends StatelessWidget {
     );
   }
 }
-
 
 
 /// =======================================
