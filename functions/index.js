@@ -82,24 +82,53 @@ async function notifyForMessage({ snap, roomPath, roomId, messageId, roomKindDef
     (room.kind || "").toString() ||
     (String(roomId).startsWith("dm_") ? "dm" : roomKindDefault);
 
-  // 4) Data-only push
-  const multicast = {
-    tokens: uniqueTokens,
-    data: {
-      kind: String(roomKind), // ✅ dm | group
-      sender: String(senderAppUserId || "New message"),
-      body: String(body || ""),
-      roomId: String(roomId),
-      messageId: String(messageId),
-      type: String(type),
-      senderId: String(senderAppUserId || ""),
-    },
-    android: { priority: "high" },
-    apns: {
-      headers: { "apns-priority": "10" },
-      payload: { aps: { "content-available": 1 } },
-    },
-  };
+    // 4) Visible push notification + data
+    const title =
+      roomKind === "dm"
+        ? String(senderAppUserId || "New message")
+        : "New group message";
+
+    const multicast = {
+      tokens: uniqueTokens,
+
+      notification: {
+        title: title,
+        body: String(body || "New message"),
+      },
+
+      data: {
+        kind: String(roomKind),
+        sender: String(senderAppUserId || "New message"),
+        body: String(body || ""),
+        roomId: String(roomId),
+        messageId: String(messageId),
+        type: String(type),
+        senderId: String(senderAppUserId || ""),
+      },
+
+      android: {
+        priority: "high",
+        notification: {
+          sound: "default",
+        },
+      },
+
+      apns: {
+        headers: {
+          "apns-priority": "10",
+          "apns-push-type": "alert",
+        },
+        payload: {
+          aps: {
+            alert: {
+              title: title,
+              body: String(body || "New message"),
+            },
+            sound: "default",
+          },
+        },
+      },
+    };
 
   const res = await admin.messaging().sendEachForMulticast(multicast);
 
