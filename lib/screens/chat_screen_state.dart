@@ -1116,75 +1116,177 @@ Widget buildImageHeartOverlay({
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
       ),
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              16,
-              16,
-              24 + MediaQuery.of(context).padding.bottom,
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: FirestoreChatService.loadStickerArchive(
+              userId: widget.currentUserId,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Stickers',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+            builder: (context, snapshot) {
+              final bool isLoading =
+                  snapshot.connectionState == ConnectionState.waiting;
+
+              final List<Map<String, dynamic>> stickers =
+                  snapshot.data ?? <Map<String, dynamic>>[];
+
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  24 + MediaQuery.of(context).padding.bottom,
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'No stickers yet',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.65),
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final XFile? picked = await _stickerPicker.pickImage(
-                        source: ImageSource.gallery,
-                        imageQuality: 70,
-                      );
-
-                      if (picked == null) return;
-
-if (!mounted) return;
-
-final int ts = DateTime.now().millisecondsSinceEpoch;
-_pendingScrollToBottomTs = ts;
-
-Navigator.pop(context);
-
-await FirestoreChatService.sendStickerMessage(
-  roomId: widget.roomId,
-  senderId: widget.currentUserId,
-  localFilePath: picked.path,
-  ts: ts,
-);
-
-Sfx.I.playSend();
-                    },
-                    icon: const Icon(Icons.add_photo_alternate_outlined),
-                    label: const Text('Create Sticker'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: BorderSide(
-                        color: Colors.white.withOpacity(0.2),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Stickers',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                  ),
+                    const SizedBox(height: 16),
+
+                    SizedBox(
+                      height: 330,
+                      child: isLoading
+                          ? const Center(
+                              child: CircularProgressIndicator(),
+                            )
+                          : GridView.builder(
+                              itemCount: stickers.length + 1,
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                mainAxisSpacing: 10,
+                                crossAxisSpacing: 10,
+                                childAspectRatio: 1,
+                              ),
+                              itemBuilder: (context, index) {
+                                if (index == 0) {
+                                  return GestureDetector(
+                                    onTap: () async {
+                                      final XFile? picked =
+                                          await _stickerPicker.pickImage(
+                                        source: ImageSource.gallery,
+                                        imageQuality: 70,
+                                      );
+
+                                      if (picked == null) return;
+                                      if (!mounted) return;
+
+                                      final int ts = DateTime.now()
+                                          .millisecondsSinceEpoch;
+                                      _pendingScrollToBottomTs = ts;
+
+                                      Navigator.pop(sheetContext);
+
+                                      await FirestoreChatService
+                                          .sendStickerMessage(
+                                        roomId: widget.roomId,
+                                        senderId: widget.currentUserId,
+                                        localFilePath: picked.path,
+                                        ts: ts,
+                                      );
+
+                                      Sfx.I.playSend();
+                                    },
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.06),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.white.withOpacity(0.18),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.add_photo_alternate_outlined,
+                                            color: Colors.white.withOpacity(0.9),
+                                            size: 30,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'Create',
+                                            style: TextStyle(
+                                              color: Colors.white
+                                                  .withOpacity(0.75),
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                final sticker = stickers[index - 1];
+                                final stickerUrl =
+                                    (sticker['stickerUrl'] ?? '').toString();
+                                final storagePath =
+                                    (sticker['storagePath'] ?? '').toString();
+
+                                if (stickerUrl.isEmpty) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                return GestureDetector(
+                                  onTap: () async {
+                                    final int ts =
+                                        DateTime.now().millisecondsSinceEpoch;
+                                    _pendingScrollToBottomTs = ts;
+
+                                    Navigator.pop(sheetContext);
+
+                                    await FirestoreChatService
+                                        .sendArchivedStickerMessage(
+                                      roomId: widget.roomId,
+                                      senderId: widget.currentUserId,
+                                      stickerUrl: stickerUrl,
+                                      storagePath: storagePath,
+                                      ts: ts,
+                                    );
+
+                                    Sfx.I.playSend();
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.06),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.white.withOpacity(0.12),
+                                      ),
+                                    ),
+                                    child: Image.network(
+                                      stickerUrl,
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+
+                    if (!isLoading && stickers.isEmpty) ...[
+                      const SizedBox(height: 14),
+                      Text(
+                        'No saved stickers yet',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.55),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           ),
         );
       },

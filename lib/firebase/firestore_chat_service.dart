@@ -272,6 +272,54 @@ static Future<void> sendVoiceMessage({
       rethrow;
     }
   }
+
+
+  static Future<List<Map<String, dynamic>>> loadStickerArchive({
+  required String userId,
+}) async {
+  final snap = await _db
+      .collection('users')
+      .doc(userId)
+      .collection('stickers')
+      .orderBy('createdAt', descending: true)
+      .get();
+
+  return snap.docs.map((doc) {
+    final data = doc.data();
+    data['id'] = doc.id;
+    return data;
+  }).toList();
+}
+
+static Future<void> sendArchivedStickerMessage({
+  required String roomId,
+  required String senderId,
+  required String stickerUrl,
+  required String storagePath,
+  required int ts,
+}) async {
+  await _ensureDmRoomDocExists(roomId);
+
+  final docId = ts.toString();
+
+  await _messagesCol(roomId).doc(docId).set({
+    'type': 'sticker',
+    'senderId': senderId,
+    'text': '',
+    'stickerUrl': stickerUrl,
+    'stickerLocalPath': null,
+    'storagePath': storagePath,
+    'ts': ts,
+    'bubbleTemplate': 'normal',
+    'decor': 'none',
+    'fontFamily': null,
+    'heartReactorIds': <String>[],
+  });
+
+  await _roomDoc(roomId).set({
+    'updatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
   /// ✅ Delete voice message: deletes storage file (if exists) + deletes Firestore doc
   static Future<void> deleteVoiceMessage({
     required String roomId,
