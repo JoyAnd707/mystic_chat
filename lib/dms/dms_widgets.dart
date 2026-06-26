@@ -412,9 +412,11 @@ class _DmBottomBar extends StatelessWidget {
       padding: EdgeInsets.only(bottom: s(0)),
       child: AnimatedBuilder(
         animation: controller,
-        builder: (context, _) {
-          return isTyping ? _typingBar(s) : _answerButtonBar(s);
-        },
+     builder: (context, _) {
+  return (_hasText || isTyping)
+      ? _typingBar(s)
+      : _answerButtonBar(s);
+},
       ),
     );
   }
