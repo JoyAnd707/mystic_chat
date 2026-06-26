@@ -33,6 +33,7 @@ String _titleTextForRoom(String roomId) {
       ItemPositionsListener.create();
 
   final ImageMessageService _imageService = ImageMessageService();
+  final ImagePicker _stickerPicker = ImagePicker();
 
   // ✅ IMPORTANT: cached "near bottom" state so UI rebuilds on scroll
   bool _nearBottomCached = true;
@@ -354,6 +355,11 @@ String _replyPreviewForMessage(ChatMessage msg) {
   switch (msg.type) {
     case ChatMessageType.image:
       return '📷 Photo';
+
+
+case ChatMessageType.sticker:
+  return '🙂 Sticker';
+
 
     case ChatMessageType.voice:
       return '🎙️ Voice message • ${_formatReplyDurationMs(msg.voiceDurationMs ?? 0)}';
@@ -1101,6 +1107,90 @@ Widget buildImageHeartOverlay({
   // ✅ Selected decor for NEXT message
   BubbleDecor _selectedDecor = BubbleDecor.none;
 
+
+  void _openStickerPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.black.withOpacity(0.92),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              24 + MediaQuery.of(context).padding.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Stickers',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No stickers yet',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.65),
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final XFile? picked = await _stickerPicker.pickImage(
+                        source: ImageSource.gallery,
+                        imageQuality: 70,
+                      );
+
+                      if (picked == null) return;
+
+if (!mounted) return;
+
+final int ts = DateTime.now().millisecondsSinceEpoch;
+_pendingScrollToBottomTs = ts;
+
+Navigator.pop(context);
+
+await FirestoreChatService.sendStickerMessage(
+  roomId: widget.roomId,
+  senderId: widget.currentUserId,
+  localFilePath: picked.path,
+  ts: ts,
+);
+
+Sfx.I.playSend();
+                    },
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    label: const Text('Create Sticker'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(
+                        color: Colors.white.withOpacity(0.2),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _openBubbleTemplateMenu() async {
     final result = await showModalBottomSheet<_TemplateMenuResult>(
       context: context,
@@ -1521,6 +1611,26 @@ Widget buildImageHeartOverlay({
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                SizedBox(
+  width: double.infinity,
+  child: OutlinedButton.icon(
+onPressed: () {
+  Navigator.pop(context);
+  _openStickerPicker();
+},
+    icon: const Icon(Icons.sticky_note_2_outlined),
+    label: const Text('Stickers'),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: Colors.white,
+      side: BorderSide(
+        color: Colors.white.withOpacity(0.2),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 14),
+    ),
+  ),
+),
+
+const SizedBox(height: 16),
                 const Text(
                   'Bubble Style',
                   style: TextStyle(
@@ -2962,15 +3072,17 @@ child: Stack(
       },
 messageType: (msg.type == ChatMessageType.image)
     ? 'image'
-    : (msg.type == ChatMessageType.voice)
-        ? 'voice'
-        : (msg.type == ChatMessageType.video)
-            ? 'video'
-            : 'text',
+    : (msg.type == ChatMessageType.sticker)
+        ? 'sticker'
+        : (msg.type == ChatMessageType.voice)
+            ? 'voice'
+            : (msg.type == ChatMessageType.video)
+                ? 'video'
+                : 'text',
 imageUrl: msg.imageUrl,
 videoUrl: msg.videoUrl,
-
-
+stickerUrl: msg.stickerUrl,
+stickerLocalPath: msg.stickerLocalPath,
 // ✅ voice
 voicePath: msg.voicePath,
 voiceDurationMs: msg.voiceDurationMs,
@@ -3186,19 +3298,7 @@ if (_newBelowCount > 0 && !_nearBottomCached)
                       ),
                     ),
 
-                  // ✅ Mystic red frame
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: _redFrameTopGap,
-                    bottom: 0,
-                    child: IgnorePointer(
-                      ignoring: true,
-                      child: CustomPaint(
-                        painter: _MysticRedFramePainter(),
-                      ),
-                    ),
-                  ),
+       
                 ],
               ),
             ),

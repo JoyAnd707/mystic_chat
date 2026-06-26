@@ -394,7 +394,7 @@ class ActiveUsersBar extends StatelessWidget {
     double s(double v) => v * uiScale;
 
     final double tapSize = s(40);
-    final double iconSize = s(26);
+    final double iconSize = s(30);
 
     return SizedBox(
       height: s(barHeight),
@@ -438,7 +438,7 @@ class ActiveUsersBar extends StatelessWidget {
 
           // ✅ Max Speed (LEFT) — נשאר
           Positioned(
-            left: s(44),
+            left: s(50),
             top: 0,
             bottom: 0,
             child: Center(
@@ -456,9 +456,8 @@ Builder(
   builder: (context) {
     // left cluster: back + max speed
     final double leftInset = s(44) + s(57) + s(10);
-
-    // right cluster: mic + camera + bubble menu
-    final double rightInset = s(6) + (tapSize * 3) + (s(6) * 2) + s(10);
+// right cluster: mic + camera + bubble menu
+final double rightInset = s(6) + (tapSize * 3) + (s(6) * 2) + s(10);
 
 final List<String> names = kDebugSevenNames
     ? <String>[
@@ -524,64 +523,57 @@ return Positioned(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-         // 🎙️ Mic (tap to record, tap to send, double-tap to cancel)
+// 🎙️ Mic
 TapToRecordMicButton(
   size: tapSize,
   iconSize: s(32),
   uiScale: uiScale,
   onSendVoice: onSendVoice,
+  onStartRecordingSfx: () {},
+  onCancelRecordingSfx: () {},
+),
 
-  // 🔊 אפשר לשנות כאן למה שבא לך (כרגע safe, בלי לשבור קומפילציה)
-  onStartRecordingSfx: () {
-    // TODO: חברי פה סאונד "record start" אמיתי אם יש לך
-    // לדוגמה אם קיים אצלך: Sfx.I.playRecordStart();
-  },
-  onCancelRecordingSfx: () {
-    // TODO: חברי פה סאונד "record cancel" אמיתי אם יש לך
-    // לדוגמה אם קיים אצלך: Sfx.I.playCancelRecord();
-  },
+SizedBox(width: s(6)),
+
+// 📷 Camera button
+GestureDetector(
+  onTap: onPickImage,
+  behavior: HitTestBehavior.opaque,
+  child: SizedBox(
+    width: tapSize,
+    height: tapSize,
+    child: Center(
+      child: Image.asset(
+        'assets/ui/CameraIcon.png',
+        width: s(32),
+        height: s(32),
+        fit: BoxFit.contain,
+        color: Colors.white.withOpacity(0.92),
+      ),
+    ),
+  ),
 ),
 
 
-                  SizedBox(width: s(6)),
 
-                  // 📷 Camera button
-                  GestureDetector(
-                    onTap: onPickImage,
-                    behavior: HitTestBehavior.opaque,
-                    child: SizedBox(
-                      width: tapSize,
-                      height: tapSize,
-                      child: Center(
-                        child: Image.asset(
-                          'assets/ui/CameraIcon.png',
-                          width: s(32),
-                          height: s(32),
-                          fit: BoxFit.contain,
-                          color: Colors.white.withOpacity(0.92),
-                        ),
-                      ),
-                    ),
-                  ),
+SizedBox(width: s(6)),
 
-                  SizedBox(width: s(6)),
-
-                  // ✨ Bubble menu button
-                  GestureDetector(
-                    onTap: onOpenBubbleMenu,
-                    behavior: HitTestBehavior.opaque,
-                    child: SizedBox(
-                      width: tapSize,
-                      height: tapSize,
-                      child: Center(
-                        child: Icon(
-                          Icons.auto_awesome,
-                          size: s(20),
-                          color: Colors.white.withOpacity(0.9),
-                        ),
-                      ),
-                    ),
-                  ),
+// ✨ Bubble menu button
+GestureDetector(
+  onTap: onOpenBubbleMenu,
+  behavior: HitTestBehavior.opaque,
+  child: SizedBox(
+    width: tapSize,
+    height: tapSize,
+    child: Center(
+      child: Icon(
+        Icons.auto_awesome,
+        size: s(20),
+        color: Colors.white.withOpacity(0.9),
+      ),
+    ),
+  ),
+),
                 ],
               ),
             ),
@@ -805,11 +797,15 @@ class MessageRow extends StatelessWidget {
   final String? replyToSenderName;
 final String? replyToText;
 final VoidCallback? onTapReplyPreview;
-  /// ✅ NEW: message type + image url
-  final String messageType; // 'text' / 'image' / 'voice'
+  /// ✅ NEW: message type + media
+  final String messageType; // 'text' / 'image' / 'sticker' / 'voice' / 'video'
+
   final String? imageUrl;
-  /// ✅ NEW: video messages
-  final String? videoUrl;
+final String? stickerUrl;
+final String? stickerLocalPath;
+
+/// ✅ NEW: video messages
+final String? videoUrl;
 
   /// ✅ NEW: voice messages
   final String? voicePath;
@@ -937,8 +933,10 @@ const MessageRow({
 
   /// ✅ NEW
   this.messageType = 'text',
-  this.imageUrl,
-  this.videoUrl,
+this.imageUrl,
+this.stickerUrl,
+this.stickerLocalPath,
+this.videoUrl,
 
   // ✅ voice
   this.voicePath,
@@ -1269,8 +1267,10 @@ final String displayText = _maybeAvoidOrphanLastLine(
 // ✅ Decide what the row shows: image OR text
 late final Widget messageBody;
 
-final String msgType = messageType; // 'text' / 'image' / 'voice'
+final String msgType = messageType; // 'text' / 'image' / 'sticker' / 'voice' / 'video'
 final String? imgUrl = imageUrl;
+final String? stkUrl = stickerUrl;
+
 
 // ✅ voice data
 final String? vPath = voicePath;
@@ -1278,10 +1278,12 @@ final bool hasVoicePath = (vPath != null && vPath.trim().isNotEmpty);
 final int vDurMs = voiceDurationMs ?? 0;
 
 final bool isImageMessage = (msgType == 'image');
+final bool isStickerMessage = (msgType == 'sticker');
 final bool isVoiceMessage = (msgType == 'voice');
 final bool isVideoMessage = (msgType == 'video'); // ✅ NEW
 
 final bool hasImageUrl = (imgUrl != null && imgUrl.trim().isNotEmpty);
+final bool hasStickerUrl = (stkUrl != null && stkUrl.trim().isNotEmpty);
 
 // ✅ NEW: video url data
 final String? vidUrl = videoUrl;
@@ -1326,6 +1328,41 @@ if (isImageMessage) {
           opacity: 1.0,
         ),
       ),
+    );
+  }
+} else if (isStickerMessage) {
+  final String? localPath = stickerLocalPath;
+  final bool hasLocalPath =
+      localPath != null && localPath.trim().isNotEmpty;
+
+  if (hasStickerUrl) {
+    messageBody = GestureDetector(
+      onTap: () => _openImageViewer(context, stkUrl),
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 120 * uiScale,
+        height: 120 * uiScale,
+        child: Image.network(
+          stkUrl,
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
+  } else if (hasLocalPath) {
+    messageBody = SizedBox(
+      width: 120 * uiScale,
+      height: 120 * uiScale,
+      child: Image.file(
+        File(localPath),
+        fit: BoxFit.contain,
+      ),
+    );
+  } else {
+    messageBody = RotatingEnvelope(
+      assetPath: envelopeAsset,
+      size: 34 * uiScale,
+      duration: const Duration(milliseconds: 1800),
+      opacity: 1.0,
     );
   }
 } else if (isVideoMessage) {
@@ -1482,6 +1519,7 @@ final bool hasReplyPreview =
     (replyToSenderName != null && replyToSenderName!.trim().isNotEmpty);
 
 final bool shouldWrapImageInBubble = isImageMessage && hasReplyPreview;
+final bool shouldWrapStickerInBubble = isStickerMessage && hasReplyPreview;
 // ✅ IMAGE without reply: no bubble at all
 final Widget imageOnlyWidget = Column(
   mainAxisSize: MainAxisSize.min,
@@ -1560,9 +1598,11 @@ final double minBubbleWidth = math.min(
 
 
 
-final Widget bubbleWidget = (isImageMessage && !shouldWrapImageInBubble)
-    ? imageOnlyWidget
-    : ConstrainedBox(
+final Widget bubbleWidget =
+    ((isImageMessage && !shouldWrapImageInBubble) ||
+            (isStickerMessage && !shouldWrapStickerInBubble))
+        ? imageOnlyWidget
+        : ConstrainedBox(
         constraints: BoxConstraints(
           minWidth: shouldWrapImageInBubble ? 0 : minBubbleWidth,
           maxWidth: maxBubbleWidth,
@@ -1584,7 +1624,7 @@ final Widget bubbleWidget = (isImageMessage && !shouldWrapImageInBubble)
 
 
 // ✅ If image: return just the widget (no decors). If text: keep decors stack.
-final Widget bubbleStack = isImageMessage
+final Widget bubbleStack = (isImageMessage || isStickerMessage)
 
     ? bubbleWidget
     : Stack(

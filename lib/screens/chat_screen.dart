@@ -13,7 +13,8 @@ import '../firebase/firestore_chat_service.dart';
 import '../firebase/auth_service.dart';
 import '../services/presence_service.dart';
 import '../services/notifications_service.dart'; // ✅ ADD THIS
-
+import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 // ✅ ADD THIS
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../services/image_message_service.dart';
@@ -134,7 +135,7 @@ const Map<String, ChatUser> users = {
 /// MESSAGE MODEL
 /// =======================
 
-enum ChatMessageType { text, system, image, voice, video }
+enum ChatMessageType { text, system, image, voice, video, sticker }
 
 class ChatMessage {
   /// Firestore doc id (we use ts.toString())
@@ -148,6 +149,10 @@ class ChatMessage {
 
   /// For image messages
   final String? imageUrl;
+
+  /// For sticker messages
+  final String? stickerUrl;
+  final String? stickerLocalPath;
 
   /// For video messages
   final String? videoUrl;
@@ -176,6 +181,8 @@ class ChatMessage {
     required this.text,
     required this.ts,
     this.imageUrl,
+    this.stickerUrl,
+        this.stickerLocalPath,
     this.videoUrl,
     this.voicePath,
     this.voiceDurationMs,
@@ -194,6 +201,8 @@ class ChatMessage {
     String? senderId,
     String? text,
     String? imageUrl,
+    String? stickerUrl,
+        String? stickerLocalPath,
     String? videoUrl,
     String? voicePath,
     int? voiceDurationMs,
@@ -212,6 +221,8 @@ class ChatMessage {
       senderId: senderId ?? this.senderId,
       text: text ?? this.text,
       imageUrl: imageUrl ?? this.imageUrl,
+      stickerUrl: stickerUrl ?? this.stickerUrl,
+            stickerLocalPath: stickerLocalPath ?? this.stickerLocalPath,
       videoUrl: videoUrl ?? this.videoUrl,
       voicePath: voicePath ?? this.voicePath,
       voiceDurationMs: voiceDurationMs ?? this.voiceDurationMs,
@@ -225,41 +236,48 @@ class ChatMessage {
       replyToText: replyToText ?? this.replyToText,
     );
   }
-String _formatReplyDurationMs(int ms) {
-  if (ms <= 0) return '0:00';
-  final totalSeconds = (ms / 1000).round();
-  final minutes = totalSeconds ~/ 60;
-  final seconds = totalSeconds % 60;
-  return '$minutes:${seconds.toString().padLeft(2, '0')}';
-}
 
-String buildReplyPreviewText(ChatMessage message) {
-  switch (message.type) {
-    case ChatMessageType.image:
-      return '📷 Photo';
-
-    case ChatMessageType.voice:
-      final dur = _formatReplyDurationMs(message.voiceDurationMs ?? 0);
-      return '🎙️ Voice message • $dur';
-
-    case ChatMessageType.video:
-      return '🎥 Video';
-
-    case ChatMessageType.system:
-      final t = message.text.trim();
-      return t.isEmpty ? 'System message' : t;
-
-    case ChatMessageType.text:
-      final t = message.text.trim();
-      return t.isEmpty ? 'Message' : t;
+  String _formatReplyDurationMs(int ms) {
+    if (ms <= 0) return '0:00';
+    final totalSeconds = (ms / 1000).round();
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
-}
+
+  String buildReplyPreviewText(ChatMessage message) {
+    switch (message.type) {
+      case ChatMessageType.image:
+        return '📷 Photo';
+
+      case ChatMessageType.sticker:
+        return 'Sticker';
+
+      case ChatMessageType.voice:
+        final dur = _formatReplyDurationMs(message.voiceDurationMs ?? 0);
+        return '🎙️ Voice message • $dur';
+
+      case ChatMessageType.video:
+        return '🎥 Video';
+
+      case ChatMessageType.system:
+        final t = message.text.trim();
+        return t.isEmpty ? 'System message' : t;
+
+      case ChatMessageType.text:
+        final t = message.text.trim();
+        return t.isEmpty ? 'Message' : t;
+    }
+  }
+
   Map<String, dynamic> toMap() => <String, dynamic>{
         'id': id,
         'type': type.name,
         'senderId': senderId,
         'text': text,
         'imageUrl': imageUrl,
+        'stickerUrl': stickerUrl,
+                'stickerLocalPath': stickerLocalPath,
         'videoUrl': videoUrl,
         'voicePath': voicePath,
         'voiceDurationMs': voiceDurationMs,
@@ -311,30 +329,42 @@ String buildReplyPreviewText(ChatMessage message) {
             ? null
             : m['imageUrl'].toString();
 
+    final sticker =
+        (m['stickerUrl'] == null || m['stickerUrl'].toString().trim().isEmpty)
+            ? null
+            : m['stickerUrl'].toString();
+
+
+    final stickerLocal =
+        (m['stickerLocalPath'] == null ||
+                m['stickerLocalPath'].toString().trim().isEmpty)
+            ? null
+            : m['stickerLocalPath'].toString();
+
     final vid =
         (m['videoUrl'] == null || m['videoUrl'].toString().trim().isEmpty)
             ? null
             : m['videoUrl'].toString();
 
-final vp = (() {
-  final path = m['voicePath'];
-  final url = m['voiceUrl'];
+    final vp = (() {
+      final path = m['voicePath'];
+      final url = m['voiceUrl'];
 
-  if (path != null && path.toString().trim().isNotEmpty) {
-    return path.toString();
-  }
+      if (path != null && path.toString().trim().isNotEmpty) {
+        return path.toString();
+      }
 
-  if (url != null && url.toString().trim().isNotEmpty) {
-    return url.toString();
-  }
+      if (url != null && url.toString().trim().isNotEmpty) {
+        return url.toString();
+      }
 
-  return null;
-})();
+      return null;
+    })();
 
-final dynamic rawVoiceDur = m['voiceDurationMs'] ?? m['durationMs'];
-final int? vDur = (rawVoiceDur is int)
-    ? rawVoiceDur
-    : int.tryParse((rawVoiceDur ?? '').toString());
+    final dynamic rawVoiceDur = m['voiceDurationMs'] ?? m['durationMs'];
+    final int? vDur = (rawVoiceDur is int)
+        ? rawVoiceDur
+        : int.tryParse((rawVoiceDur ?? '').toString());
 
     return ChatMessage(
       id: id,
@@ -342,6 +372,8 @@ final int? vDur = (rawVoiceDur is int)
       senderId: (m['senderId'] ?? '').toString(),
       text: (m['text'] ?? '').toString(),
       imageUrl: img,
+      stickerUrl: sticker,
+            stickerLocalPath: stickerLocal,
       videoUrl: vid,
       voicePath: vp,
       voiceDurationMs: vDur,

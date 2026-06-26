@@ -33,7 +33,7 @@ class FirestoreChatService {
   /// ✅ Critical for push notifications:
   /// Cloud Function needs rooms/{roomId}.memberIds to exist.
   static Future<void> _ensureDmRoomDocExists(String roomId) async {
-    if (!_isDmRoomId(roomId)) return;
+    if (!_isDmRoomId(roomId)) return; 
 
     final members = _dmMemberIdsFromRoomId(roomId);
     if (members.length != 2) return;
@@ -200,6 +200,78 @@ static Future<void> sendVoiceMessage({
     rethrow;
   }
 }
+
+
+  /// ✅ Sticker message:
+  /// 1) writes message immediately with local preview path
+  /// 2) uploads image to Storage
+  /// 3) saves sticker to user's archive
+  /// 4) updates Firestore with stickerUrl
+  static Future<void> sendStickerMessage({
+    required String roomId,
+    required String senderId,
+    required String localFilePath,
+    required int ts,
+  }) async {
+    await _ensureDmRoomDocExists(roomId);
+
+    final docId = ts.toString();
+    final msgRef = _messagesCol(roomId).doc(docId);
+
+    final storagePath = 'users/$senderId/stickers/$docId.png';
+    final ref = _storage.ref(storagePath);
+
+    await msgRef.set({
+      'type': 'sticker',
+      'senderId': senderId,
+      'text': '',
+      'stickerUrl': '',
+      'stickerLocalPath': localFilePath,
+      'storagePath': storagePath,
+      'ts': ts,
+      'bubbleTemplate': 'normal',
+      'decor': 'none',
+      'fontFamily': null,
+      'heartReactorIds': <String>[],
+    });
+
+    await _roomDoc(roomId).set({
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    try {
+      final file = File(localFilePath);
+      final snap = await ref.putFile(
+        file,
+        SettableMetadata(contentType: 'image/png'),
+      );
+
+      final stickerUrl = await snap.ref.getDownloadURL();
+
+      await _db
+          .collection('users')
+          .doc(senderId)
+          .collection('stickers')
+          .doc(docId)
+          .set({
+        'stickerUrl': stickerUrl,
+        'storagePath': storagePath,
+        'createdBy': senderId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await msgRef.update({
+        'stickerUrl': stickerUrl,
+        'stickerLocalPath': null,
+        'storagePath': storagePath,
+      });
+    } catch (e) {
+      await msgRef.update({
+        'uploadFailed': true,
+      });
+      rethrow;
+    }
+  }
   /// ✅ Delete voice message: deletes storage file (if exists) + deletes Firestore doc
   static Future<void> deleteVoiceMessage({
     required String roomId,
