@@ -11,83 +11,93 @@ class PushService {
   static final FirebaseMessaging _msg = FirebaseMessaging.instance;
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  static bool _tokenRefreshListenerStarted = false;
+
   static Future<void> initAndSaveToken({
     required String appUserId,
   }) async {
     try {
-      // 1) Ask permission (iOS + Android 13+)
       final settings = await _msg.requestPermission(
         alert: true,
         badge: true,
         sound: true,
       );
 
+      print('Push permission status: ${settings.authorizationStatus}');
+
       if (settings.authorizationStatus == AuthorizationStatus.denied) {
         print('Push permission denied.');
         return;
       }
 
-      // 2) On iOS, APNS token may not be ready immediately.
-      if (Platform.isIOS) {
-        String? apnsToken;
+      await _tryGetAndSaveToken(appUserId: appUserId);
 
-        for (int i = 0; i < 10; i++) {
-          try {
-            apnsToken = await _msg.getAPNSToken();
-          } catch (_) {
-            apnsToken = null;
-          }
+      if (!_tokenRefreshListenerStarted) {
+        _tokenRefreshListenerStarted = true;
 
-          if (apnsToken != null && apnsToken.isNotEmpty) {
-            break;
-          }
+        FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+          if (newToken.isEmpty) return;
 
-          await Future.delayed(const Duration(seconds: 1));
-        }
-
-        if (apnsToken == null || apnsToken.isEmpty) {
-          print('APNS token not available yet. Skipping push token save for now.');
-          return;
-        }
+          await _saveToken(
+            token: newToken,
+            appUserId: appUserId,
+          );
+        });
       }
-
-      // 3) Get FCM token
-      final token = await _msg.getToken();
-      print('FCM TOKEN = $token');
-
-      if (token == null || token.isEmpty) {
-        print('FCM token is empty.');
-        return;
-      }
-
-      await _saveToken(
-        token: token,
-        appUserId: appUserId,
-      );
-
-      // 4) Token refresh
-      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
-        if (newToken.isEmpty) return;
-
-        await _saveToken(
-          token: newToken,
-          appUserId: appUserId,
-        );
-      });
     } catch (e) {
-      // Push notifications should never block login / app entry.
       print('PushService.initAndSaveToken skipped due to error: $e');
     }
   }
 
-static Future<void> _saveToken({
-  required String token,
-  required String appUserId,
-}) async {
-  print('Saving token...');
+  static Future<void> _tryGetAndSaveToken({
+    required String appUserId,
+  }) async {
+    for (int attempt = 1; attempt <= 30; attempt++) {
+      try {
+        if (Platform.isIOS) {
+          final apnsToken = await _msg.getAPNSToken();
+          print('APNS TOKEN attempt $attempt = $apnsToken');
 
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+          if (apnsToken == null || apnsToken.isEmpty) {
+            await Future.delayed(const Duration(seconds: 2));
+            continue;
+          }
+        }
+
+        final token = await _msg.getToken();
+        print('FCM TOKEN = $token');
+
+        if (token == null || token.isEmpty) {
+          await Future.delayed(const Duration(seconds: 2));
+          continue;
+        }
+
+        await _saveToken(
+          token: token,
+          appUserId: appUserId,
+        );
+
+        return;
+      } catch (e) {
+        print('Token attempt $attempt failed: $e');
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    }
+
+    print('Could not get push token after retries.');
+  }
+
+  static Future<void> _saveToken({
+    required String token,
+    required String appUserId,
+  }) async {
+    print('Saving token...');
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      print('No Firebase Auth user. Cannot save FCM token.');
+      return;
+    }
 
     await _db.collection('users').doc(uid).set({
       'uid': uid,
