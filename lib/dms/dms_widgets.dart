@@ -376,6 +376,9 @@ class _DmBottomBar extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final double uiScale;
+  final String? replyToSenderName;
+final String? replyToText;
+final VoidCallback? onCancelReply;
 
   const _DmBottomBar({
     required this.height,
@@ -383,8 +386,11 @@ class _DmBottomBar extends StatelessWidget {
     required this.onTapTypeMessage,
     required this.controller,
     required this.focusNode,
-    required this.onSend,
-    required this.uiScale,
+required this.onSend,
+required this.uiScale,
+this.replyToSenderName,
+this.replyToText,
+this.onCancelReply,
   });
 
   static const double _typeButtonWidth = 260;
@@ -410,17 +416,103 @@ class _DmBottomBar extends StatelessWidget {
       width: double.infinity,
       color: Colors.black,
       padding: EdgeInsets.only(bottom: s(0)),
-      child: AnimatedBuilder(
-        animation: controller,
-     builder: (context, _) {
-  return (_hasText || isTyping)
-      ? _typingBar(s)
-      : _answerButtonBar(s);
-},
-      ),
+child: AnimatedBuilder(
+  animation: controller,
+  builder: (context, _) {
+    final bool hasReply =
+        (replyToText?.trim().isNotEmpty ?? false);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (hasReply)
+          _replyPreviewBar(s),
+
+        Expanded(
+          child: (_hasText || isTyping || hasReply)
+              ? _typingBar(s)
+              : _answerButtonBar(s),
+        ),
+      ],
+    );
+  },
+),
     );
   }
+Widget _replyPreviewBar(double Function(double) s) {
+  final String sender = replyToSenderName ?? '';
+  final String text = replyToText ?? '';
 
+  return Container(
+    width: double.infinity,
+    height: s(46),
+    color: Colors.black,
+    padding: EdgeInsets.symmetric(horizontal: s(14)),
+    child: Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: s(10),
+        vertical: s(6),
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1F1F1F),
+        border: Border.all(
+          color: const Color(0xFF46F5D6).withOpacity(0.75),
+          width: s(1.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  sender,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: const Color(0xFF46F5D6),
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w700,
+                    height: 1.0,
+                  ),
+                ),
+                SizedBox(height: s(4)),
+                Text(
+                  text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.78),
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w500,
+                    height: 1.0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: onCancelReply,
+            behavior: HitTestBehavior.opaque,
+            child: SizedBox(
+              width: s(30),
+              height: s(30),
+              child: Center(
+                child: Icon(
+                  Icons.close,
+                  color: Colors.white.withOpacity(0.85),
+                  size: s(18),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   Widget _answerButtonBar(double Function(double) s) {
     final String previewText = controller.text.trim();
 

@@ -354,6 +354,41 @@ late final AnimationController _enterController;
 late final Animation<double> _enterScale;
   bool _isTyping = false;
 
+
+
+
+double _dragDx = 0.0;
+
+String? _replyToMessageId;
+String? _replyToSenderId;
+String? _replyToSenderName;
+String? _replyToText;
+
+void _setReplyTarget({
+  required String messageId,
+  required String senderId,
+  required String text,
+}) {
+  setState(() {
+    _replyToMessageId = messageId;
+    _replyToSenderId = senderId;
+    _replyToSenderName =
+        dmUsers[senderId]?.name ?? senderId;
+    _replyToText = text.trim();
+    _isTyping = true;
+  });
+
+  _focus.requestFocus();
+}
+
+void _clearReplyTarget() {
+  setState(() {
+    _replyToMessageId = null;
+    _replyToSenderId = null;
+    _replyToSenderName = null;
+    _replyToText = null;
+  });
+}
   String _lastReadKey() =>
       'lastReadMs__${widget.currentUserId}__${widget.roomId}';
 
@@ -715,39 +750,69 @@ Widget build(BuildContext context) {
                                 ? switchedSenderGap
                                 : sameSenderGap;
 
-                            return Padding(
-                              padding: EdgeInsets.only(bottom: bottomGap),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (showDateDivider)
-                                    _DmDateDivider(
-                                      text: dateHeader,
-                                      uiScale: uiScale,
-                                    ),
-                                  _DmMessageRow(
-                                    isMe: isMe,
-                                    text: text,
-                                    time: timeLabel,
-                                    uiScale: uiScale,
-                                    meLetter: (dmUsers[widget.currentUserId]
-                                                ?.name
-                                                .characters
-                                                .first ??
-                                            ' ')
-                                        .toUpperCase(),
-                                    otherLetter: (dmUsers[widget.otherUserId]
-                                                ?.name
-                                                .characters
-                                                .first ??
-                                            ' ')
-                                        .toUpperCase(),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+        return Padding(
+  padding: EdgeInsets.only(bottom: bottomGap),
+  child: Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (showDateDivider)
+        _DmDateDivider(
+          text: dateHeader,
+          uiScale: uiScale,
+        ),
+
+      GestureDetector(
+        behavior: HitTestBehavior.translucent,
+
+        onHorizontalDragStart: (_) {
+          _dragDx = 0.0;
+        },
+
+        onHorizontalDragUpdate: (details) {
+          _dragDx += details.delta.dx;
+
+          final bool swipeOk = _dragDx > 28;
+
+          if (swipeOk) {
+            _dragDx = 0.0;
+
+            _setReplyTarget(
+              messageId: docs[i].id,
+              senderId: sender,
+              text: text,
+            );
+          }
+        },
+
+        onHorizontalDragEnd: (_) {
+          _dragDx = 0.0;
+        },
+
+        child: _DmMessageRow(
+          isMe: isMe,
+          text: text,
+          time: timeLabel,
+          uiScale: uiScale,
+          meLetter: (dmUsers[widget.currentUserId]
+                      ?.name
+                      .characters
+                      .first ??
+                  ' ')
+              .toUpperCase(),
+          otherLetter: (dmUsers[widget.otherUserId]
+                      ?.name
+                      .characters
+                      .first ??
+                  ' ')
+              .toUpperCase(),
+        ),
+      ),
+    ],
+  ),
+);
+},
                         );
+                        
                       },
                     ),
                   ],
@@ -761,15 +826,21 @@ Widget build(BuildContext context) {
             child: _DmBottomCornerLine(uiScale: uiScale),
           ),
 
-          _DmBottomBar(
-            height: s(80),
-            isTyping: _isTyping,
-            onTapTypeMessage: _onTapType,
-            controller: _c,
-            focusNode: _focus,
-            onSend: _send,
-            uiScale: uiScale,
-          ),
+_DmBottomBar(
+height: (_replyToText != null && _replyToText!.trim().isNotEmpty)
+    ? s(126)
+    : s(80),
+  isTyping: _isTyping,
+  onTapTypeMessage: _onTapType,
+  controller: _c,
+  focusNode: _focus,
+  onSend: _send,
+  uiScale: uiScale,
+
+  replyToSenderName: _replyToSenderName,
+  replyToText: _replyToText,
+  onCancelReply: _clearReplyTarget,
+),
         ],
       ),
     ),
