@@ -30,7 +30,12 @@ class AuthService {
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
-    // ✅ NEW: register push token for this device/user
-    await PushService.initAndSaveToken(appUserId: currentUserId);
+    // Register push token, but don't block login if APNS isn't ready yet.
+    PushService.initAndSaveToken(appUserId: currentUserId).catchError((
+      error,
+      stackTrace,
+    ) {
+      print('Push init failed, continuing: $error');
+    });
   }
 }
