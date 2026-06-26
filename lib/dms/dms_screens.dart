@@ -21,9 +21,10 @@ class DmsListScreen extends StatefulWidget {
 }
 
 class _DmsListScreenState extends State<DmsListScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _twinkleController;
-
+late final AnimationController _enterController;
+late final Animation<double> _enterScale;
 // ✅ prevents double back sound when we pop manually (top bar back)
 bool _suppressNextPopSound = false;
 
@@ -47,12 +48,29 @@ void initState() {
     vsync: this,
     duration: const Duration(seconds: 6),
   )..repeat();
+  _enterController = AnimationController(
+  vsync: this,
+  duration: const Duration(milliseconds: 180),
+);
+
+_enterScale = Tween<double>(
+  begin: 0.0,
+  end: 1.0,
+).animate(
+  CurvedAnimation(
+    parent: _enterController,
+    curve: Curves.easeOutCubic,
+  ),
+);
+
+_enterController.forward();
 }
 
 
   @override
   void dispose() {
     _twinkleController.dispose();
+    _enterController.dispose();
     super.dispose();
   }
 
@@ -307,7 +325,7 @@ class DmChatScreen extends StatefulWidget {
 }
 
 class _DmChatScreenState extends State<DmChatScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
 
   static const String _roomsCol = 'dm_rooms';
   static const String _msgsSub = 'messages';
@@ -316,7 +334,8 @@ class _DmChatScreenState extends State<DmChatScreen>
   final TextEditingController _c = TextEditingController();
   final FocusNode _focus = FocusNode();
   late final AnimationController _twinkleController;
-
+late final AnimationController _enterController;
+late final Animation<double> _enterScale;
   bool _isTyping = false;
 
   String _lastReadKey() =>
@@ -416,7 +435,22 @@ class _DmChatScreenState extends State<DmChatScreen>
       vsync: this,
       duration: const Duration(seconds: 6),
     )..repeat();
+_enterController = AnimationController(
+  vsync: this,
+  duration: const Duration(milliseconds: 180),
+);
 
+_enterScale = Tween<double>(
+  begin: 0.0,
+  end: 1.0,
+).animate(
+  CurvedAnimation(
+    parent: _enterController,
+    curve: Curves.easeOutCubic,
+  ),
+);
+
+_enterController.forward();
     _focus.addListener(() {
       if (!_focus.hasFocus) {
         if (mounted) {
@@ -446,6 +480,7 @@ class _DmChatScreenState extends State<DmChatScreen>
   @override
   void dispose() {
     _twinkleController.dispose();
+    _enterController.dispose();
     _scroll.dispose();
     _c.dispose();
     _focus.dispose();
@@ -453,117 +488,119 @@ class _DmChatScreenState extends State<DmChatScreen>
   }
 
   @override
-  Widget build(BuildContext context) {
-    final double uiScale = mysticUiScale(context);
-    double s(double v) => v * uiScale;
+Widget build(BuildContext context) {
+  final double uiScale = mysticUiScale(context);
+  double s(double v) => v * uiScale;
 
-    final mq = MediaQuery.of(context);
+  final mq = MediaQuery.of(context);
 
-    return MediaQuery(
-      data: mq.copyWith(
-        textScaler: const TextScaler.linear(1.0),
-      ),
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Column(
-          children: [
-            // ✅ TOP BAR שלך נשאר בדיוק כמו שיש לך
-            SafeArea(
-              bottom: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 34, width: double.infinity),
-                  LayoutBuilder(
-                    builder: (context, c) {
-                      const double barAspect = 2048 / 212;
-                      final w = c.maxWidth;
-                      final barH = w / barAspect;
+  return MediaQuery(
+    data: mq.copyWith(
+      textScaler: const TextScaler.linear(1.0),
+    ),
+    child: Scaffold(
+      backgroundColor: Colors.black,
+      body: Column(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 34, width: double.infinity),
+                LayoutBuilder(
+                  builder: (context, c) {
+                    const double barAspect = 2048 / 212;
+                    final w = c.maxWidth;
+                    final barH = w / barAspect;
 
-                      return SizedBox(
-                        width: w,
-                        height: barH,
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: Image.asset(
-                                'assets/ui/DMSroomNameBar.png',
-                                fit: BoxFit.fitWidth,
-                                alignment: Alignment.center,
-                                filterQuality: FilterQuality.high,
-                                errorBuilder: (_, __, ___) =>
-                                    const SizedBox.shrink(),
-                              ),
-                            ),
-                            Positioned(
-                              left: 0,
-                              top: 0,
-                              bottom: 0,
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () async {
-                                  try {
-                                    Sfx.I.playBack();
-                                  } catch (_) {}
-                                  if (context.mounted) {
-                                    Navigator.of(context).pop();
-                                  }
-                                },
-                                child: const SizedBox(
-                                  width: 72,
-                                  height: double.infinity,
-                                ),
-                              ),
-                            ),
-                            Align(
+                    return SizedBox(
+                      width: w,
+                      height: barH,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: Image.asset(
+                              'assets/ui/DMSroomNameBar.png',
+                              fit: BoxFit.fitWidth,
                               alignment: Alignment.center,
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 80),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Transform.translate(
-                                      offset: const Offset(-2, 1),
-                                      child: Image.asset(
-                                        'assets/ui/DMSlittleLetterIcon.png',
-                                        width: 25,
-                                        height: 25,
-                                        fit: BoxFit.contain,
-                                        filterQuality: FilterQuality.high,
-                                        errorBuilder: (_, __, ___) =>
-                                            const SizedBox.shrink(),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Flexible(
-                                      child: Text(
-                                        widget.otherName,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w200,
-                                          height: 1.0,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              filterQuality: FilterQuality.high,
+                              errorBuilder: (_, __, ___) =>
+                                  const SizedBox.shrink(),
+                            ),
+                          ),
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () async {
+                                try {
+                                  Sfx.I.playBack();
+                                } catch (_) {}
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                              child: const SizedBox(
+                                width: 72,
+                                height: double.infinity,
                               ),
                             ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
+                          ),
+                          Align(
+                            alignment: Alignment.center,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 80),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Transform.translate(
+                                    offset: const Offset(-2, 1),
+                                    child: Image.asset(
+                                      'assets/ui/DMSlittleLetterIcon.png',
+                                      width: 25,
+                                      height: 25,
+                                      fit: BoxFit.contain,
+                                      filterQuality: FilterQuality.high,
+                                      errorBuilder: (_, __, ___) =>
+                                          const SizedBox.shrink(),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      widget.otherName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w200,
+                                        height: 1.0,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
+          ),
 
-            Expanded(
+          Expanded(
+            child: ScaleTransition(
+              scale: _enterScale,
+              alignment: Alignment.center,
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
@@ -584,13 +621,11 @@ class _DmChatScreenState extends State<DmChatScreen>
                       ),
                     ),
 
-                    // ✅ במקום ListView על _messages — StreamBuilder
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: _msgsStream,
                       builder: (context, snap) {
                         final docs = snap.data?.docs ?? const [];
 
-                        // ✅ mark read when we receive new snapshot (lightweight)
                         if (snap.hasData) {
                           WidgetsBinding.instance.addPostFrameCallback((_) async {
                             await _markReadNow();
@@ -620,9 +655,12 @@ class _DmChatScreenState extends State<DmChatScreen>
                             final sender = (m['senderId'] ?? '').toString();
                             final isMe = sender == widget.currentUserId;
                             final text = (m['text'] ?? '').toString();
+
                             final int ts =
                                 (m['tsMs'] is int) ? m['tsMs'] as int : 0;
-                            final String timeLabel = mysticTimeOnlyFromMs(ts);
+
+                            final String timeLabel =
+                                mysticTimeOnlyFromMs(ts);
 
                             int prevTs = 0;
                             if (i > 0) {
@@ -647,17 +685,19 @@ class _DmChatScreenState extends State<DmChatScreen>
                             if (i > 0) {
                               final prev = docs[i - 1].data();
                               if ((prev['type'] ?? 'text') == 'text') {
-                                prevSender = (prev['senderId'] ?? '').toString();
+                                prevSender =
+                                    (prev['senderId'] ?? '').toString();
                               }
                             }
 
                             final bool switchedSender =
-                                (prevSender.isNotEmpty && prevSender != sender);
+                                prevSender.isNotEmpty && prevSender != sender;
 
                             final double sameSenderGap = s(22);
                             final double switchedSenderGap = s(34);
-                            final double bottomGap =
-                                switchedSender ? switchedSenderGap : sameSenderGap;
+                            final double bottomGap = switchedSender
+                                ? switchedSenderGap
+                                : sameSenderGap;
 
                             return Padding(
                               padding: EdgeInsets.only(bottom: bottomGap),
@@ -698,34 +738,30 @@ class _DmChatScreenState extends State<DmChatScreen>
                 ),
               ),
             ),
+          ),
 
-            Padding(
-              padding: EdgeInsets.only(bottom: s(0)),
-              child: _DmBottomCornerLine(uiScale: uiScale),
-            ),
+          Padding(
+            padding: EdgeInsets.only(bottom: s(0)),
+            child: _DmBottomCornerLine(uiScale: uiScale),
+          ),
 
-            _DmBottomBar(
-              height: s(80),
-              isTyping: _isTyping,
-              onTapTypeMessage: _onTapType,
-              controller: _c,
-              focusNode: _focus,
-              onSend: _send,
-              uiScale: uiScale,
-            ),
-          ],
-        ),
+          _DmBottomBar(
+            height: s(80),
+            isTyping: _isTyping,
+            onTapTypeMessage: _onTapType,
+            controller: _c,
+            focusNode: _focus,
+            onSend: _send,
+            uiScale: uiScale,
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }
 
 
-
-
-
-
-
+}
 
 
 
