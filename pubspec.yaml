@@ -66,10 +66,7 @@ flutter:
     - assets/fonts/
     - assets/avatars/
     - assets/reactions/
-    - assets/ui/VideoResumedIcon.png
-    - assets/ui/VideoPausedIcon.png
-    - assets/ui/VideoProgressionBar.png
-    - assets/ui/ProgressionDotVideo.png
+
   fonts:
     - family: NotoSans
       fonts:
@@ -100,3 +97,9 @@ flutter:
     - family: Abraham
       fonts:
         - asset: assets/fonts/Abraham-Regular.ttf
+
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-VariableFont_wdth,wght.ttf
+        - asset: assets/fonts/Roboto-Italic-VariableFont_wdth,wght.ttf
+          style: italic

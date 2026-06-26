@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../audio/bgm.dart';
 import '../audio/sfx.dart';
-
+import 'dart:async';
 part 'dms_core.dart';
 part 'dms_widgets.dart';
 part 'dms_painters.dart';
@@ -25,6 +25,8 @@ class _DmsListScreenState extends State<DmsListScreen>
   late final AnimationController _twinkleController;
 late final AnimationController _enterController;
 late final Animation<double> _enterScale;
+Timer? _clockTimer;
+DateTime _now = DateTime.now();
 // ✅ prevents double back sound when we pop manually (top bar back)
 bool _suppressNextPopSound = false;
 
@@ -38,7 +40,18 @@ bool _suppressNextPopSound = false;
 @override
 void initState() {
   super.initState();
+_now = DateTime.now();
 
+_clockTimer = Timer.periodic(
+  const Duration(seconds: 1),
+  (_) {
+    if (!mounted) return;
+
+    setState(() {
+      _now = DateTime.now();
+    });
+  },
+);
   // ✅ DMs use same Home BGM
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     await Bgm.I.playHomeDm();
@@ -67,12 +80,13 @@ _enterController.forward();
 }
 
 
-  @override
-  void dispose() {
-    _twinkleController.dispose();
-    _enterController.dispose();
-    super.dispose();
-  }
+@override
+void dispose() {
+  _clockTimer?.cancel();
+  _twinkleController.dispose();
+  _enterController.dispose();
+  super.dispose();
+}
 
   String _dmRoomId(String a, String b) {
     final pair = [a, b]..sort();
@@ -205,10 +219,12 @@ Widget build(BuildContext context) {
             ),
           ),
 
-          SafeArea(
-            child: Column(
-              children: [
-_DmTopBar(
+SafeArea(
+  child: Column(
+    children: [
+      MysticTopStatusBar(now: _now),
+
+      _DmTopBar(
   onBack: () async {
     // 🔊 Back SFX (do NOT await — navigate immediately)
     try {
@@ -764,7 +780,62 @@ Widget build(BuildContext context) {
 }
 
 
+class MysticTopStatusBar extends StatelessWidget {
+  final DateTime now;
 
+  const MysticTopStatusBar({
+    super.key,
+    required this.now,
+  });
+
+  String _timeText(DateTime t) {
+    final hour = t.hour % 12 == 0 ? 12 : t.hour % 12;
+    final minute = t.minute.toString().padLeft(2, '0');
+    final ampm = t.hour >= 12 ? 'PM' : 'AM';
+
+    return '$hour:$minute$ampm';
+  }
+
+@override
+Widget build(BuildContext context) {
+  return Padding(
+    padding: const EdgeInsets.only(top: 25),
+    child: SizedBox(
+      width: double.infinity,
+      height: 64,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: -25,
+            child: Image.asset(
+              'assets/ui/TopBar.png',
+              fit: BoxFit.fitWidth,
+            ),
+          ),
+
+          Positioned(
+            left: 12,
+            top: 67,
+            child: Text(
+              _timeText(now),
+              style: const TextStyle(
+                fontFamily: 'Roboto',
+                fontSize: 17,
+                color: Colors.white,
+                fontWeight: FontWeight.w400,
+                height: 1,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+}
 
 
 
