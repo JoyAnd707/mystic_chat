@@ -320,6 +320,71 @@ static Future<void> sendArchivedStickerMessage({
     'updatedAt': FieldValue.serverTimestamp(),
   }, SetOptions(merge: true));
 }
+
+static Future<bool> saveStickerToArchiveFromMessage({
+  required String userId,
+  required String stickerUrl,
+  required String storagePath,
+}) async {
+  if (stickerUrl.trim().isEmpty && storagePath.trim().isEmpty) {
+    return false;
+  }
+
+  final stickersCol = _db
+      .collection('users')
+      .doc(userId)
+      .collection('stickers');
+
+  QuerySnapshot<Map<String, dynamic>> existingSnap;
+
+  if (storagePath.trim().isNotEmpty) {
+    existingSnap = await stickersCol
+        .where('sourceStoragePath', isEqualTo: storagePath)
+        .limit(1)
+        .get();
+  } else {
+    existingSnap = await stickersCol
+        .where('sourceStickerUrl', isEqualTo: stickerUrl)
+        .limit(1)
+        .get();
+  }
+
+  if (existingSnap.docs.isNotEmpty) {
+    return false;
+  }
+
+  final newStickerRef = stickersCol.doc();
+  final newStickerId = newStickerRef.id;
+  final newStoragePath = 'users/$userId/stickers/$newStickerId.png';
+
+  final sourceRef = storagePath.trim().isNotEmpty
+      ? _storage.ref(storagePath)
+      : _storage.refFromURL(stickerUrl);
+
+  final bytes = await sourceRef.getData(10 * 1024 * 1024);
+
+  if (bytes == null) {
+    return false;
+  }
+
+  final uploadSnap = await _storage.ref(newStoragePath).putData(
+        bytes,
+        SettableMetadata(contentType: 'image/png'),
+      );
+
+  final newStickerUrl = await uploadSnap.ref.getDownloadURL();
+
+  await newStickerRef.set({
+    'stickerUrl': newStickerUrl,
+    'storagePath': newStoragePath,
+    'createdBy': userId,
+    'createdAt': FieldValue.serverTimestamp(),
+    'sourceStickerUrl': stickerUrl,
+    'sourceStoragePath': storagePath,
+  });
+
+  return true;
+}
   /// ✅ Delete voice message: deletes storage file (if exists) + deletes Firestore doc
   static Future<void> deleteVoiceMessage({
     required String roomId,

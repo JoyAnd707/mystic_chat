@@ -813,7 +813,8 @@ final String? videoUrl;
 
 
   /// ✅ NEW: allow heart reaction on images even when outer detector can't win
-  final VoidCallback? onDoubleTapImage;
+final VoidCallback? onDoubleTapImage;
+final VoidCallback? onLongPressSticker;
 
 
 // ✅ NEW: builds TextSpans so @mentions are white (including the @)
@@ -942,8 +943,8 @@ this.videoUrl,
   this.voicePath,
   this.voiceDurationMs,
 
-  this.onDoubleTapImage,
-
+ this.onDoubleTapImage,
+this.onLongPressSticker,
 
   // ✅ reply preview
   this.replyToSenderName,
@@ -1335,20 +1336,21 @@ if (isImageMessage) {
   final bool hasLocalPath =
       localPath != null && localPath.trim().isNotEmpty;
 
-  if (hasStickerUrl) {
-    messageBody = GestureDetector(
-      onTap: () => _openImageViewer(context, stkUrl),
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 120 * uiScale,
-        height: 120 * uiScale,
-        child: Image.network(
-          stkUrl,
-          fit: BoxFit.contain,
-        ),
+if (hasStickerUrl) {
+  messageBody = GestureDetector(
+    onTap: () => _openImageViewer(context, stkUrl),
+    onLongPress: onLongPressSticker,
+    behavior: HitTestBehavior.opaque,
+    child: SizedBox(
+      width: 120 * uiScale,
+      height: 120 * uiScale,
+      child: Image.network(
+        stkUrl,
+        fit: BoxFit.contain,
       ),
-    );
-  } else if (hasLocalPath) {
+    ),
+  );
+} else if (hasLocalPath) {
     messageBody = SizedBox(
       width: 120 * uiScale,
       height: 120 * uiScale,

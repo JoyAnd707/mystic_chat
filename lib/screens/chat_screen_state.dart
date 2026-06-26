@@ -3245,6 +3245,59 @@ onDoubleTapImage: (msg.type == ChatMessageType.image)
     ? () => _toggleHeartForMessage(msg)
     : null,
 
+onLongPressSticker: (msg.type == ChatMessageType.sticker &&
+        (msg.stickerUrl ?? '').trim().isNotEmpty)
+    ? () async {
+        final bool? shouldSave = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              backgroundColor: Colors.black,
+              title: const Text(
+                'Save sticker?',
+                style: TextStyle(color: Colors.white),
+              ),
+              content: const Text(
+                'Add this sticker to your archive?',
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (shouldSave != true) return;
+
+        final bool saved =
+            await FirestoreChatService.saveStickerToArchiveFromMessage(
+          userId: widget.currentUserId,
+       stickerUrl: msg.stickerUrl ?? '',
+storagePath: '',
+        );
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              saved ? 'Sticker saved!' : 'Sticker already saved.',
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    : null,
+
+
     ),
 
     // ✅ existing outline highlight (unchanged)
