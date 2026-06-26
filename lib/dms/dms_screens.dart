@@ -88,15 +88,15 @@ Stream<List<_DmEntry>> _dmEntriesStream() async* {
       .where((u) => u.id != widget.currentUserId)
       .toList();
 
-  for (final u in others) {
-    final roomId = _dmRoomId(widget.currentUserId, u.id);
+for (final u in others) {
+  final roomId = _dmRoomId(widget.currentUserId, u.id);
 
-    await _ensureDmRoomExists(
-      roomId: roomId,
-      me: widget.currentUserId,
-      other: u.id,
-    );
-  }
+  _ensureDmRoomExists(
+    roomId: roomId,
+    me: widget.currentUserId,
+    other: u.id,
+  );
+}
 
   await for (final snap in FirebaseFirestore.instance
       .collection(_roomsCol)
