@@ -53,6 +53,7 @@ class PushService {
 
       // 3) Get FCM token
       final token = await _msg.getToken();
+      print('FCM TOKEN = $token');
 
       if (token == null || token.isEmpty) {
         print('FCM token is empty.');
@@ -79,11 +80,13 @@ class PushService {
     }
   }
 
-  static Future<void> _saveToken({
-    required String token,
-    required String appUserId,
-  }) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+static Future<void> _saveToken({
+  required String token,
+  required String appUserId,
+}) async {
+  print('Saving token...');
+
+  final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
     await _db.collection('users').doc(uid).set({
