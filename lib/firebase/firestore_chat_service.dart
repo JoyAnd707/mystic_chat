@@ -362,7 +362,26 @@ static Future<void> sendArchivedStickerMessage({
           : FieldValue.arrayRemove([reactorId]),
     });
   }
+static Future<void> deleteArchivedSticker({
+  required String userId,
+  required String stickerId,
+  required String storagePath,
+}) async {
+  if (storagePath.trim().isNotEmpty) {
+    try {
+      await _storage.ref(storagePath).delete();
+    } catch (_) {
+      // ignore if file already deleted
+    }
+  }
 
+  await _db
+      .collection('users')
+      .doc(userId)
+      .collection('stickers')
+      .doc(stickerId)
+      .delete();
+}
   /// ✅ delete doc
   static Future<void> deleteMessage({
     required String roomId,
