@@ -377,8 +377,8 @@ class _DmBottomBar extends StatelessWidget {
   final FocusNode focusNode;
   final double uiScale;
   final String? replyToSenderName;
-final String? replyToText;
-final VoidCallback? onCancelReply;
+  final String? replyToText;
+  final VoidCallback? onCancelReply;
 
   const _DmBottomBar({
     required this.height,
@@ -386,18 +386,24 @@ final VoidCallback? onCancelReply;
     required this.onTapTypeMessage,
     required this.controller,
     required this.focusNode,
-required this.onSend,
-required this.uiScale,
-this.replyToSenderName,
-this.replyToText,
-this.onCancelReply,
+    required this.onSend,
+    required this.uiScale,
+    this.replyToSenderName,
+    this.replyToText,
+    this.onCancelReply,
   });
 
   static const double _typeButtonWidth = 260;
 
   static const double _sendBoxSize = 40;
   static const double _sendScale = 0.9;
-  static const double _sendInset = 14;
+
+  // שלילי = יוצא ימינה מחוץ לבר
+  static const double _sendInset = 30;
+
+  // מזיז רק את הבר שמאלה, לא את המעטפה
+  static const double _barShiftLeft = 10;
+
   static const double _sendDown = 3;
 
   static const String _answerButtonAsset = 'assets/ui/DmsAnswerButton.png';
@@ -409,6 +415,7 @@ this.onCancelReply,
   @override
   Widget build(BuildContext context) {
     if (height <= 0) return const SizedBox.shrink();
+
     double s(double v) => v * uiScale;
 
     return Container(
@@ -416,244 +423,262 @@ this.onCancelReply,
       width: double.infinity,
       color: Colors.black,
       padding: EdgeInsets.only(bottom: s(0)),
-child: AnimatedBuilder(
-  animation: controller,
-  builder: (context, _) {
-    final bool hasReply =
-        (replyToText?.trim().isNotEmpty ?? false);
+      child: AnimatedBuilder(
+        animation: controller,
+        builder: (context, _) {
+          final bool hasReply =
+              (replyToText?.trim().isNotEmpty ?? false);
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (hasReply)
-          _replyPreviewBar(s),
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasReply)
+                _replyPreviewBar(s),
 
-        Expanded(
-          child: (_hasText || isTyping || hasReply)
-              ? _typingBar(s)
-              : _answerButtonBar(s),
-        ),
-      ],
-    );
-  },
-),
+              Expanded(
+                child: (_hasText || isTyping || hasReply)
+                    ? _typingBar(s)
+                    : _answerButtonBar(s),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
-Widget _replyPreviewBar(double Function(double) s) {
-  final String sender = replyToSenderName ?? '';
-  final String text = replyToText ?? '';
 
-  return Container(
-    width: double.infinity,
-    height: s(46),
-    color: Colors.black,
-    padding: EdgeInsets.symmetric(horizontal: s(14)),
-    child: Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: s(10),
-        vertical: s(6),
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1F1F1F),
-        border: Border.all(
-          color: const Color(0xFF46F5D6).withOpacity(0.75),
-          width: s(1.2),
+  Widget _replyPreviewBar(double Function(double) s) {
+    final String sender = replyToSenderName ?? '';
+    final String text = replyToText ?? '';
+
+    return Container(
+      width: double.infinity,
+      height: s(46),
+      color: Colors.black,
+      padding: EdgeInsets.symmetric(horizontal: s(14)),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: s(10),
+          vertical: s(6),
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1F1F1F),
+          border: Border.all(
+            color: const Color(0xFF46F5D6).withOpacity(0.75),
+            width: s(1.2),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    sender,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: const Color(0xFF46F5D6),
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w700,
+                      height: 1.0,
+                    ),
+                  ),
+                  SizedBox(height: s(4)),
+                  Text(
+                    text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.78),
+                      fontSize: s(12),
+                      fontWeight: FontWeight.w500,
+                      height: 1.0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            GestureDetector(
+              onTap: onCancelReply,
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
+                width: s(30),
+                height: s(30),
+                child: Center(
+                  child: Icon(
+                    Icons.close,
+                    color: Colors.white.withOpacity(0.85),
+                    size: s(18),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-      child: Row(
+    );
+  }
+
+  Widget _answerButtonBar(double Function(double) s) {
+    final String previewText = controller.text.trim();
+
+    return SizedBox(
+      width: double.infinity,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
         children: [
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  sender,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: const Color(0xFF46F5D6),
-                    fontSize: s(12),
-                    fontWeight: FontWeight.w700,
-                    height: 1.0,
-                  ),
-                ),
-                SizedBox(height: s(4)),
-                Text(
-                  text,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.78),
-                    fontSize: s(12),
-                    fontWeight: FontWeight.w500,
-                    height: 1.0,
-                  ),
-                ),
-              ],
-            ),
-          ),
           GestureDetector(
-            onTap: onCancelReply,
-            behavior: HitTestBehavior.opaque,
-            child: SizedBox(
-              width: s(30),
-              height: s(30),
-              child: Center(
-                child: Icon(
-                  Icons.close,
-                  color: Colors.white.withOpacity(0.85),
-                  size: s(18),
+            onTap: onTapTypeMessage,
+            child: Transform.translate(
+              offset: Offset(-s(_barShiftLeft), 0),
+              child: SizedBox(
+                width: s(_typeButtonWidth),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Image.asset(
+                      _answerButtonAsset,
+                      fit: BoxFit.fitWidth,
+                    ),
+
+                    if (previewText.isNotEmpty)
+                      Positioned.fill(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: s(22),
+                            vertical: s(8),
+                          ),
+                          child: Builder(
+                            builder: (context) {
+                              final bool isRtl =
+                                  RegExp(r'[\u0590-\u05FF]').hasMatch(previewText);
+
+                              return Align(
+                                alignment: isRtl
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft,
+                                child: Text(
+                                  previewText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textDirection:
+                                      isRtl ? TextDirection.rtl : TextDirection.ltr,
+                                  textAlign:
+                                      isRtl ? TextAlign.right : TextAlign.left,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: s(18),
+                                    height: 1.0,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
           ),
+
+          _sendButtonRightOnly(
+            s: s,
+            enabled: _hasText,
+          ),
         ],
       ),
-    ),
-  );
-}
-  Widget _answerButtonBar(double Function(double) s) {
-    final String previewText = controller.text.trim();
-
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        GestureDetector(
-          onTap: onTapTypeMessage,
-          child: SizedBox(
-            width: s(_typeButtonWidth),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Image.asset(
-                  _answerButtonAsset,
-                  fit: BoxFit.fitWidth,
-                ),
-
-                if (previewText.isNotEmpty)
-                  Positioned.fill(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: s(22),
-                        vertical: s(8),
-                      ),
-                      child: Builder(
-  builder: (context) {
-    final bool isRtl =
-        RegExp(r'[\u0590-\u05FF]').hasMatch(previewText);
-
-    return Align(
-      alignment:
-          isRtl ? Alignment.centerRight : Alignment.centerLeft,
-      child: Text(
-        previewText,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textDirection:
-            isRtl ? TextDirection.rtl : TextDirection.ltr,
-        textAlign:
-            isRtl ? TextAlign.right : TextAlign.left,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: s(18),
-          height: 1.0,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  },
-),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-
-        _sendButtonRightOnly(
-          s: s,
-          enabled: _hasText,
-        ),
-      ],
     );
   }
 
   Widget _typingBar(double Function(double) s) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        SizedBox(
-          width: s(_typeButtonWidth),
-          child: Stack(
-            children: [
-              Image.asset(
-                _answerBarAsset,
-                fit: BoxFit.fitWidth,
-              ),
-              Positioned.fill(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: s(18),
-                    vertical: s(8),
+    return SizedBox(
+      width: double.infinity,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Transform.translate(
+            offset: Offset(-s(_barShiftLeft), 0),
+            child: SizedBox(
+              width: s(_typeButtonWidth),
+              child: Stack(
+                children: [
+                  Image.asset(
+                    _answerBarAsset,
+                    fit: BoxFit.fitWidth,
                   ),
-                  child: TextField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    textDirection: RegExp(r'[\u0590-\u05FF]').hasMatch(controller.text)
-    ? TextDirection.rtl
-    : TextDirection.ltr,
-
-textAlign: RegExp(r'[\u0590-\u05FF]').hasMatch(controller.text)
-    ? TextAlign.right
-    : TextAlign.left,
-                    maxLines: 1,
-                    textAlignVertical: TextAlignVertical.center,
-                    textInputAction: TextInputAction.done,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: s(18),
-                      height: 1.0,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    cursorColor: Colors.white,
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Type...',
-                      hintStyle: TextStyle(
-                        color: Colors.white.withOpacity(0.55),
-                        fontSize: s(18),
-                        height: 1.0,
-                        fontWeight: FontWeight.w600,
+                  Positioned.fill(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: s(18),
+                        vertical: s(8),
                       ),
-                      isDense: true,
-                      contentPadding: EdgeInsets.only(
-                        left: 0,
-                        right: 0,
-                        top: s(2),
-                        bottom: s(0),
+                      child: TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        textDirection:
+                            RegExp(r'[\u0590-\u05FF]').hasMatch(controller.text)
+                                ? TextDirection.rtl
+                                : TextDirection.ltr,
+                        textAlign:
+                            RegExp(r'[\u0590-\u05FF]').hasMatch(controller.text)
+                                ? TextAlign.right
+                                : TextAlign.left,
+                        maxLines: 1,
+                        textAlignVertical: TextAlignVertical.center,
+                        textInputAction: TextInputAction.done,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: s(18),
+                          height: 1.0,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        cursorColor: Colors.white,
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          hintText: 'Type...',
+                          hintStyle: TextStyle(
+                            color: Colors.white.withOpacity(0.55),
+                            fontSize: s(18),
+                            height: 1.0,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          isDense: true,
+                          contentPadding: EdgeInsets.only(
+                            left: 0,
+                            right: 0,
+                            top: s(2),
+                            bottom: s(0),
+                          ),
+                        ),
+                        onEditingComplete: () {
+                          focusNode.unfocus();
+                        },
+                        onSubmitted: (_) async {
+                          if (_hasText) {
+                            await onSend();
+                          }
+                        },
                       ),
                     ),
-                    onEditingComplete: () {
-                      focusNode.unfocus();
-                    },
-                    onSubmitted: (_) async {
-                      if (_hasText) {
-                        await onSend();
-                      }
-                    },
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
 
-        _sendButtonRightOnly(
-          s: s,
-          enabled: _hasText,
-        ),
-      ],
+          _sendButtonRightOnly(
+            s: s,
+            enabled: _hasText,
+          ),
+        ],
+      ),
     );
   }
 
@@ -1237,9 +1262,10 @@ final row = Padding(
             ? 'assets/ui/DMSbubbleTailISME.png'
             : 'assets/ui/DMSbubbleTailOTHERS.png';
 
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
+return Stack(
+  clipBehavior: Clip.none,
+  alignment: Alignment.center,
+  children: [
             CustomPaint(
               foregroundPainter: _MysticStemFromPngTipPainter(
                 isRightSide: isMe,

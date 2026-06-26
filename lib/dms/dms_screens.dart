@@ -453,8 +453,14 @@ void _clearReplyTarget() {
 
     final nowMs = DateTime.now().millisecondsSinceEpoch;
 
-    _c.clear();
-    setState(() => _isTyping = true);
+ _c.clear();
+setState(() {
+  _isTyping = true;
+  _replyToMessageId = null;
+  _replyToSenderId = null;
+  _replyToSenderName = null;
+  _replyToText = null;
+});
 
     // ✅ write message
     await _msgsRef.add({
