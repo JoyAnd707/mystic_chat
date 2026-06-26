@@ -81,48 +81,51 @@ void initState() {
     }, SetOptions(merge: true));
   }
 
-  Future<List<_DmEntry>> _loadDmEntries() async {
-    final prefs = await SharedPreferences.getInstance();
+Stream<List<_DmEntry>> _dmEntriesStream() async* {
+  final prefs = await SharedPreferences.getInstance();
 
-    final others = dmUsers.values
-        .where((u) => u.id != widget.currentUserId)
-        .toList();
+  final others = dmUsers.values
+      .where((u) => u.id != widget.currentUserId)
+      .toList();
 
+  for (final u in others) {
+    final roomId = _dmRoomId(widget.currentUserId, u.id);
+
+    await _ensureDmRoomExists(
+      roomId: roomId,
+      me: widget.currentUserId,
+      other: u.id,
+    );
+  }
+
+  await for (final snap in FirebaseFirestore.instance
+      .collection(_roomsCol)
+      .where('participants', arrayContains: widget.currentUserId)
+      .snapshots()) {
     final entries = <_DmEntry>[];
 
     for (final u in others) {
       final roomId = _dmRoomId(widget.currentUserId, u.id);
+      final docMatches = snap.docs.where((d) => d.id == roomId).toList();
 
-      // ✅ create room doc once (so list always has something to open)
-      await _ensureDmRoomExists(
-        roomId: roomId,
-        me: widget.currentUserId,
-        other: u.id,
-      );
-
-      final doc = await FirebaseFirestore.instance
-          .collection(_roomsCol)
-          .doc(roomId)
-          .get();
-
-      final data = (doc.data() ?? <String, dynamic>{});
+      final data = docMatches.isEmpty
+          ? <String, dynamic>{}
+          : docMatches.first.data();
 
       final int lastUpdatedMs =
           (data['lastUpdatedMs'] is int) ? data['lastUpdatedMs'] as int : 0;
 
-      final String lastSenderId =
-          (data['lastSenderId'] ?? '').toString();
-
-      final String previewRaw =
-          (data['lastText'] ?? '').toString().trim();
+      final String lastSenderId = (data['lastSenderId'] ?? '').toString();
+      final String previewRaw = (data['lastText'] ?? '').toString().trim();
 
       final String preview =
           previewRaw.isEmpty ? 'Tap to open chat' : previewRaw;
 
-      final lastReadMs = prefs.getInt(_lastReadKeyFor(roomId)) ?? 0;
+      final int lastReadMs = prefs.getInt(_lastReadKeyFor(roomId)) ?? 0;
 
       final bool unread =
-          (lastUpdatedMs > lastReadMs) && (lastSenderId != widget.currentUserId);
+          (lastUpdatedMs > lastReadMs) &&
+          (lastSenderId != widget.currentUserId);
 
       entries.add(
         _DmEntry(
@@ -141,9 +144,9 @@ void initState() {
       return a.user.name.toLowerCase().compareTo(b.user.name.toLowerCase());
     });
 
-    return entries;
+    yield entries;
   }
-
+}
 
 @override
 Widget build(BuildContext context) {
@@ -209,8 +212,8 @@ _DmTopBar(
                       final double uiScale = mysticUiScale(context);
                       double s(double v) => v * uiScale;
 
-                      return FutureBuilder<List<_DmEntry>>(
-                        future: _loadDmEntries(),
+                    return StreamBuilder<List<_DmEntry>>(
+  stream: _dmEntriesStream(),
                         builder: (context, snap) {
                           final items = snap.data ?? const <_DmEntry>[];
 
