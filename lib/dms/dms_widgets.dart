@@ -1138,7 +1138,7 @@ final double strokeW = s(2);
 
 final double cornerInset = s(0.5);
 
-final Widget bubble = Stack(
+final Widget bubbleVisual = Stack(
   clipBehavior: Clip.none,
   children: [
     ClipPath(
@@ -1230,7 +1230,7 @@ final Widget bubble = Stack(
                 crossAxisAlignment:
                     isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
-                  bubble,
+                 messageType == 'animatedEmoji' ? mediaContent() : bubbleVisual,
                   if (heartReactorIds.isNotEmpty)
                     Padding(
                       padding: EdgeInsets.only(top: s(8)),
