@@ -372,7 +372,7 @@ class _DmBottomBar extends StatelessWidget {
   final bool isTyping;
   final VoidCallback onTapTypeMessage;
   final Future<void> Function() onSend;
-
+  final Future<void> Function() onPickMedia;
   final TextEditingController controller;
   final FocusNode focusNode;
   final double uiScale;
@@ -387,6 +387,7 @@ class _DmBottomBar extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.onSend,
+    required this.onPickMedia,
     required this.uiScale,
     this.replyToSenderName,
     this.replyToText,
@@ -591,6 +592,8 @@ class _DmBottomBar extends StatelessWidget {
             s: s,
             enabled: _hasText,
           ),
+
+          _mediaButtonLeftOnly(s: s),
         ],
       ),
     );
@@ -677,6 +680,8 @@ class _DmBottomBar extends StatelessWidget {
             s: s,
             enabled: _hasText,
           ),
+
+          _mediaButtonLeftOnly(s: s),
         ],
       ),
     );
@@ -712,9 +717,456 @@ class _DmBottomBar extends StatelessWidget {
       ),
     );
   }
+
+  Widget _mediaButtonLeftOnly({
+    required double Function(double) s,
+  }) {
+    return Positioned(
+          left: s(4),
+      child: Transform.translate(
+        offset: Offset(0, s(_sendDown)),
+        child: GestureDetector(
+          onTap: () async => await onPickMedia(),
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: s(_sendBoxSize),
+            height: s(_sendBoxSize),
+            child: Center(
+              child: Icon(
+                Icons.photo_library_rounded,
+                color: const Color(0xFF46F5D6),
+                size: s(25),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
+class _DmMediaMessageRow extends StatelessWidget {
+  final bool isMe;
+  final String messageType;
+  final String mediaUrl;
+  final String time;
+  final double uiScale;
 
+  final String meLetter;
+  final String otherLetter;
+
+  final List<String> heartReactorIds;
+
+  final String? replyToSenderName;
+  final String? replyToText;
+  final VoidCallback? onTapReplyPreview;
+
+  const _DmMediaMessageRow({
+    required this.isMe,
+    required this.messageType,
+    required this.mediaUrl,
+    required this.time,
+    required this.uiScale,
+    required this.meLetter,
+    required this.otherLetter,
+    required this.heartReactorIds,
+    this.replyToSenderName,
+    this.replyToText,
+    this.onTapReplyPreview,
+  });
+
+  bool get _hasReplyPreview {
+    return (replyToSenderName?.trim().isNotEmpty ?? false) ||
+        (replyToText?.trim().isNotEmpty ?? false);
+  }
+
+  Widget _simpleAvatar({
+    required String letter,
+    required double size,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.black,
+        border: Border.all(
+          color: Colors.white.withOpacity(0.24),
+          width: 1,
+        ),
+      ),
+      child: Text(
+        letter,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: size * 0.42,
+          fontWeight: FontWeight.w700,
+          height: 1.0,
+        ),
+      ),
+    );
+  }
+
+  Widget _heart({
+    required String userId,
+    required double size,
+  }) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: ColorFiltered(
+        colorFilter: ColorFilter.mode(
+          _heartColorForUserId(userId),
+          BlendMode.srcIn,
+        ),
+        child: Image.asset(
+          'assets/reactions/HeartReaction.png',
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (_, __, ___) => Icon(
+            Icons.favorite,
+            color: _heartColorForUserId(userId),
+            size: size,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openImageViewer(BuildContext context, String url) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            elevation: 0,
+            automaticallyImplyLeading: false,
+            title: TextButton(
+              onPressed: () {
+                try {
+                  Sfx.I.playBack();
+                } catch (_) {}
+
+                Navigator.of(context).pop();
+              },
+              child: const Text(
+                'Close',
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 1.0,
+              maxScale: 4.0,
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * uiScale;
+
+    const Color bodyFill = Color(0xB3606060);
+    final Color borderColor = isMe ? Colors.white : const Color(0xFF46F5D6);
+
+    final double avatarSize = s(48);
+    final double gap = s(18);
+    final double mediaW = s(150);
+    final double mediaH = s(210);
+
+    final String cornerAsset = isMe
+        ? 'assets/ui/DMSbubbleCornerISME.png'
+        : 'assets/ui/DMSbubbleCornerOTHERS.png';
+
+    Widget replyPreviewBox() {
+      if (!_hasReplyPreview) return const SizedBox.shrink();
+
+      final String sender = replyToSenderName ?? '';
+      final String preview = replyToText ?? '';
+
+      return GestureDetector(
+        onTap: onTapReplyPreview,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: double.infinity,
+          margin: EdgeInsets.only(bottom: s(8)),
+          padding: EdgeInsets.fromLTRB(s(8), s(7), s(8), s(7)),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.28),
+            border: Border(
+              left: BorderSide(
+                color: borderColor.withOpacity(0.95),
+                width: s(3),
+              ),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (sender.trim().isNotEmpty)
+                Text(
+                  sender,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: borderColor,
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                  ),
+                ),
+              if (preview.trim().isNotEmpty) ...[
+                SizedBox(height: s(4)),
+                Text(
+                  preview,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.74),
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w500,
+                    height: 1.1,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget mediaContent() {
+if (mediaUrl.trim().isEmpty) {
+  return SizedBox(
+    width: mediaW,
+    height: mediaH,
+    child: Center(
+      child: RotatingEnvelope(
+        assetPath: 'assets/ui/DMSmessageUnread.png',
+        size: s(50),
+        duration: const Duration(milliseconds: 1800),
+        opacity: 1.0,
+      ),
+    ),
+  );
+}
+
+      if (messageType == 'video') {
+        return GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                fullscreenDialog: true,
+                builder: (_) => FullscreenVideoPlayer(videoUrl: mediaUrl),
+              ),
+            );
+          },
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: mediaW,
+            height: mediaH,
+            child: ClipRect(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  VideoPreviewTile(
+                    videoUrl: mediaUrl,
+                    width: mediaW,
+                    height: mediaH,
+                    uiScale: uiScale,
+                  ),
+                  Center(
+                    child: Container(
+                      width: s(54),
+                      height: s(54),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.58),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.82),
+                          width: s(1.2),
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: s(38),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      return GestureDetector(
+        onTap: () => _openImageViewer(context, mediaUrl),
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: mediaW,
+          height: mediaH,
+          child: ClipRect(
+            child: Image.network(
+              mediaUrl,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+
+                return Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: s(2),
+                    color: const Color(0xFF46F5D6),
+                  ),
+                );
+              },
+              errorBuilder: (_, __, ___) {
+                return Container(
+                  color: Colors.black.withOpacity(0.35),
+                  child: Center(
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white.withOpacity(0.75),
+                      size: s(34),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
+    final Widget bubble = Container(
+      decoration: BoxDecoration(
+        color: bodyFill,
+        border: Border.all(
+          color: borderColor,
+          width: s(2),
+        ),
+      ),
+      child: Stack(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(s(10), s(10), s(10), s(10)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                replyPreviewBox(),
+                mediaContent(),
+              ],
+            ),
+          ),
+          Positioned(
+            top: s(0.5),
+            left: isMe ? s(0.5) : null,
+            right: isMe ? null : s(0.5),
+            child: IgnorePointer(
+              child: Image.asset(
+                cornerAsset,
+                width: s(28),
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final Widget avatar = _simpleAvatar(
+      letter: isMe ? meLetter : otherLetter,
+      size: avatarSize,
+    );
+
+    return Padding(
+      padding: EdgeInsets.only(
+        right: isMe ? s(8) : 0,
+        left: isMe ? 0 : s(8),
+      ),
+      child: Row(
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!isMe) ...[
+            avatar,
+            SizedBox(width: gap),
+          ],
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (isMe && time.isNotEmpty) ...[
+                Text(
+                  time,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.65),
+                    fontSize: s(14),
+                    fontWeight: FontWeight.w500,
+                    height: 1.0,
+                  ),
+                ),
+                SizedBox(width: s(8)),
+              ],
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment:
+                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  bubble,
+                  if (heartReactorIds.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(top: s(8)),
+                      child: Wrap(
+                        spacing: s(4),
+                        children: heartReactorIds.map((uid) {
+                          return _heart(
+                            userId: uid,
+                            size: s(24),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                ],
+              ),
+              if (!isMe && time.isNotEmpty) ...[
+                SizedBox(width: s(8)),
+                Text(
+                  time,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.65),
+                    fontSize: s(14),
+                    fontWeight: FontWeight.w500,
+                    height: 1.0,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (isMe) ...[
+            SizedBox(width: gap),
+            avatar,
+          ],
+        ],
+      ),
+    );
+  }
+}
 /// =======================================
 /// Star twinkle overlay (DMs list only)
 /// =======================================

@@ -1,17 +1,25 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:math';
-import 'package:flutter/material.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../widgets/rotating_envelope.dart';
+
 import '../audio/bgm.dart';
 import '../audio/sfx.dart';
-import 'dart:async';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../fx/heart_reaction_fly_layer.dart';
 import '../services/presence_service.dart';
+import '../widgets/fullscreen_video_player.dart';
+import '../widgets/video_preview_tile.dart';
+
 part 'dms_core.dart';
 part 'dms_widgets.dart';
 part 'dms_painters.dart';
-
 
 
 class DmsListScreen extends StatefulWidget {
@@ -351,10 +359,10 @@ class _DmChatScreenState extends State<DmChatScreen>
 
   static const String _roomsCol = 'dm_rooms';
   static const String _msgsSub = 'messages';
-
-  final ScrollController _scroll = ScrollController();
-  final TextEditingController _c = TextEditingController();
-  final FocusNode _focus = FocusNode();
+final ScrollController _scroll = ScrollController();
+final TextEditingController _c = TextEditingController();
+final FocusNode _focus = FocusNode();
+final ImagePicker _mediaPicker = ImagePicker();
   late final AnimationController _twinkleController;
 late final AnimationController _enterController;
 late final Animation<double> _enterScale;
@@ -770,7 +778,78 @@ void _notifyDmTypingChanged() {
     setState(() => _isTyping = true);
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
   }
+Future<void> _pickAndSendDmMedia() async {
+  final XFile? picked = await _mediaPicker.pickMedia();
 
+  if (picked == null) return;
+
+  final String path = picked.path;
+  final String lowerPath = path.toLowerCase();
+
+  final bool isVideo =
+      lowerPath.endsWith('.mp4') ||
+      lowerPath.endsWith('.mov') ||
+      lowerPath.endsWith('.m4v') ||
+      lowerPath.endsWith('.avi') ||
+      lowerPath.endsWith('.webm');
+
+  final String type = isVideo ? 'video' : 'image';
+
+  final int nowMs = DateTime.now().millisecondsSinceEpoch;
+
+  final docRef = _msgsRef.doc();
+
+  final String fileExt = path.split('.').last.toLowerCase();
+  final String storagePath =
+      'dm_rooms/${widget.roomId}/media/${docRef.id}.$fileExt';
+
+  try {
+    await docRef.set({
+      'type': type,
+      'senderId': widget.currentUserId,
+      'text': '',
+      'tsMs': nowMs,
+      'mediaUrl': '',
+      'storagePath': storagePath,
+      'heartReactorIds': <String>[],
+      'replyToMessageId': null,
+      'replyToSenderId': null,
+      'replyToSenderName': null,
+      'replyToText': null,
+    });
+
+    final ref = FirebaseStorage.instance.ref(storagePath);
+
+    await ref.putFile(File(path));
+
+    final String downloadUrl = await ref.getDownloadURL();
+
+    await docRef.update({
+      'mediaUrl': downloadUrl,
+    });
+
+    await _roomRef.set({
+      'lastUpdatedMs': nowMs,
+      'lastSenderId': widget.currentUserId,
+      'lastText': isVideo ? '🎥 Video' : '📷 Photo',
+    }, SetOptions(merge: true));
+
+    _scrollToBottom(keepFocus: false);
+  } catch (e) {
+    try {
+      await docRef.delete();
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not send media: $e'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
 Future<void> _send() async {
   final text = _c.text.trim();
   if (text.isEmpty) return;
@@ -1137,13 +1216,18 @@ if (snap.hasData) {
                                 firstUnreadTs > 0 &&
                                 currentTs == firstUnreadTs;
 
-                            if ((m['type'] ?? 'text') != 'text') {
-                              return const SizedBox.shrink();
-                            }
+           final String messageType = (m['type'] ?? 'text').toString();
 
-                            final sender = (m['senderId'] ?? '').toString();
-                            final isMe = sender == widget.currentUserId;
-                            final text = (m['text'] ?? '').toString();
+if (messageType != 'text' &&
+    messageType != 'image' &&
+    messageType != 'video') {
+  return const SizedBox.shrink();
+}
+
+final sender = (m['senderId'] ?? '').toString();
+final isMe = sender == widget.currentUserId;
+final text = (m['text'] ?? '').toString();
+final String mediaUrl = (m['mediaUrl'] ?? '').toString();
 
                             final int ts =
                                 (m['tsMs'] is int) ? m['tsMs'] as int : 0;
@@ -1151,15 +1235,13 @@ if (snap.hasData) {
                             final String timeLabel =
                                 mysticTimeOnlyFromMs(ts);
 
-                            int prevTs = 0;
-                            if (i > 0) {
-                              final prev = docs[i - 1].data();
-                              if ((prev['type'] ?? 'text') == 'text') {
-                                prevTs = (prev['tsMs'] is int)
-                                    ? prev['tsMs'] as int
-                                    : 0;
-                              }
-                            }
+                  int prevTs = 0;
+if (i > 0) {
+  final prev = docs[i - 1].data();
+  prevTs = (prev['tsMs'] is int)
+      ? prev['tsMs'] as int
+      : 0;
+}
 
                             final bool showDateDivider =
                                 (i == 0 && ts > 0) ||
@@ -1297,35 +1379,70 @@ if (snap.hasData) {
                     _dragDx = 0.0;
                   },
 
-                  child: _DmMessageRow(
-                    isMe: isMe,
-                    text: text,
-                    time: timeLabel,
-                    uiScale: uiScale,
-                    heartReactorIds:
-                        List<String>.from(m['heartReactorIds'] ?? const []),
-                    meLetter: (dmUsers[widget.currentUserId]
-                                ?.name
-                                .characters
-                                .first ??
-                            ' ')
-                        .toUpperCase(),
-                    otherLetter: (dmUsers[widget.otherUserId]
-                                ?.name
-                                .characters
-                                .first ??
-                            ' ')
-                        .toUpperCase(),
-                    replyToSenderName: m['replyToSenderName']?.toString(),
-                    replyToText: m['replyToText']?.toString(),
-                    onTapReplyPreview: () {
-                      final id = m['replyToMessageId']?.toString();
+                  child: (messageType == 'image' || messageType == 'video')
+                      ? _DmMediaMessageRow(
+                          isMe: isMe,
+                          messageType: messageType,
+                          mediaUrl: mediaUrl,
+                          time: timeLabel,
+                          uiScale: uiScale,
+                          heartReactorIds: List<String>.from(
+                            m['heartReactorIds'] ?? const [],
+                          ),
+                          meLetter: (dmUsers[widget.currentUserId]
+                                      ?.name
+                                      .characters
+                                      .first ??
+                                  ' ')
+                              .toUpperCase(),
+                          otherLetter: (dmUsers[widget.otherUserId]
+                                      ?.name
+                                      .characters
+                                      .first ??
+                                  ' ')
+                              .toUpperCase(),
+                          replyToSenderName:
+                              m['replyToSenderName']?.toString(),
+                          replyToText: m['replyToText']?.toString(),
+                          onTapReplyPreview: () {
+                            final id = m['replyToMessageId']?.toString();
 
-                      if (id == null || id.isEmpty) return;
+                            if (id == null || id.isEmpty) return;
 
-                      _jumpToMessage(id);
-                    },
-                  ),
+                            _jumpToMessage(id);
+                          },
+                        )
+                      : _DmMessageRow(
+                          isMe: isMe,
+                          text: text,
+                          time: timeLabel,
+                          uiScale: uiScale,
+                          heartReactorIds: List<String>.from(
+                            m['heartReactorIds'] ?? const [],
+                          ),
+                          meLetter: (dmUsers[widget.currentUserId]
+                                      ?.name
+                                      .characters
+                                      .first ??
+                                  ' ')
+                              .toUpperCase(),
+                          otherLetter: (dmUsers[widget.otherUserId]
+                                      ?.name
+                                      .characters
+                                      .first ??
+                                  ' ')
+                              .toUpperCase(),
+                          replyToSenderName:
+                              m['replyToSenderName']?.toString(),
+                          replyToText: m['replyToText']?.toString(),
+                          onTapReplyPreview: () {
+                            final id = m['replyToMessageId']?.toString();
+
+                            if (id == null || id.isEmpty) return;
+
+                            _jumpToMessage(id);
+                          },
+                        ),
                 ),
               ),
 
@@ -1490,6 +1607,7 @@ height: (_replyToText != null && _replyToText!.trim().isNotEmpty)
   controller: _c,
   focusNode: _focus,
   onSend: _send,
+  onPickMedia: _pickAndSendDmMedia,
   uiScale: uiScale,
 
   replyToSenderName: _replyToSenderName,
