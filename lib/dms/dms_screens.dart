@@ -6,6 +6,7 @@ import '../audio/bgm.dart';
 import '../audio/sfx.dart';
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../fx/heart_reaction_fly_layer.dart';
 part 'dms_core.dart';
 part 'dms_widgets.dart';
 part 'dms_painters.dart';
@@ -435,6 +436,12 @@ Future<void> _toggleHeartForMessage(
         ? FieldValue.arrayUnion([me])
         : FieldValue.arrayRemove([me]),
   });
+
+  if (isAdding && mounted) {
+    HeartReactionFlyLayer.of(context).spawnHeart(
+      color: _heartColorForUserId(me),
+    );
+  }
 }
 
 double _dragDx = 0.0;
