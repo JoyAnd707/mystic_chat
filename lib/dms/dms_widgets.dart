@@ -981,117 +981,138 @@ class _DmMediaMessageRow extends StatelessWidget {
       );
     }
 
-    Widget mediaContent() {
-if (mediaUrl.trim().isEmpty) {
-  return SizedBox(
-    width: mediaW,
-    height: mediaH,
-    child: Center(
-      child: RotatingEnvelope(
-        assetPath: 'assets/ui/DMSmessageUnread.png',
-        size: s(50),
-        duration: const Duration(milliseconds: 1800),
-        opacity: 1.0,
+Widget mediaContent() {
+  if (mediaUrl.trim().isEmpty) {
+    return SizedBox(
+      width: messageType == 'sticker' ? s(140) : mediaW,
+      height: messageType == 'sticker' ? s(140) : mediaH,
+      child: Center(
+        child: RotatingEnvelope(
+          assetPath: 'assets/ui/DMSmessageUnread.png',
+          size: s(50),
+          duration: const Duration(milliseconds: 1800),
+          opacity: 1.0,
+        ),
+      ),
+    );
+  }
+
+  if (messageType == 'sticker') {
+    return GestureDetector(
+      onTap: () => _openImageViewer(context, mediaUrl),
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: s(140),
+        height: s(140),
+        child: Image.network(
+          mediaUrl,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (_, __, ___) => Icon(
+            Icons.broken_image_outlined,
+            color: Colors.white.withOpacity(0.75),
+            size: s(34),
+          ),
+        ),
+      ),
+    );
+  }
+
+  if (messageType == 'video') {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => FullscreenVideoPlayer(videoUrl: mediaUrl),
+          ),
+        );
+      },
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: mediaW,
+        height: mediaH,
+        child: ClipPath(
+          clipper: _DmMediaClipper(
+            isMe: isMe,
+            cut: s(28),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              VideoPreviewTile(
+                videoUrl: mediaUrl,
+                width: mediaW,
+                height: mediaH,
+                uiScale: uiScale,
+              ),
+              Center(
+                child: Container(
+                  width: s(54),
+                  height: s(54),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.58),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.82),
+                      width: s(1.2),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: s(38),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  return GestureDetector(
+    onTap: () => _openImageViewer(context, mediaUrl),
+    behavior: HitTestBehavior.opaque,
+    child: SizedBox(
+      width: mediaW,
+      height: mediaH,
+      child: ClipPath(
+        clipper: _DmMediaClipper(
+          isMe: isMe,
+          cut: s(28),
+        ),
+        child: Image.network(
+          mediaUrl,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+
+            return Center(
+              child: CircularProgressIndicator(
+                strokeWidth: s(2),
+                color: const Color(0xFF46F5D6),
+              ),
+            );
+          },
+          errorBuilder: (_, __, ___) {
+            return Container(
+              color: Colors.black.withOpacity(0.35),
+              child: Center(
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  color: Colors.white.withOpacity(0.75),
+                  size: s(34),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     ),
   );
 }
-
-      if (messageType == 'video') {
-        return GestureDetector(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                fullscreenDialog: true,
-                builder: (_) => FullscreenVideoPlayer(videoUrl: mediaUrl),
-              ),
-            );
-          },
-          behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            width: mediaW,
-            height: mediaH,
-           child: ClipPath(
-  clipper: _DmMediaClipper(
-    isMe: isMe,
-    cut: s(28),
-  ),
-  child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  VideoPreviewTile(
-                    videoUrl: mediaUrl,
-                    width: mediaW,
-                    height: mediaH,
-                    uiScale: uiScale,
-                  ),
-                  Center(
-                    child: Container(
-                      width: s(54),
-                      height: s(54),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.58),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.82),
-                          width: s(1.2),
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.play_arrow_rounded,
-                        color: Colors.white,
-                        size: s(38),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }
-
-      return GestureDetector(
-        onTap: () => _openImageViewer(context, mediaUrl),
-        behavior: HitTestBehavior.opaque,
-        child: SizedBox(
-          width: mediaW,
-          height: mediaH,
-       child: ClipPath(
-  clipper: _DmMediaClipper(
-    isMe: isMe,
-    cut: s(28),
-  ),
-  child: Image.network(
-              mediaUrl,
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
-
-                return Center(
-                  child: CircularProgressIndicator(
-                    strokeWidth: s(2),
-                    color: const Color(0xFF46F5D6),
-                  ),
-                );
-              },
-              errorBuilder: (_, __, ___) {
-                return Container(
-                  color: Colors.black.withOpacity(0.35),
-                  child: Center(
-                    child: Icon(
-                      Icons.broken_image_outlined,
-                      color: Colors.white.withOpacity(0.75),
-                      size: s(34),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      );
-    }
 
 final double chamfer = s(8.5);
 final double strokeW = s(2);

@@ -8,7 +8,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
-
+import '../widgets/sticker_picker_sheet.dart';
 import '../firebase/firestore_chat_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/rotating_envelope.dart';
@@ -914,255 +914,120 @@ Future<void> _pickAndSendDmPhotoOrVideo() async {
 }
 
 void _openDmStickerPicker() {
-  showModalBottomSheet(
+  showMysticStickerPickerSheet(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.black.withOpacity(0.92),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-    ),
-    builder: (sheetContext) {
-      return SafeArea(
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: FirestoreChatService.loadStickerArchive(
-            userId: widget.currentUserId,
-          ),
-          builder: (context, snapshot) {
-            final bool isLoading =
-                snapshot.connectionState == ConnectionState.waiting;
-
-            final List<Map<String, dynamic>> stickers =
-                snapshot.data ?? <Map<String, dynamic>>[];
-
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                24 + MediaQuery.of(context).padding.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Stickers',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: 330,
-                    child: isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : GridView.builder(
-                            itemCount: stickers.length + 1,
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              mainAxisSpacing: 10,
-                              crossAxisSpacing: 10,
-                              childAspectRatio: 1,
-                            ),
-                            itemBuilder: (context, index) {
-                              if (index == 0) {
-                                return GestureDetector(
-                                  onTap: () async {
-                                    final XFile? picked =
-                                        await _mediaPicker.pickImage(
-                                      source: ImageSource.gallery,
-                                      imageQuality: 70,
-                                    );
-
-                                    if (picked == null) return;
-
-                                    final int nowMs =
-                                        DateTime.now().millisecondsSinceEpoch;
-
-                                    Navigator.pop(sheetContext);
-
-                                    await FirestoreChatService
-                                        .sendStickerMessage(
-                                      roomId: widget.roomId,
-                                      senderId: widget.currentUserId,
-                                      localFilePath: picked.path,
-                                      ts: nowMs,
-                                    );
-
-                                    await _roomRef.set({
-                                      'lastUpdatedMs': nowMs,
-                                      'lastSenderId': widget.currentUserId,
-                                      'lastText': '🙂 Sticker',
-                                    }, SetOptions(merge: true));
-
-                                    try {
-                                      Sfx.I.playSend();
-                                    } catch (_) {}
-
-                                    _scrollToBottom(keepFocus: false);
-                                  },
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.06),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: Colors.white.withOpacity(0.18),
-                                      ),
-                                    ),
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.add_photo_alternate_outlined,
-                                          color: Colors.white.withOpacity(0.9),
-                                          size: 30,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'Create',
-                                          style: TextStyle(
-                                            color:
-                                                Colors.white.withOpacity(0.75),
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }
-
-                              final sticker = stickers[index - 1];
-                              final String stickerId =
-                                  (sticker['id'] ?? '').toString();
-                              final String stickerUrl =
-                                  (sticker['stickerUrl'] ?? '').toString();
-                              final String storagePath =
-                                  (sticker['storagePath'] ?? '').toString();
-
-                              if (stickerUrl.isEmpty) {
-                                return const SizedBox.shrink();
-                              }
-
-                              return GestureDetector(
-                                onTap: () async {
-                                  final int nowMs =
-                                      DateTime.now().millisecondsSinceEpoch;
-
-                                  Navigator.pop(sheetContext);
-
-                                  await FirestoreChatService
-                                      .sendArchivedStickerMessage(
-                                    roomId: widget.roomId,
-                                    senderId: widget.currentUserId,
-                                    stickerUrl: stickerUrl,
-                                    storagePath: storagePath,
-                                    ts: nowMs,
-                                  );
-
-                                  await _roomRef.set({
-                                    'lastUpdatedMs': nowMs,
-                                    'lastSenderId': widget.currentUserId,
-                                    'lastText': '🙂 Sticker',
-                                  }, SetOptions(merge: true));
-
-                                  try {
-                                    Sfx.I.playSend();
-                                  } catch (_) {}
-
-                                  _scrollToBottom(keepFocus: false);
-                                },
-                                onLongPress: () async {
-                                  if (stickerId.isEmpty) return;
-
-                                  final bool? shouldDelete =
-                                      await showDialog<bool>(
-                                    context: context,
-                                    builder: (dialogContext) {
-                                      return AlertDialog(
-                                        backgroundColor: Colors.black,
-                                        title: const Text(
-                                          'Delete sticker?',
-                                          style: TextStyle(color: Colors.white),
-                                        ),
-                                        content: const Text(
-                                          'Remove this sticker from your archive?',
-                                          style:
-                                              TextStyle(color: Colors.white70),
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(
-                                              dialogContext,
-                                              false,
-                                            ),
-                                            child: const Text('Cancel'),
-                                          ),
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(
-                                              dialogContext,
-                                              true,
-                                            ),
-                                            child: const Text('Delete'),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  );
-
-                                  if (shouldDelete != true) return;
-
-                                  await FirestoreChatService
-                                      .deleteArchivedSticker(
-                                    userId: widget.currentUserId,
-                                    stickerId: stickerId,
-                                    storagePath: storagePath,
-                                  );
-
-                                  if (!mounted) return;
-
-                                  Navigator.pop(sheetContext);
-                                  _openDmStickerPicker();
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.06),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.white.withOpacity(0.12),
-                                    ),
-                                  ),
-                                  child: Image.network(
-                                    stickerUrl,
-                                    fit: BoxFit.contain,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                  if (!isLoading && stickers.isEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      'No saved stickers yet',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.55),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          },
-        ),
+    currentUserId: widget.currentUserId,
+    onCreateSticker: (localFilePath, ts) async {
+      await _sendNewDmStickerFromPicker(
+        localFilePath: localFilePath,
+        nowMs: ts,
+      );
+    },
+    onSendArchivedSticker: (stickerUrl, storagePath, ts) async {
+      await _sendArchivedDmStickerFromPicker(
+        stickerUrl: stickerUrl,
+        storagePath: storagePath,
+        nowMs: ts,
       );
     },
   );
+}
+
+Future<void> _sendNewDmStickerFromPicker({
+  required String localFilePath,
+  required int nowMs,
+}) async {
+  final docRef = _msgsRef.doc();
+
+  final String storagePath =
+      'users/${widget.currentUserId}/stickers/${docRef.id}.png';
+
+  await docRef.set({
+    'type': 'sticker',
+    'senderId': widget.currentUserId,
+    'text': '',
+    'tsMs': nowMs,
+    'stickerUrl': '',
+    'stickerLocalPath': localFilePath,
+    'storagePath': storagePath,
+    'heartReactorIds': <String>[],
+    'replyToMessageId': null,
+    'replyToSenderId': null,
+    'replyToSenderName': null,
+    'replyToText': null,
+  });
+
+  final ref = FirebaseStorage.instance.ref(storagePath);
+
+  final uploadSnap = await ref.putFile(
+    File(localFilePath),
+    SettableMetadata(contentType: 'image/png'),
+  );
+
+  final String stickerUrl = await uploadSnap.ref.getDownloadURL();
+
+  await FirebaseFirestore.instance
+      .collection('users')
+      .doc(widget.currentUserId)
+      .collection('stickers')
+      .doc(docRef.id)
+      .set({
+    'stickerUrl': stickerUrl,
+    'storagePath': storagePath,
+    'createdBy': widget.currentUserId,
+    'createdAt': FieldValue.serverTimestamp(),
+  });
+
+  await docRef.update({
+    'stickerUrl': stickerUrl,
+    'stickerLocalPath': null,
+    'storagePath': storagePath,
+  });
+
+  await _roomRef.set({
+    'lastUpdatedMs': nowMs,
+    'lastSenderId': widget.currentUserId,
+    'lastText': '🙂 Sticker',
+  }, SetOptions(merge: true));
+
+  try {
+    Sfx.I.playSend();
+  } catch (_) {}
+
+  _scrollToBottom(keepFocus: false);
+}
+
+Future<void> _sendArchivedDmStickerFromPicker({
+  required String stickerUrl,
+  required String storagePath,
+  required int nowMs,
+}) async {
+  await _msgsRef.add({
+    'type': 'sticker',
+    'senderId': widget.currentUserId,
+    'text': '',
+    'tsMs': nowMs,
+    'stickerUrl': stickerUrl,
+    'stickerLocalPath': null,
+    'storagePath': storagePath,
+    'heartReactorIds': <String>[],
+    'replyToMessageId': null,
+    'replyToSenderId': null,
+    'replyToSenderName': null,
+    'replyToText': null,
+  });
+
+  await _roomRef.set({
+    'lastUpdatedMs': nowMs,
+    'lastSenderId': widget.currentUserId,
+    'lastText': '🙂 Sticker',
+  }, SetOptions(merge: true));
+
+  try {
+    Sfx.I.playSend();
+  } catch (_) {}
+
+  _scrollToBottom(keepFocus: false);
 }
 Future<void> _send() async {
   final text = _c.text.trim();
@@ -1729,7 +1594,7 @@ if (i > 0) {
                     _dragDx = 0.0;
                   },
 
-                  child: (messageType == 'image' || messageType == 'video')
+                  child: (messageType == 'image' || messageType == 'video' || messageType == 'sticker')
                       ? _DmMediaMessageRow(
                           isMe: isMe,
                           messageType: messageType,
