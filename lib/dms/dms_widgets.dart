@@ -1289,6 +1289,18 @@ class _AnimatedEmojiMessageContent extends StatefulWidget {
 class _AnimatedEmojiMessageContentState
     extends State<_AnimatedEmojiMessageContent> {
   bool _showFirstFrame = true;
+  bool _didPrecache = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_didPrecache) return;
+    _didPrecache = true;
+
+    precacheImage(AssetImage(widget.frame1Asset), context);
+    precacheImage(AssetImage(widget.frame2Asset), context);
+  }
 
   @override
   void initState() {
@@ -1309,28 +1321,28 @@ class _AnimatedEmojiMessageContentState
 
   @override
   Widget build(BuildContext context) {
-    final double size = 140 * widget.uiScale;
-
-    final String assetPath =
-        _showFirstFrame ? widget.frame1Asset : widget.frame2Asset;
+    final double size = 120 * widget.uiScale;
 
     return SizedBox(
       width: size,
       height: size,
-      child: Image.asset(
-        assetPath,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.high,
-        errorBuilder: (_, __, ___) {
-          return Center(
-            child: Text(
-              '✨',
-              style: TextStyle(
-                fontSize: 52 * widget.uiScale,
-              ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            widget.frame1Asset,
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.high,
+          ),
+          if (!_showFirstFrame)
+            Image.asset(
+              widget.frame2Asset,
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.high,
             ),
-          );
-        },
+        ],
       ),
     );
   }

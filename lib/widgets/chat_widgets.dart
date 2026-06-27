@@ -3420,6 +3420,18 @@ class _AnimatedEmojiMessageContent extends StatefulWidget {
 class _AnimatedEmojiMessageContentState
     extends State<_AnimatedEmojiMessageContent> {
   bool _showFirstFrame = true;
+  bool _didPrecache = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_didPrecache) return;
+    _didPrecache = true;
+
+    precacheImage(AssetImage(widget.frame1Asset), context);
+    precacheImage(AssetImage(widget.frame2Asset), context);
+  }
 
   @override
   void initState() {
@@ -3442,32 +3454,26 @@ class _AnimatedEmojiMessageContentState
   Widget build(BuildContext context) {
     final double size = 120 * widget.uiScale;
 
-    final String assetPath =
-        _showFirstFrame ? widget.frame1Asset : widget.frame2Asset;
-
     return SizedBox(
       width: size,
       height: size,
-      child: Image.asset(
-        assetPath,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.high,
-errorBuilder: (_, __, ___) {
-  return Container(
-    width: size,
-    height: size,
-    color: Colors.red,
-    alignment: Alignment.center,
-    child: Text(
-      assetPath,
-      textAlign: TextAlign.center,
-      style: const TextStyle(
-        fontSize: 9,
-        color: Colors.white,
-      ),
-    ),
-  );
-},
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            widget.frame1Asset,
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.high,
+          ),
+          if (!_showFirstFrame)
+            Image.asset(
+              widget.frame2Asset,
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.high,
+            ),
+        ],
       ),
     );
   }
