@@ -1295,10 +1295,18 @@ Widget build(BuildContext context) {
             child: ScaleTransition(
               scale: _enterScale,
               alignment: Alignment.center,
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-                child: Stack(
+         child: GestureDetector(
+  behavior: HitTestBehavior.translucent,
+  onTap: () {
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    if (_armedDeleteMessageId != null) {
+      setState(() {
+        _armedDeleteMessageId = null;
+      });
+    }
+  },
+  child: Stack(
                   children: [
                     Positioned.fill(
                       child: Image.asset(
