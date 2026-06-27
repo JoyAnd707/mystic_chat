@@ -7,6 +7,7 @@ import '../audio/sfx.dart';
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../fx/heart_reaction_fly_layer.dart';
+import '../services/presence_service.dart';
 part 'dms_core.dart';
 part 'dms_widgets.dart';
 part 'dms_painters.dart';
@@ -357,8 +358,14 @@ class _DmChatScreenState extends State<DmChatScreen>
   late final AnimationController _twinkleController;
 late final AnimationController _enterController;
 late final Animation<double> _enterScale;
-  bool _isTyping = false;
-  bool _nearBottomCached = true;
+bool _isTyping = false;
+bool _nearBottomCached = true;
+
+// ✅ DM typing indicator
+Timer? _typingStopTimer;
+bool _sentTypingState = false;
+Set<String> _typingUserIds = <String>{};
+StreamSubscription<Set<String>>? _typingSub;
 // ✅ NEW: unread messages badge (DM)
 int _newBelowCount = 0;
 
@@ -578,6 +585,41 @@ void _onTapScrollToBottomButton() {
   _clearNewBelowBadge();
   _scrollToBottom(keepFocus: false);
 }
+String _myDmDisplayName() {
+  return dmUsers[widget.currentUserId]?.name ?? widget.currentUserId;
+}
+
+Future<void> _sendTypingState(bool isTyping) async {
+  if (_sentTypingState == isTyping) return;
+
+  _sentTypingState = isTyping;
+
+  try {
+    await PresenceService.I.setTyping(
+      roomId: widget.roomId,
+      userId: widget.currentUserId,
+      displayName: _myDmDisplayName(),
+      isTyping: isTyping,
+    );
+  } catch (_) {
+    // Ignore typing failures; chat should keep working.
+  }
+}
+
+void _notifyDmTypingChanged() {
+  final bool shouldType =
+      _focus.hasFocus && _c.text.trim().isNotEmpty;
+
+  _sendTypingState(shouldType);
+
+  _typingStopTimer?.cancel();
+
+  if (shouldType) {
+    _typingStopTimer = Timer(const Duration(seconds: 3), () {
+      _sendTypingState(false);
+    });
+  }
+}
   void _onTapType() {
     if (_isTyping) {
       _focus.requestFocus();
@@ -602,10 +644,11 @@ Future<void> _send() async {
 
   final nowMs = DateTime.now().millisecondsSinceEpoch;
 
-  _c.clear();
+_c.clear();
+await _sendTypingState(false);
 
-  setState(() {
-    _isTyping = true;
+setState(() {
+  _isTyping = true;
     _replyToMessageId = null;
     _replyToSenderId = null;
     _replyToSenderName = null;
@@ -665,15 +708,29 @@ _enterScale = Tween<double>(
 
 _enterController.forward();
 _scroll.addListener(_onDmScroll);
-    _focus.addListener(() {
-      if (!_focus.hasFocus) {
-        if (mounted) {
-          setState(() {
-            _isTyping = false;
-          });
-        }
-      }
-    });
+_focus.addListener(() {
+  if (!_focus.hasFocus) {
+    if (mounted) {
+      setState(() {
+        _isTyping = false;
+      });
+    }
+  }
+
+  _notifyDmTypingChanged();
+});
+
+_c.addListener(() {
+  if (_focus.hasFocus && !_isTyping) {
+    if (mounted) {
+      setState(() {
+        _isTyping = true;
+      });
+    }
+  }
+
+  _notifyDmTypingChanged();
+});
 
     _c.addListener(() {
       if (_focus.hasFocus && !_isTyping) {
@@ -690,10 +747,27 @@ _ensureRoomExists().then((_) async {
   await _markReadNow();
   await _setActiveDmWith();
 });
+_typingSub = PresenceService.I.streamTypingUserIds(
+  roomId: widget.roomId,
+).listen((ids) {
+  if (!mounted) return;
+
+  final filtered = ids.where((id) {
+    return id != widget.currentUserId;
+  }).toSet();
+
+  setState(() {
+    _typingUserIds = filtered;
+  });
+});
   }
 
 @override
 void dispose() {
+  _typingSub?.cancel();
+  _typingStopTimer?.cancel();
+  _sendTypingState(false);
+
   _clearActiveDmWith();
 
   _twinkleController.dispose();
@@ -1076,6 +1150,17 @@ child: GestureDetector(
                       },
                     ),
 
+
+
+if (_typingUserIds.isNotEmpty)
+  Positioned(
+    left: s(18),
+    bottom: s(18),
+    child: _DmTypingIndicator(
+      name: dmUsers[_typingUserIds.first]?.name ?? 'Someone',
+      uiScale: uiScale,
+    ),
+  ),
   if (!_nearBottomCached)
   Positioned(
     right: s(18),

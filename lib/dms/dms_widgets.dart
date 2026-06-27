@@ -1446,3 +1446,138 @@ class _HeartIcon extends StatelessWidget {
     );
   }
 }
+
+
+
+class TypingDots extends StatefulWidget {
+  final Color color;
+  final double dotSize;
+  final double gap;
+
+  const TypingDots({
+    super.key,
+    required this.color,
+    required this.dotSize,
+    required this.gap,
+  });
+
+  @override
+  State<TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<TypingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) {
+        Widget dot(int i) {
+          final double t = ((_ctrl.value * 3) - i).clamp(0.0, 1.0);
+          final double opacity = 0.35 + (0.65 * t);
+
+          return Opacity(
+            opacity: opacity,
+            child: Container(
+              width: widget.dotSize,
+              height: widget.dotSize,
+              decoration: BoxDecoration(
+                color: widget.color,
+                shape: BoxShape.circle,
+              ),
+            ),
+          );
+        }
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            dot(0),
+            SizedBox(width: widget.gap),
+            dot(1),
+            SizedBox(width: widget.gap),
+            dot(2),
+          ],
+        );
+      },
+    );
+  }
+}
+class _DmTypingIndicator extends StatelessWidget {
+  final String name;
+  final double uiScale;
+
+  const _DmTypingIndicator({
+    required this.name,
+    required this.uiScale,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * uiScale;
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      child: Container(
+        key: ValueKey<String>(name),
+        padding: EdgeInsets.symmetric(
+          horizontal: s(12),
+          vertical: s(8),
+        ),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.78),
+          border: Border.all(
+            color: const Color(0xFF46F5D6),
+            width: s(1.2),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF46F5D6).withOpacity(0.30),
+              blurRadius: s(10),
+              spreadRadius: s(1),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$name is typing',
+              style: TextStyle(
+                fontFamily: 'NanumGothic',
+                color: Colors.white.withOpacity(0.92),
+                fontSize: s(12),
+                fontWeight: FontWeight.w700,
+                height: 1.0,
+              ),
+            ),
+            SizedBox(width: s(8)),
+            TypingDots(
+              color: const Color(0xFF46F5D6),
+              dotSize: s(4.5),
+              gap: s(3),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
