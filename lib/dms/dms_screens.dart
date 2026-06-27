@@ -7,6 +7,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
+
+import '../firebase/firestore_chat_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/rotating_envelope.dart';
 
@@ -582,10 +585,12 @@ void _clearReplyTarget() {
     _lastReadLoaded = true;
   }
 
-  bool _isReadableDmMessageType(String type) {
-    return type == 'text' || type == 'image' || type == 'video';
-  }
-
+bool _isReadableDmMessageType(String type) {
+  return type == 'text' ||
+      type == 'image' ||
+      type == 'video' ||
+      type == 'sticker';
+}
   int _latestIncomingReadableTs(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
@@ -786,6 +791,56 @@ void _notifyDmTypingChanged() {
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
   }
 Future<void> _pickAndSendDmMedia() async {
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.black.withOpacity(0.92),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+    ),
+    builder: (sheetContext) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(
+                  Icons.photo_library_rounded,
+                  color: Color(0xFF46F5D6),
+                ),
+                title: const Text(
+                  'Photo / Video',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _pickAndSendDmPhotoOrVideo();
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.sticky_note_2_outlined,
+                  color: Color(0xFF46F5D6),
+                ),
+                title: const Text(
+                  'Stickers',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  _openDmStickerPicker();
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<void> _pickAndSendDmPhotoOrVideo() async {
   final XFile? picked = await _mediaPicker.pickMedia();
 
   if (picked == null) return;
@@ -856,6 +911,258 @@ Future<void> _pickAndSendDmMedia() async {
       ),
     );
   }
+}
+
+void _openDmStickerPicker() {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.black.withOpacity(0.92),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+    ),
+    builder: (sheetContext) {
+      return SafeArea(
+        child: FutureBuilder<List<Map<String, dynamic>>>(
+          future: FirestoreChatService.loadStickerArchive(
+            userId: widget.currentUserId,
+          ),
+          builder: (context, snapshot) {
+            final bool isLoading =
+                snapshot.connectionState == ConnectionState.waiting;
+
+            final List<Map<String, dynamic>> stickers =
+                snapshot.data ?? <Map<String, dynamic>>[];
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                24 + MediaQuery.of(context).padding.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Stickers',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 330,
+                    child: isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : GridView.builder(
+                            itemCount: stickers.length + 1,
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              mainAxisSpacing: 10,
+                              crossAxisSpacing: 10,
+                              childAspectRatio: 1,
+                            ),
+                            itemBuilder: (context, index) {
+                              if (index == 0) {
+                                return GestureDetector(
+                                  onTap: () async {
+                                    final XFile? picked =
+                                        await _mediaPicker.pickImage(
+                                      source: ImageSource.gallery,
+                                      imageQuality: 70,
+                                    );
+
+                                    if (picked == null) return;
+
+                                    final int nowMs =
+                                        DateTime.now().millisecondsSinceEpoch;
+
+                                    Navigator.pop(sheetContext);
+
+                                    await FirestoreChatService
+                                        .sendStickerMessage(
+                                      roomId: widget.roomId,
+                                      senderId: widget.currentUserId,
+                                      localFilePath: picked.path,
+                                      ts: nowMs,
+                                    );
+
+                                    await _roomRef.set({
+                                      'lastUpdatedMs': nowMs,
+                                      'lastSenderId': widget.currentUserId,
+                                      'lastText': '🙂 Sticker',
+                                    }, SetOptions(merge: true));
+
+                                    try {
+                                      Sfx.I.playSend();
+                                    } catch (_) {}
+
+                                    _scrollToBottom(keepFocus: false);
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.06),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.white.withOpacity(0.18),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.add_photo_alternate_outlined,
+                                          color: Colors.white.withOpacity(0.9),
+                                          size: 30,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Create',
+                                          style: TextStyle(
+                                            color:
+                                                Colors.white.withOpacity(0.75),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              final sticker = stickers[index - 1];
+                              final String stickerId =
+                                  (sticker['id'] ?? '').toString();
+                              final String stickerUrl =
+                                  (sticker['stickerUrl'] ?? '').toString();
+                              final String storagePath =
+                                  (sticker['storagePath'] ?? '').toString();
+
+                              if (stickerUrl.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
+
+                              return GestureDetector(
+                                onTap: () async {
+                                  final int nowMs =
+                                      DateTime.now().millisecondsSinceEpoch;
+
+                                  Navigator.pop(sheetContext);
+
+                                  await FirestoreChatService
+                                      .sendArchivedStickerMessage(
+                                    roomId: widget.roomId,
+                                    senderId: widget.currentUserId,
+                                    stickerUrl: stickerUrl,
+                                    storagePath: storagePath,
+                                    ts: nowMs,
+                                  );
+
+                                  await _roomRef.set({
+                                    'lastUpdatedMs': nowMs,
+                                    'lastSenderId': widget.currentUserId,
+                                    'lastText': '🙂 Sticker',
+                                  }, SetOptions(merge: true));
+
+                                  try {
+                                    Sfx.I.playSend();
+                                  } catch (_) {}
+
+                                  _scrollToBottom(keepFocus: false);
+                                },
+                                onLongPress: () async {
+                                  if (stickerId.isEmpty) return;
+
+                                  final bool? shouldDelete =
+                                      await showDialog<bool>(
+                                    context: context,
+                                    builder: (dialogContext) {
+                                      return AlertDialog(
+                                        backgroundColor: Colors.black,
+                                        title: const Text(
+                                          'Delete sticker?',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                        content: const Text(
+                                          'Remove this sticker from your archive?',
+                                          style:
+                                              TextStyle(color: Colors.white70),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(
+                                              dialogContext,
+                                              false,
+                                            ),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(
+                                              dialogContext,
+                                              true,
+                                            ),
+                                            child: const Text('Delete'),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  );
+
+                                  if (shouldDelete != true) return;
+
+                                  await FirestoreChatService
+                                      .deleteArchivedSticker(
+                                    userId: widget.currentUserId,
+                                    stickerId: stickerId,
+                                    storagePath: storagePath,
+                                  );
+
+                                  if (!mounted) return;
+
+                                  Navigator.pop(sheetContext);
+                                  _openDmStickerPicker();
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.06),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.white.withOpacity(0.12),
+                                    ),
+                                  ),
+                                  child: Image.network(
+                                    stickerUrl,
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  if (!isLoading && stickers.isEmpty) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      'No saved stickers yet',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.55),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    },
+  );
 }
 Future<void> _send() async {
   final text = _c.text.trim();
@@ -1259,14 +1566,18 @@ if (snap.hasData) {
 
 if (messageType != 'text' &&
     messageType != 'image' &&
-    messageType != 'video') {
+    messageType != 'video' &&
+    messageType != 'sticker') {
   return const SizedBox.shrink();
 }
 
 final sender = (m['senderId'] ?? '').toString();
 final isMe = sender == widget.currentUserId;
 final text = (m['text'] ?? '').toString();
-final String mediaUrl = (m['mediaUrl'] ?? '').toString();
+
+final String mediaUrl = messageType == 'sticker'
+    ? (m['stickerUrl'] ?? '').toString()
+    : (m['mediaUrl'] ?? '').toString();
 
                             final int ts =
                                 (m['tsMs'] is int) ? m['tsMs'] as int : 0;
