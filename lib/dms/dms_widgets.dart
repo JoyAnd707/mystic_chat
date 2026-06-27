@@ -786,7 +786,10 @@ class _DmMediaMessageRow extends StatelessWidget {
   final String messageType;
   final String mediaUrl;
   final String storagePath;
-final VoidCallback? onLongPressSticker;
+  final String animatedEmojiId;
+  final String frame1Asset;
+  final String frame2Asset;
+  final VoidCallback? onLongPressSticker;
   final String time;
   final double uiScale;
 
@@ -804,6 +807,9 @@ final VoidCallback? onLongPressSticker;
     required this.messageType,
     required this.mediaUrl,
     required this.storagePath,
+    this.animatedEmojiId = '',
+    this.frame1Asset = '',
+    this.frame2Asset = '',
     this.onLongPressSticker,
     required this.time,
     required this.uiScale,
@@ -986,6 +992,14 @@ final VoidCallback? onLongPressSticker;
     }
 
 Widget mediaContent() {
+
+  if (messageType == 'animatedEmoji') {
+  return _AnimatedEmojiMessageContent(
+    frame1Asset: frame1Asset,
+    frame2Asset: frame2Asset,
+    uiScale: uiScale,
+  );
+}
   if (mediaUrl.trim().isEmpty) {
     return SizedBox(
       width: messageType == 'sticker' ? s(140) : mediaW,
@@ -1251,6 +1265,72 @@ final Widget bubble = Stack(
             avatar,
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _AnimatedEmojiMessageContent extends StatefulWidget {
+  final String frame1Asset;
+  final String frame2Asset;
+  final double uiScale;
+
+  const _AnimatedEmojiMessageContent({
+    required this.frame1Asset,
+    required this.frame2Asset,
+    required this.uiScale,
+  });
+
+  @override
+  State<_AnimatedEmojiMessageContent> createState() =>
+      _AnimatedEmojiMessageContentState();
+}
+
+class _AnimatedEmojiMessageContentState
+    extends State<_AnimatedEmojiMessageContent> {
+  bool _showFirstFrame = true;
+
+  @override
+  void initState() {
+    super.initState();
+
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(milliseconds: 450));
+
+      if (!mounted) return false;
+
+      setState(() {
+        _showFirstFrame = !_showFirstFrame;
+      });
+
+      return true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double size = 140 * widget.uiScale;
+
+    final String assetPath =
+        _showFirstFrame ? widget.frame1Asset : widget.frame2Asset;
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (_, __, ___) {
+          return Center(
+            child: Text(
+              '✨',
+              style: TextStyle(
+                fontSize: 52 * widget.uiScale,
+              ),
+            ),
+          );
+        },
       ),
     );
   }

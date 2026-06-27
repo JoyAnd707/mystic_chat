@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../data/animated_emojis.dart';
 import '../firebase/firestore_chat_service.dart';
 
 typedef CreateStickerCallback = Future<void> Function(
@@ -14,11 +15,17 @@ typedef SendArchivedStickerCallback = Future<void> Function(
   int ts,
 );
 
+typedef SendAnimatedEmojiCallback = Future<void> Function(
+  MysticAnimatedEmoji emoji,
+  int ts,
+);
+
 void showMysticStickerPickerSheet({
   required BuildContext context,
   required String currentUserId,
   required CreateStickerCallback onCreateSticker,
   required SendArchivedStickerCallback onSendArchivedSticker,
+  SendAnimatedEmojiCallback? onSendAnimatedEmoji,
 }) {
   showModalBottomSheet(
     context: context,
@@ -28,11 +35,12 @@ void showMysticStickerPickerSheet({
       borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
     ),
     builder: (sheetContext) {
-      return _MysticStickerPickerSheet(
-        currentUserId: currentUserId,
-        onCreateSticker: onCreateSticker,
-        onSendArchivedSticker: onSendArchivedSticker,
-      );
+return _MysticStickerPickerSheet(
+  currentUserId: currentUserId,
+  onCreateSticker: onCreateSticker,
+  onSendArchivedSticker: onSendArchivedSticker,
+  onSendAnimatedEmoji: onSendAnimatedEmoji,
+);
     },
   );
 }
@@ -41,12 +49,13 @@ class _MysticStickerPickerSheet extends StatefulWidget {
   final String currentUserId;
   final CreateStickerCallback onCreateSticker;
   final SendArchivedStickerCallback onSendArchivedSticker;
-
-  const _MysticStickerPickerSheet({
-    required this.currentUserId,
-    required this.onCreateSticker,
-    required this.onSendArchivedSticker,
-  });
+final SendAnimatedEmojiCallback? onSendAnimatedEmoji;
+const _MysticStickerPickerSheet({
+  required this.currentUserId,
+  required this.onCreateSticker,
+  required this.onSendArchivedSticker,
+  this.onSendAnimatedEmoji,
+});
 
   @override
   State<_MysticStickerPickerSheet> createState() =>
@@ -64,6 +73,9 @@ class _MysticStickerPickerSheetState extends State<_MysticStickerPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final List<MysticAnimatedEmoji> myAnimatedEmojis =
+        animatedEmojisForUser(widget.currentUserId);
+
     return SafeArea(
       child: FutureBuilder<List<Map<String, dynamic>>>(
         future: _load(),
@@ -93,6 +105,64 @@ class _MysticStickerPickerSheetState extends State<_MysticStickerPickerSheet> {
                   ),
                 ),
                 const SizedBox(height: 16),
+
+                if (myAnimatedEmojis.isNotEmpty) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'My Animated Emojis',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.78),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 105,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: myAnimatedEmojis.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      itemBuilder: (context, index) {
+                        final MysticAnimatedEmoji emoji =
+                            myAnimatedEmojis[index];
+
+         return _AnimatedEmojiTestTile(
+  emoji: emoji,
+  onTap: widget.onSendAnimatedEmoji == null
+      ? null
+      : () async {
+          final int ts = DateTime.now().millisecondsSinceEpoch;
+
+          Navigator.pop(context);
+
+          await widget.onSendAnimatedEmoji!(
+            emoji,
+            ts,
+          );
+        },
+);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                ],
+
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Saved Stickers',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.78),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
                 SizedBox(
                   height: 330,
                   child: isLoading
@@ -241,6 +311,97 @@ class _MysticStickerPickerSheetState extends State<_MysticStickerPickerSheet> {
         },
       ),
     );
+  }
+}
+
+class _AnimatedEmojiTestTile extends StatefulWidget {
+  final MysticAnimatedEmoji emoji;
+  final VoidCallback? onTap;
+
+  const _AnimatedEmojiTestTile({
+    required this.emoji,
+    this.onTap,
+  });
+
+  @override
+  State<_AnimatedEmojiTestTile> createState() => _AnimatedEmojiTestTileState();
+}
+
+class _AnimatedEmojiTestTileState extends State<_AnimatedEmojiTestTile> {
+  bool _showFirstFrame = true;
+
+  @override
+  void initState() {
+    super.initState();
+
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(milliseconds: 450));
+
+      if (!mounted) return false;
+
+      setState(() {
+        _showFirstFrame = !_showFirstFrame;
+      });
+
+      return true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String assetPath = _showFirstFrame
+        ? widget.emoji.frame1Asset
+        : widget.emoji.frame2Asset;
+
+    return GestureDetector(
+  onTap: widget.onTap,
+  child: Container(
+      width: 92,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF46F5D6).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF46F5D6).withOpacity(0.45),
+        ),
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: Image.asset(
+              assetPath,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) {
+                return Center(
+                  child: Text(
+                    widget.emoji.ownerUserId.characters.first.toUpperCase(),
+                    style: const TextStyle(
+                      color: Color(0xFF46F5D6),
+                      fontSize: 34,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            widget.emoji.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.72),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+      
+    )
+    );
+    
   }
 }
 

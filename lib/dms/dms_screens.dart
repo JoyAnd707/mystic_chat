@@ -12,7 +12,7 @@ import '../widgets/sticker_picker_sheet.dart';
 import '../firebase/firestore_chat_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/rotating_envelope.dart';
-
+import '../data/animated_emojis.dart';
 import '../audio/bgm.dart';
 import '../audio/sfx.dart';
 import '../fx/heart_reaction_fly_layer.dart';
@@ -930,9 +930,47 @@ void _openDmStickerPicker() {
         nowMs: ts,
       );
     },
+    onSendAnimatedEmoji: (emoji, ts) async {
+      await _sendAnimatedEmojiDmMessage(
+        emoji: emoji,
+        nowMs: ts,
+      );
+    },
   );
 }
+Future<void> _sendAnimatedEmojiDmMessage({
+  required MysticAnimatedEmoji emoji,
+  required int nowMs,
+}) async {
+  await _msgsRef.add({
+    'type': 'animatedEmoji',
+    'senderId': widget.currentUserId,
+    'text': emoji.label,
+    'tsMs': nowMs,
+    'animatedEmojiId': emoji.id,
+    'ownerUserId': emoji.ownerUserId,
+    'frame1Asset': emoji.frame1Asset,
+    'frame2Asset': emoji.frame2Asset,
+    'canBeSaved': false,
+    'heartReactorIds': <String>[],
+    'replyToMessageId': null,
+    'replyToSenderId': null,
+    'replyToSenderName': null,
+    'replyToText': null,
+  });
 
+  await _roomRef.set({
+    'lastUpdatedMs': nowMs,
+    'lastSenderId': widget.currentUserId,
+    'lastText': '✨ ${emoji.label}',
+  }, SetOptions(merge: true));
+
+  try {
+    Sfx.I.playSend();
+  } catch (_) {}
+
+  _scrollToBottom(keepFocus: false);
+}
 Future<void> _sendNewDmStickerFromPicker({
   required String localFilePath,
   required int nowMs,
@@ -1440,7 +1478,8 @@ if (snap.hasData) {
 if (messageType != 'text' &&
     messageType != 'image' &&
     messageType != 'video' &&
-    messageType != 'sticker') {
+    messageType != 'sticker' &&
+    messageType != 'animatedEmoji') {
   return const SizedBox.shrink();
 }
 
@@ -1602,13 +1641,19 @@ if (i > 0) {
                     _dragDx = 0.0;
                   },
 
-                  child: (messageType == 'image' || messageType == 'video' || messageType == 'sticker')
+                  child: (messageType == 'image' ||
+        messageType == 'video' ||
+        messageType == 'sticker' ||
+        messageType == 'animatedEmoji')
                       ? _DmMediaMessageRow(
   isMe: isMe,
   messageType: messageType,
   mediaUrl: mediaUrl,
   storagePath: (m['storagePath'] ?? '').toString(),
-  onLongPressSticker: messageType == 'sticker' && !isMe
+  animatedEmojiId: (m['animatedEmojiId'] ?? '').toString(),
+  frame1Asset: (m['frame1Asset'] ?? '').toString(),
+  frame2Asset: (m['frame2Asset'] ?? '').toString(),
+  onLongPressSticker: messageType == 'sticker'
       ? () async {
           final bool saved =
               await FirestoreChatService.saveStickerToArchiveFromMessage(
