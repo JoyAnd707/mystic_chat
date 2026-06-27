@@ -1007,30 +1007,38 @@ class _DmBottomCornerLine extends StatelessWidget {
 /// Later we replace with your exact DMSbubble asset logic.
 /// =======================================
 class _DmMessageRow extends StatelessWidget {
-  final bool isMe;
-  final String text;
-  final String time;
-  final double uiScale;
+final bool isMe;
+final String text;
+final String time;
+final double uiScale;
 
-  final String meLetter;
-  final String otherLetter;
+final String meLetter;
+final String otherLetter;
+
+// ❤️ Hearts (same system as Group Chat)
+
+
+final List<String> heartReactorIds;
 
   // ✅ NEW: reply preview inside sent message bubble
   final String? replyToSenderName;
   final String? replyToText;
   final VoidCallback? onTapReplyPreview;
 
-  const _DmMessageRow({
-    required this.isMe,
-    required this.text,
-    required this.time,
-    required this.uiScale,
-    required this.meLetter,
-    required this.otherLetter,
-    this.replyToSenderName,
-    this.replyToText,
-    this.onTapReplyPreview,
-  });
+const _DmMessageRow({
+  required this.isMe,
+  required this.text,
+  required this.time,
+  required this.uiScale,
+  required this.meLetter,
+  required this.otherLetter,
+
+  required this.heartReactorIds,
+
+  this.replyToSenderName,
+  this.replyToText,
+  this.onTapReplyPreview,
+});
 
   bool get _hasReplyPreview {
     return (replyToSenderName?.trim().isNotEmpty ?? false) ||
@@ -1168,10 +1176,13 @@ class _DmMessageRow extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        replyPreviewBox(),
-                        Builder(
-                          builder: (context) {
+                 children: [
+  replyPreviewBox(),
+
+
+
+  Builder(
+    builder: (context) {
                             final bool isRtl =
                                 RegExp(r'[\u0590-\u05FF]').hasMatch(text);
 
@@ -1251,13 +1262,34 @@ class _DmMessageRow extends StatelessWidget {
                     ),
                     SizedBox(width: s(8)),
                   ],
-                  Padding(
-                    padding: EdgeInsets.only(
-                      left: isMe ? 0.0 : s(2.5),
-                      right: isMe ? s(2.5) : 0.0,
-                    ),
-                    child: bubble,
-                  ),
+  Padding(
+  padding: EdgeInsets.only(
+    left: isMe ? 0.0 : s(2.5),
+    right: isMe ? s(2.5) : 0.0,
+  ),
+  child: Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment:
+        isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+    children: [
+      bubble,
+
+      if (heartReactorIds.isNotEmpty)
+        Padding(
+          padding: EdgeInsets.only(top: s(8)),
+          child: Wrap(
+            spacing: s(4),
+            children: heartReactorIds.map((uid) {
+              return _HeartIcon(
+                userId: uid,
+                uiScale: uiScale * 2.50,
+              );
+            }).toList(),
+          ),
+        ),
+    ],
+  ),
+),
                   if (!isMe && time.isNotEmpty) ...[
                     SizedBox(width: s(8)),
                     Padding(
@@ -1371,3 +1403,46 @@ class _Avatar extends StatelessWidget {
   }
 }
 
+
+const Map<String, Color> _heartColorByUserId = {
+  'lian': Color(0xFFFF8A00),
+  'lihi': Color(0xFFFF3B30),
+  'lera': Color(0xFFFFF420),
+  'tal': Color(0xFF33FF20),
+  'danielle': Color(0xFF20D2FF),
+  'joy': Color(0xFFB120FF),
+  'adi': Color(0xFFFF20AA),
+  'nella': Color(0xFF3BFFD8),
+};
+
+Color _heartColorForUserId(String userId) {
+  return _heartColorByUserId[userId] ?? Colors.white;
+}
+
+class _HeartIcon extends StatelessWidget {
+  final String userId;
+  final double uiScale;
+
+  const _HeartIcon({
+    required this.userId,
+    required this.uiScale,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = 20 * uiScale;
+
+    return ColorFiltered(
+      colorFilter: ColorFilter.mode(
+        _heartColorForUserId(userId),
+        BlendMode.srcIn,
+      ),
+      child: Image.asset(
+        'assets/reactions/HeartReaction.png',
+        width: size,
+        height: size,
+        filterQuality: FilterQuality.high,
+      ),
+    );
+  }
+}

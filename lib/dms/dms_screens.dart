@@ -422,7 +422,20 @@ Future<void> _jumpToMessage(String messageId) async {
 }
 
 
+Future<void> _toggleHeartForMessage(
+  String messageId,
+  List<String> currentReactors,
+) async {
+  final me = widget.currentUserId;
 
+  final bool isAdding = !currentReactors.contains(me);
+
+  await _msgsRef.doc(messageId).update({
+    'heartReactorIds': isAdding
+        ? FieldValue.arrayUnion([me])
+        : FieldValue.arrayRemove([me]),
+  });
+}
 
 double _dragDx = 0.0;
 
@@ -577,17 +590,20 @@ Future<void> _send() async {
     _replyToText = null;
   });
 
-  await _msgsRef.add({
-    'type': 'text',
-    'senderId': widget.currentUserId,
-    'text': text,
-    'tsMs': nowMs,
+await _msgsRef.add({
+  'type': 'text',
+  'senderId': widget.currentUserId,
+  'text': text,
+  'tsMs': nowMs,
 
-    'replyToMessageId': replyMessageId,
-    'replyToSenderId': replySenderId,
-    'replyToSenderName': replySenderName,
-    'replyToText': replyText,
-  });
+  // ❤️ reactions
+  'heartReactorIds': <String>[],
+
+  'replyToMessageId': replyMessageId,
+  'replyToSenderId': replySenderId,
+  'replyToSenderName': replySenderName,
+  'replyToText': replyText,
+});
 
   await _roomRef.set({
     'lastUpdatedMs': nowMs,
@@ -921,10 +937,20 @@ Widget build(BuildContext context) {
               ]
             : const [],
       ),
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
+child: GestureDetector(
+  behavior: HitTestBehavior.translucent,
 
-        onHorizontalDragStart: (_) {
+  onDoubleTap: () {
+    final reactors =
+        List<String>.from(m['heartReactorIds'] ?? const []);
+
+    _toggleHeartForMessage(
+      messageId,
+      reactors,
+    );
+  },
+
+  onHorizontalDragStart: (_) {
           _dragDx = 0.0;
         },
 
@@ -947,25 +973,29 @@ Widget build(BuildContext context) {
         },
 
         child: _DmMessageRow(
-          isMe: isMe,
-          text: text,
-          time: timeLabel,
-          uiScale: uiScale,
-          meLetter: (dmUsers[widget.currentUserId]
-                      ?.name
-                      .characters
-                      .first ??
-                  ' ')
-              .toUpperCase(),
-          otherLetter: (dmUsers[widget.otherUserId]
-                      ?.name
-                      .characters
-                      .first ??
-                  ' ')
-              .toUpperCase(),
-          replyToSenderName: m['replyToSenderName']?.toString(),
-          replyToText: m['replyToText']?.toString(),
-          onTapReplyPreview: () {
+  isMe: isMe,
+  text: text,
+  time: timeLabel,
+  uiScale: uiScale,
+
+  heartReactorIds:
+      List<String>.from(m['heartReactorIds'] ?? const []),
+
+  meLetter: (dmUsers[widget.currentUserId]
+              ?.name
+              .characters
+              .first ??
+          ' ')
+      .toUpperCase(),
+  otherLetter: (dmUsers[widget.otherUserId]
+              ?.name
+              .characters
+              .first ??
+          ' ')
+      .toUpperCase(),
+  replyToSenderName: m['replyToSenderName']?.toString(),
+  replyToText: m['replyToText']?.toString(),
+  onTapReplyPreview: () {
             final id = m['replyToMessageId']?.toString();
 
             if (id == null || id.isEmpty) return;
