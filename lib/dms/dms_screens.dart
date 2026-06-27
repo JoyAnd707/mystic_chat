@@ -385,6 +385,9 @@ bool _hideUnreadDivider = false;
 
 // How many messages were in the previous snapshot
 int _previousMessageCount = 0;
+
+// ✅ Initial open position: jump to UNREAD if exists, otherwise bottom
+bool _didInitialDmOpenJump = false;
 // ✅ Reply jump + highlight
 final Map<String, GlobalKey> _messageKeys = <String, GlobalKey>{};
 final Set<String> _highlightedMessageIds = <String>{};
@@ -579,7 +582,11 @@ void _clearReplyTarget() {
     _lastReadLoaded = true;
   }
 
-  int _latestIncomingTextTs(
+  bool _isReadableDmMessageType(String type) {
+    return type == 'text' || type == 'image' || type == 'video';
+  }
+
+  int _latestIncomingReadableTs(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
     int latest = 0;
@@ -591,7 +598,7 @@ void _clearReplyTarget() {
       final String sender = (data['senderId'] ?? '').toString();
       final int ts = (data['tsMs'] is int) ? data['tsMs'] as int : 0;
 
-      if (type != 'text') continue;
+      if (!_isReadableDmMessageType(type)) continue;
       if (sender == widget.currentUserId) continue;
       if (ts > latest) latest = ts;
     }
@@ -599,7 +606,7 @@ void _clearReplyTarget() {
     return latest;
   }
 
-  int _firstUnreadIncomingTextTs(
+  int _firstUnreadIncomingReadableTs(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
     if (!_lastReadLoaded) return 0;
@@ -611,7 +618,7 @@ void _clearReplyTarget() {
       final String sender = (data['senderId'] ?? '').toString();
       final int ts = (data['tsMs'] is int) ? data['tsMs'] as int : 0;
 
-      if (type != 'text') continue;
+      if (!_isReadableDmMessageType(type)) continue;
       if (sender == widget.currentUserId) continue;
       if (ts <= _lastReadMsCache) continue;
 
@@ -626,7 +633,7 @@ void _clearReplyTarget() {
   }) async {
     if (!_lastReadLoaded) return;
 
-    final int latestIncomingTs = _latestIncomingTextTs(docs);
+   final int latestIncomingTs = _latestIncomingReadableTs(docs);
     if (latestIncomingTs <= 0) return;
     if (latestIncomingTs <= _lastReadMsCache) return;
 
@@ -1141,6 +1148,38 @@ Widget build(BuildContext context) {
                       builder: (context, snap) {
        final docs = snap.data?.docs ?? const [];
 _messageIdsInOrder = docs.map((d) => d.id).toList();
+if (snap.hasData && _lastReadLoaded && !_didInitialDmOpenJump) {
+  _didInitialDmOpenJump = true;
+
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    if (!mounted) return;
+
+    final int firstUnreadTs =
+        _firstUnreadIncomingReadableTs(docs);
+
+    if (firstUnreadTs > 0) {
+      String targetMessageId = '';
+
+      for (final d in docs) {
+        final data = d.data();
+        final int ts = (data['tsMs'] is int) ? data['tsMs'] as int : 0;
+
+        if (ts == firstUnreadTs) {
+          targetMessageId = d.id;
+          break;
+        }
+      }
+
+      if (targetMessageId.isNotEmpty) {
+        await _jumpToMessage(targetMessageId);
+      }
+
+      return;
+    }
+
+    _scrollToBottom(keepFocus: false);
+  });
+}
 
 if (snap.hasData) {
   final int currentCount = docs.length;
@@ -1193,8 +1232,8 @@ if (snap.hasData) {
 //   if (snap.hasData) _scrollToBottom();
 // });
 
-                                   final int firstUnreadTs =
-                            _firstUnreadIncomingTextTs(docs);
+                         final int firstUnreadTs =
+    _firstUnreadIncomingReadableTs(docs);
 
                         return ListView.builder(
                           controller: _scroll,
