@@ -54,6 +54,22 @@ async function notifyForMessage({ snap, roomPath, roomId, messageId, roomKindDef
     const u = doc.data() || {};
     const fcmTokens = u.fcmTokens;
 
+    const recipientAppUserId = (u.appUserId || "").toString();
+    const activeDmWith = (u.activeDmWith || "").toString();
+
+    // If this is a DM, and the recipient is currently inside
+    // the DM with this exact sender, do not send push to this recipient.
+    if (
+      roomKindDefault === "dm" &&
+      activeDmWith &&
+      activeDmWith === senderAppUserId
+    ) {
+      console.log(
+        `Skipping DM push for ${recipientAppUserId}: active DM with ${senderAppUserId}`
+      );
+      return;
+    }
+
     // supports both:
     // 1) map: { token: true, token2: true }
     // 2) array: [token, token2]
@@ -67,7 +83,6 @@ async function notifyForMessage({ snap, roomPath, roomId, messageId, roomKindDef
       });
     }
   });
-
   const uniqueTokens = Array.from(new Set(tokens)).filter(Boolean);
   if (!uniqueTokens.length) return null;
 

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../audio/bgm.dart';
 import '../audio/sfx.dart';
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 part 'dms_core.dart';
 part 'dms_widgets.dart';
 part 'dms_painters.dart';
@@ -482,7 +483,27 @@ void _clearReplyTarget() {
       'createdMs': DateTime.now().millisecondsSinceEpoch,
     }, SetOptions(merge: true));
   }
+Future<void> _setActiveDmWith() async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
 
+  await FirebaseFirestore.instance.collection('users').doc(uid).set({
+    'activeDmWith': widget.otherUserId,
+    'activeDmRoomId': widget.roomId,
+    'activeDmUpdatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
+
+Future<void> _clearActiveDmWith() async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
+
+  await FirebaseFirestore.instance.collection('users').doc(uid).set({
+    'activeDmWith': FieldValue.delete(),
+    'activeDmRoomId': FieldValue.delete(),
+    'activeDmUpdatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
   void _scrollToBottom({bool keepFocus = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
@@ -598,21 +619,24 @@ _enterController.forward();
       }
     });
 
-    // ✅ ensure room exists + mark read
-    _ensureRoomExists().then((_) async {
-      await _markReadNow();
-    });
+// ✅ ensure room exists + mark read + mark this DM as currently open
+_ensureRoomExists().then((_) async {
+  await _markReadNow();
+  await _setActiveDmWith();
+});
   }
 
-  @override
-  void dispose() {
-    _twinkleController.dispose();
-    _enterController.dispose();
-    _scroll.dispose();
-    _c.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
+@override
+void dispose() {
+  _clearActiveDmWith();
+
+  _twinkleController.dispose();
+  _enterController.dispose();
+  _scroll.dispose();
+  _c.dispose();
+  _focus.dispose();
+  super.dispose();
+}
 
   @override
 Widget build(BuildContext context) {
