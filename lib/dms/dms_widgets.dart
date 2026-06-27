@@ -785,6 +785,8 @@ class _DmMediaMessageRow extends StatelessWidget {
   final bool isMe;
   final String messageType;
   final String mediaUrl;
+  final String storagePath;
+final VoidCallback? onLongPressSticker;
   final String time;
   final double uiScale;
 
@@ -801,6 +803,8 @@ class _DmMediaMessageRow extends StatelessWidget {
     required this.isMe,
     required this.messageType,
     required this.mediaUrl,
+    required this.storagePath,
+    this.onLongPressSticker,
     required this.time,
     required this.uiScale,
     required this.meLetter,
@@ -998,9 +1002,10 @@ Widget mediaContent() {
   }
 
   if (messageType == 'sticker') {
-    return GestureDetector(
-      onTap: () => _openImageViewer(context, mediaUrl),
-      behavior: HitTestBehavior.opaque,
+return GestureDetector(
+  onTap: () => _openImageViewer(context, mediaUrl),
+  onLongPress: onLongPressSticker,
+  behavior: HitTestBehavior.opaque,
       child: SizedBox(
         width: s(140),
         height: s(140),

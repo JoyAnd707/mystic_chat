@@ -1596,11 +1596,35 @@ if (i > 0) {
 
                   child: (messageType == 'image' || messageType == 'video' || messageType == 'sticker')
                       ? _DmMediaMessageRow(
-                          isMe: isMe,
-                          messageType: messageType,
-                          mediaUrl: mediaUrl,
-                          time: timeLabel,
-                          uiScale: uiScale,
+  isMe: isMe,
+  messageType: messageType,
+  mediaUrl: mediaUrl,
+  storagePath: (m['storagePath'] ?? '').toString(),
+  onLongPressSticker: messageType == 'sticker' && !isMe
+      ? () async {
+          final bool saved =
+              await FirestoreChatService.saveStickerToArchiveFromMessage(
+            userId: widget.currentUserId,
+            stickerUrl: (m['stickerUrl'] ?? '').toString(),
+            storagePath: (m['storagePath'] ?? '').toString(),
+          );
+
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                saved
+                    ? 'Sticker saved to your archive'
+                    : 'Sticker is already in your archive',
+              ),
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        }
+      : null,
+  time: timeLabel,
+  uiScale: uiScale,
                           heartReactorIds: List<String>.from(
                             m['heartReactorIds'] ?? const [],
                           ),

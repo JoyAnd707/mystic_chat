@@ -3237,6 +3237,33 @@ imageUrl: msg.imageUrl,
 videoUrl: msg.videoUrl,
 stickerUrl: msg.stickerUrl,
 stickerLocalPath: msg.stickerLocalPath,
+
+onLongPressSticker: msg.type == ChatMessageType.sticker && !isMe
+    ? () async {
+        if ((msg.stickerUrl ?? '').trim().isEmpty) return;
+
+        final bool saved =
+            await FirestoreChatService.saveStickerToArchiveFromMessage(
+          userId: widget.currentUserId,
+          stickerUrl: msg.stickerUrl ?? '',
+          storagePath: '',
+        );
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              saved
+                  ? 'Sticker saved to your archive'
+                  : 'Sticker is already in your archive',
+            ),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    : null,
+
 // ✅ voice
 voicePath: msg.voicePath,
 voiceDurationMs: msg.voiceDurationMs,
