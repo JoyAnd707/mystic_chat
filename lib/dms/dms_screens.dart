@@ -369,6 +369,11 @@ StreamSubscription<Set<String>>? _typingSub;
 // ✅ NEW: unread messages badge (DM)
 int _newBelowCount = 0;
 
+// ✅ DM unread divider
+int _lastReadMsCache = 0;
+bool _lastReadLoaded = false;
+bool _hideUnreadDivider = false;
+
 // How many messages were in the previous snapshot
 int _previousMessageCount = 0;
 // ✅ Reply jump + highlight
@@ -499,9 +504,77 @@ void _clearReplyTarget() {
   Stream<QuerySnapshot<Map<String, dynamic>>> get _msgsStream =>
       _msgsRef.orderBy('tsMs', descending: false).snapshots();
 
-  Future<void> _markReadNow() async {
+  Future<void> _loadLastReadOnce() async {
+    if (_lastReadLoaded) return;
+
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_lastReadKey(), DateTime.now().millisecondsSinceEpoch);
+
+    _lastReadMsCache = prefs.getInt(_lastReadKey()) ?? 0;
+    _lastReadLoaded = true;
+  }
+
+  int _latestIncomingTextTs(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    int latest = 0;
+
+    for (final d in docs) {
+      final data = d.data();
+
+      final String type = (data['type'] ?? 'text').toString();
+      final String sender = (data['senderId'] ?? '').toString();
+      final int ts = (data['tsMs'] is int) ? data['tsMs'] as int : 0;
+
+      if (type != 'text') continue;
+      if (sender == widget.currentUserId) continue;
+      if (ts > latest) latest = ts;
+    }
+
+    return latest;
+  }
+
+  int _firstUnreadIncomingTextTs(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    if (!_lastReadLoaded) return 0;
+
+    for (final d in docs) {
+      final data = d.data();
+
+      final String type = (data['type'] ?? 'text').toString();
+      final String sender = (data['senderId'] ?? '').toString();
+      final int ts = (data['tsMs'] is int) ? data['tsMs'] as int : 0;
+
+      if (type != 'text') continue;
+      if (sender == widget.currentUserId) continue;
+      if (ts <= _lastReadMsCache) continue;
+
+      return ts;
+    }
+
+    return 0;
+  }
+
+  Future<void> _markReadNow({
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  }) async {
+    if (!_lastReadLoaded) return;
+
+    final int latestIncomingTs = _latestIncomingTextTs(docs);
+    if (latestIncomingTs <= 0) return;
+    if (latestIncomingTs <= _lastReadMsCache) return;
+
+    _lastReadMsCache = latestIncomingTs;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_lastReadKey(), latestIncomingTs);
+
+    if (!mounted) return;
+
+    setState(() {
+      _hideUnreadDivider = true;
+      _newBelowCount = 0;
+    });
   }
 
   Future<void> _ensureRoomExists() async {
@@ -568,6 +641,12 @@ void _onDmScroll() {
 
   setState(() {
     _nearBottomCached = nearBottom;
+
+    if (nearBottom) {
+      _hideUnreadDivider = true;
+    } else {
+      _hideUnreadDivider = false;
+    }
   });
 }
 
@@ -583,6 +662,11 @@ void _clearNewBelowBadge() {
 
 void _onTapScrollToBottomButton() {
   _clearNewBelowBadge();
+
+  setState(() {
+    _hideUnreadDivider = true;
+  });
+
   _scrollToBottom(keepFocus: false);
 }
 String _myDmDisplayName() {
@@ -744,7 +828,7 @@ _c.addListener(() {
 
 // ✅ ensure room exists + mark read + mark this DM as currently open
 _ensureRoomExists().then((_) async {
-  await _markReadNow();
+  _loadLastReadOnce();
   await _setActiveDmWith();
 });
 _typingSub = PresenceService.I.streamTypingUserIds(
@@ -961,7 +1045,7 @@ if (snap.hasData) {
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (_isNearBottom()) {
       _clearNewBelowBadge();
-      await _markReadNow();
+      await _markReadNow(docs: docs);
     }
   });
 }
@@ -971,6 +1055,9 @@ if (snap.hasData) {
 // WidgetsBinding.instance.addPostFrameCallback((_) {
 //   if (snap.hasData) _scrollToBottom();
 // });
+
+                                   final int firstUnreadTs =
+                            _firstUnreadIncomingTextTs(docs);
 
                         return ListView.builder(
                           controller: _scroll,
@@ -983,6 +1070,14 @@ if (snap.hasData) {
                           itemCount: docs.length,
                           itemBuilder: (context, i) {
                             final m = docs[i].data();
+
+                            final int currentTs =
+                                (m['tsMs'] is int) ? m['tsMs'] as int : 0;
+
+                            final bool showUnreadDivider =
+                                !_hideUnreadDivider &&
+                                firstUnreadTs > 0 &&
+                                currentTs == firstUnreadTs;
 
                             if ((m['type'] ?? 'text') != 'text') {
                               return const SizedBox.shrink();
@@ -1043,6 +1138,11 @@ if (snap.hasData) {
       if (showDateDivider)
         _DmDateDivider(
           text: dateHeader,
+          uiScale: uiScale,
+        ),
+
+      if (showUnreadDivider)
+        _DmUnreadDivider(
           uiScale: uiScale,
         ),
 

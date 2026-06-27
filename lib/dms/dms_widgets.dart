@@ -933,7 +933,73 @@ Positioned(right: -s(2), child: star()),
   }
 }
 
+class _DmUnreadDivider extends StatelessWidget {
+  final double uiScale;
 
+  const _DmUnreadDivider({
+    required this.uiScale,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    double s(double v) => v * uiScale;
+
+    const Color unreadColor = Color(0xFF46F5D6);
+
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: s(12)),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: s(1.2),
+              color: unreadColor.withOpacity(0.80),
+            ),
+          ),
+          SizedBox(width: s(10)),
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: s(10),
+              vertical: s(4),
+            ),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.72),
+              border: Border.all(
+                color: unreadColor.withOpacity(0.95),
+                width: s(1.1),
+              ),
+              borderRadius: BorderRadius.circular(s(2)),
+              boxShadow: [
+                BoxShadow(
+                  color: unreadColor.withOpacity(0.35),
+                  blurRadius: s(10),
+                  spreadRadius: s(1),
+                ),
+              ],
+            ),
+            child: Text(
+              'UNREAD',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: s(11),
+                fontWeight: FontWeight.w900,
+                height: 1.0,
+                letterSpacing: s(0.7),
+              ),
+            ),
+          ),
+          SizedBox(width: s(10)),
+          Expanded(
+            child: Container(
+              height: s(1.2),
+              color: unreadColor.withOpacity(0.80),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _DmBottomCornerLine extends StatelessWidget {
   final double uiScale;
