@@ -354,6 +354,68 @@ late final AnimationController _enterController;
 late final Animation<double> _enterScale;
   bool _isTyping = false;
 
+// ✅ Reply jump + highlight
+final Map<String, GlobalKey> _messageKeys = <String, GlobalKey>{};
+final Set<String> _highlightedMessageIds = <String>{};
+List<String> _messageIdsInOrder = <String>[];
+
+GlobalKey _keyForMessageId(String id) {
+  return _messageKeys.putIfAbsent(id, () => GlobalKey());
+}
+
+void _flashMessageHighlight(String messageId) {
+  if (!mounted) return;
+
+  setState(() {
+    _highlightedMessageIds.add(messageId);
+  });
+
+  Future.delayed(const Duration(milliseconds: 900), () {
+    if (!mounted) return;
+
+    setState(() {
+      _highlightedMessageIds.remove(messageId);
+    });
+  });
+}
+
+Future<void> _jumpToMessage(String messageId) async {
+  if (messageId.trim().isEmpty) return;
+
+  final int index = _messageIdsInOrder.indexOf(messageId);
+
+  if (index >= 0 && _scroll.hasClients && _messageIdsInOrder.length > 1) {
+    final double max = _scroll.position.maxScrollExtent;
+    final double target =
+        (max * (index / (_messageIdsInOrder.length - 1))).clamp(0.0, max);
+
+    await _scroll.animateTo(
+      target,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+    );
+  }
+
+  for (int attempt = 0; attempt < 8; attempt++) {
+    await Future.delayed(const Duration(milliseconds: 70));
+
+    final ctx = _messageKeys[messageId]?.currentContext;
+    if (ctx == null) continue;
+
+    await Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+      alignment: 0.25,
+    );
+
+    _flashMessageHighlight(messageId);
+    return;
+  }
+
+  _flashMessageHighlight(messageId);
+}
+
 
 
 
@@ -690,6 +752,7 @@ Widget build(BuildContext context) {
                       stream: _msgsStream,
                       builder: (context, snap) {
                         final docs = snap.data?.docs ?? const [];
+                        _messageIdsInOrder = docs.map((d) => d.id).toList();
 
                         if (snap.hasData) {
                           WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -697,9 +760,11 @@ Widget build(BuildContext context) {
                           });
                         }
 
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (snap.hasData) _scrollToBottom();
-                        });
+                 // ✅ Auto-scroll only when sending / new message flow asks for it.
+// Do not force-scroll on every rebuild, because Reply Jump needs to stay in place.
+// WidgetsBinding.instance.addPostFrameCallback((_) {
+//   if (snap.hasData) _scrollToBottom();
+// });
 
                         return ListView.builder(
                           controller: _scroll,
@@ -827,8 +892,7 @@ child: _DmMessageRow(
     final id = m['replyToMessageId']?.toString();
 
     if (id == null || id.isEmpty) return;
-
-    // נחבר את הקפיצה בשלב הבא
+_jumpToMessage(id);// נחבר את הקפיצה בשלב הבא
   },
 ),
       ),
