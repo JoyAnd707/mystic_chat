@@ -360,7 +360,8 @@ late final AnimationController _enterController;
 late final Animation<double> _enterScale;
 bool _isTyping = false;
 bool _nearBottomCached = true;
-
+// ✅ DM delete mode
+String? _armedDeleteMessageId;
 // ✅ DM typing indicator
 Timer? _typingStopTimer;
 bool _sentTypingState = false;
@@ -384,7 +385,64 @@ List<String> _messageIdsInOrder = <String>[];
 GlobalKey _keyForMessageId(String id) {
   return _messageKeys.putIfAbsent(id, () => GlobalKey());
 }
+bool _isMyDeletableDmMessage(Map<String, dynamic> m) {
+  final String senderId = (m['senderId'] ?? '').toString();
+  final String type = (m['type'] ?? 'text').toString();
 
+  if (type == 'system') return false;
+
+  return senderId == widget.currentUserId;
+}
+
+bool _isArmedDeleteDmMessage(String messageId) {
+  return _armedDeleteMessageId != null &&
+      _armedDeleteMessageId == messageId;
+}
+
+void _toggleArmDeleteDmMessage({
+  required String messageId,
+  required Map<String, dynamic> data,
+}) {
+  if (!_isMyDeletableDmMessage(data)) return;
+
+  setState(() {
+    if (_armedDeleteMessageId == messageId) {
+      _armedDeleteMessageId = null;
+    } else {
+      _armedDeleteMessageId = messageId;
+    }
+  });
+}
+
+Future<void> _deleteArmedDmMessage({
+  required String messageId,
+  required Map<String, dynamic> data,
+}) async {
+  if (!_isMyDeletableDmMessage(data)) return;
+  if (!_isArmedDeleteDmMessage(messageId)) return;
+
+  setState(() {
+    _armedDeleteMessageId = null;
+  });
+
+  try {
+    await FirebaseFirestore.instance
+        .collection(_roomsCol)
+        .doc(widget.roomId)
+        .collection(_msgsSub)
+        .doc(messageId)
+        .delete();
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not delete message: $e'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
 void _flashMessageHighlight(String messageId) {
   if (!mounted) return;
 
@@ -1146,102 +1204,173 @@ if (snap.hasData) {
           uiScale: uiScale,
         ),
 
-      Builder(
-  builder: (context) {
-    final String messageId = docs[i].id;
-    final bool isHighlighted =
-        _highlightedMessageIds.contains(messageId);
+            Builder(
+        builder: (context) {
+          final String messageId = docs[i].id;
+          final bool isHighlighted =
+              _highlightedMessageIds.contains(messageId);
 
-    return AnimatedContainer(
-      key: _keyForMessageId(messageId),
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.all(isHighlighted ? s(4) : 0),
-      decoration: BoxDecoration(
-        color: isHighlighted
-            ? const Color(0xFF46F5D6).withOpacity(0.18)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(s(12)),
-        boxShadow: isHighlighted
-            ? [
-                BoxShadow(
-                  color: const Color(0xFF46F5D6).withOpacity(0.65),
-                  blurRadius: 22,
-                  spreadRadius: 2,
+          final bool isArmedDelete =
+              _isArmedDeleteDmMessage(messageId);
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                key: _keyForMessageId(messageId),
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.all(
+                  (isHighlighted || isArmedDelete) ? s(4) : 0,
                 ),
-              ]
-            : const [],
+                decoration: BoxDecoration(
+                  color: isArmedDelete
+                      ? const Color(0xFFFF6769).withOpacity(0.16)
+                      : isHighlighted
+                          ? const Color(0xFF46F5D6).withOpacity(0.18)
+                          : Colors.transparent,
+                  borderRadius: BorderRadius.circular(s(12)),
+                  border: isArmedDelete
+                      ? Border.all(
+                          color: const Color(0xFFFF6769).withOpacity(0.95),
+                          width: s(1.4),
+                        )
+                      : null,
+                  boxShadow: isArmedDelete
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFFFF6769).withOpacity(0.45),
+                            blurRadius: s(18),
+                            spreadRadius: s(1),
+                          ),
+                        ]
+                      : isHighlighted
+                          ? [
+                              BoxShadow(
+                                color: const Color(0xFF46F5D6)
+                                    .withOpacity(0.65),
+                                blurRadius: 22,
+                                spreadRadius: 2,
+                              ),
+                            ]
+                          : const [],
+                ),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+
+                  onDoubleTap: () {
+                    final reactors =
+                        List<String>.from(m['heartReactorIds'] ?? const []);
+
+                    _toggleHeartForMessage(
+                      messageId,
+                      reactors,
+                    );
+                  },
+
+                  onLongPress: () {
+                    _toggleArmDeleteDmMessage(
+                      messageId: messageId,
+                      data: m,
+                    );
+                  },
+
+                  onHorizontalDragStart: (_) {
+                    _dragDx = 0.0;
+                  },
+
+                  onHorizontalDragUpdate: (details) {
+                    _dragDx += details.delta.dx;
+
+                    if (_dragDx > 28) {
+                      _dragDx = 0.0;
+
+                      _setReplyTarget(
+                        messageId: messageId,
+                        senderId: sender,
+                        text: text,
+                      );
+                    }
+                  },
+
+                  onHorizontalDragEnd: (_) {
+                    _dragDx = 0.0;
+                  },
+
+                  child: _DmMessageRow(
+                    isMe: isMe,
+                    text: text,
+                    time: timeLabel,
+                    uiScale: uiScale,
+                    heartReactorIds:
+                        List<String>.from(m['heartReactorIds'] ?? const []),
+                    meLetter: (dmUsers[widget.currentUserId]
+                                ?.name
+                                .characters
+                                .first ??
+                            ' ')
+                        .toUpperCase(),
+                    otherLetter: (dmUsers[widget.otherUserId]
+                                ?.name
+                                .characters
+                                .first ??
+                            ' ')
+                        .toUpperCase(),
+                    replyToSenderName: m['replyToSenderName']?.toString(),
+                    replyToText: m['replyToText']?.toString(),
+                    onTapReplyPreview: () {
+                      final id = m['replyToMessageId']?.toString();
+
+                      if (id == null || id.isEmpty) return;
+
+                      _jumpToMessage(id);
+                    },
+                  ),
+                ),
+              ),
+
+              if (isArmedDelete)
+                Padding(
+                  padding: EdgeInsets.only(top: s(8)),
+                  child: GestureDetector(
+                    onTap: () {
+                      _deleteArmedDmMessage(
+                        messageId: messageId,
+                        data: m,
+                      );
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: s(14),
+                        vertical: s(7),
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6769).withOpacity(0.92),
+                        borderRadius: BorderRadius.circular(s(999)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF6769).withOpacity(0.45),
+                            blurRadius: s(12),
+                            spreadRadius: s(1),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        'Delete',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: s(12),
+                          fontWeight: FontWeight.w900,
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
-child: GestureDetector(
-  behavior: HitTestBehavior.translucent,
-
-  onDoubleTap: () {
-    final reactors =
-        List<String>.from(m['heartReactorIds'] ?? const []);
-
-    _toggleHeartForMessage(
-      messageId,
-      reactors,
-    );
-  },
-
-  onHorizontalDragStart: (_) {
-          _dragDx = 0.0;
-        },
-
-        onHorizontalDragUpdate: (details) {
-          _dragDx += details.delta.dx;
-
-          if (_dragDx > 28) {
-            _dragDx = 0.0;
-
-            _setReplyTarget(
-              messageId: messageId,
-              senderId: sender,
-              text: text,
-            );
-          }
-        },
-
-        onHorizontalDragEnd: (_) {
-          _dragDx = 0.0;
-        },
-
-        child: _DmMessageRow(
-  isMe: isMe,
-  text: text,
-  time: timeLabel,
-  uiScale: uiScale,
-
-  heartReactorIds:
-      List<String>.from(m['heartReactorIds'] ?? const []),
-
-  meLetter: (dmUsers[widget.currentUserId]
-              ?.name
-              .characters
-              .first ??
-          ' ')
-      .toUpperCase(),
-  otherLetter: (dmUsers[widget.otherUserId]
-              ?.name
-              .characters
-              .first ??
-          ' ')
-      .toUpperCase(),
-  replyToSenderName: m['replyToSenderName']?.toString(),
-  replyToText: m['replyToText']?.toString(),
-  onTapReplyPreview: () {
-            final id = m['replyToMessageId']?.toString();
-
-            if (id == null || id.isEmpty) return;
-
-            _jumpToMessage(id);
-          },
-        ),
-      ),
-    );
-  },
-),
     ],
   ),
 );
