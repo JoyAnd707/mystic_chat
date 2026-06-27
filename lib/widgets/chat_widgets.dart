@@ -1603,9 +1603,9 @@ final double minBubbleWidth = math.min(
 );
 
 
-
 final Widget bubbleWidget =
-    ((isImageMessage && !shouldWrapImageInBubble) ||
+    (isAnimatedEmojiMessage ||
+            (isImageMessage && !shouldWrapImageInBubble) ||
             (isStickerMessage && !shouldWrapStickerInBubble))
         ? imageOnlyWidget
         : ConstrainedBox(
@@ -1630,8 +1630,8 @@ final Widget bubbleWidget =
 
 
 // ✅ If image: return just the widget (no decors). If text: keep decors stack.
-final Widget bubbleStack = (isImageMessage || isStickerMessage)
-
+final Widget bubbleStack =
+    (isImageMessage || isStickerMessage || isAnimatedEmojiMessage)
     ? bubbleWidget
     : Stack(
         clipBehavior: Clip.none,
@@ -3452,7 +3452,7 @@ class _AnimatedEmojiMessageContentState
 
   @override
   Widget build(BuildContext context) {
-    final double size = 120 * widget.uiScale;
+    final double size = 180 * widget.uiScale;
 
     return SizedBox(
       width: size,

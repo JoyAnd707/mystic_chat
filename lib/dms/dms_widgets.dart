@@ -1321,7 +1321,7 @@ class _AnimatedEmojiMessageContentState
 
   @override
   Widget build(BuildContext context) {
-    final double size = 120 * widget.uiScale;
+    final double size = 180 * widget.uiScale;
 
     return SizedBox(
       width: size,
