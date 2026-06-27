@@ -794,6 +794,11 @@ final VoidCallback? onTapReplyPreview;
 final String? stickerUrl;
 final String? stickerLocalPath;
 
+/// ✅ Animated emoji messages
+final String? animatedEmojiId;
+final String? frame1Asset;
+final String? frame2Asset;
+
 /// ✅ NEW: video messages
 final String? videoUrl;
 
@@ -932,7 +937,9 @@ this.videoUrl,
   // ✅ voice
   this.voicePath,
   this.voiceDurationMs,
-
+this.animatedEmojiId,
+this.frame1Asset,
+this.frame2Asset,
  this.onDoubleTapImage,
 this.onLongPressSticker,
 
@@ -1272,6 +1279,7 @@ final bool isImageMessage = (msgType == 'image');
 final bool isStickerMessage = (msgType == 'sticker');
 final bool isVoiceMessage = (msgType == 'voice');
 final bool isVideoMessage = (msgType == 'video'); // ✅ NEW
+final bool isAnimatedEmojiMessage = (msgType == 'animatedEmoji');
 
 final bool hasImageUrl = (imgUrl != null && imgUrl.trim().isNotEmpty);
 final bool hasStickerUrl = (stkUrl != null && stkUrl.trim().isNotEmpty);
@@ -1321,6 +1329,12 @@ if (isImageMessage) {
       ),
     );
   }
+  } else if (isAnimatedEmojiMessage) {
+  messageBody = _AnimatedEmojiMessageContent(
+    frame1Asset: frame1Asset ?? '',
+    frame2Asset: frame2Asset ?? '',
+    uiScale: uiScale,
+  );
 } else if (isStickerMessage) {
   final String? localPath = stickerLocalPath;
   final bool hasLocalPath =
@@ -3382,6 +3396,79 @@ class _AutoShrinkNamesText extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+
+class _AnimatedEmojiMessageContent extends StatefulWidget {
+  final String frame1Asset;
+  final String frame2Asset;
+  final double uiScale;
+
+  const _AnimatedEmojiMessageContent({
+    required this.frame1Asset,
+    required this.frame2Asset,
+    required this.uiScale,
+  });
+
+  @override
+  State<_AnimatedEmojiMessageContent> createState() =>
+      _AnimatedEmojiMessageContentState();
+}
+
+class _AnimatedEmojiMessageContentState
+    extends State<_AnimatedEmojiMessageContent> {
+  bool _showFirstFrame = true;
+
+  @override
+  void initState() {
+    super.initState();
+
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(milliseconds: 450));
+
+      if (!mounted) return false;
+
+      setState(() {
+        _showFirstFrame = !_showFirstFrame;
+      });
+
+      return true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double size = 120 * widget.uiScale;
+
+    final String assetPath =
+        _showFirstFrame ? widget.frame1Asset : widget.frame2Asset;
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+errorBuilder: (_, __, ___) {
+  return Container(
+    width: size,
+    height: size,
+    color: Colors.red,
+    alignment: Alignment.center,
+    child: Text(
+      assetPath,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        fontSize: 9,
+        color: Colors.white,
+      ),
+    ),
+  );
+},
+      ),
     );
   }
 }

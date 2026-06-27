@@ -1,6 +1,6 @@
 // lib/firebase/firestore_chat_service.dart
 import 'dart:io';
-
+import '../data/animated_emojis.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
@@ -9,7 +9,36 @@ class FirestoreChatService {
 
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
   static final FirebaseStorage _storage = FirebaseStorage.instance;
+static Future<void> sendAnimatedEmojiMessage({
+  required String roomId,
+  required String senderId,
+  required MysticAnimatedEmoji emoji,
+  required int ts,
+}) async {
+  await _ensureDmRoomDocExists(roomId);
 
+  final docId = ts.toString();
+
+  await _messagesCol(roomId).doc(docId).set({
+    'type': 'animatedEmoji',
+    'senderId': senderId,
+    'text': emoji.label,
+    'animatedEmojiId': emoji.id,
+    'ownerUserId': emoji.ownerUserId,
+    'frame1Asset': emoji.frame1Asset,
+    'frame2Asset': emoji.frame2Asset,
+    'canBeSaved': false,
+    'ts': ts,
+    'bubbleTemplate': 'normal',
+    'decor': 'none',
+    'fontFamily': null,
+    'heartReactorIds': <String>[],
+  });
+
+  await _roomDoc(roomId).set({
+    'updatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
   static DocumentReference<Map<String, dynamic>> _roomDoc(String roomId) {
     return _db.collection('rooms').doc(roomId);
   }

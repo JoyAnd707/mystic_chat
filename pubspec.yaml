@@ -66,6 +66,8 @@ flutter:
     - assets/fonts/
     - assets/avatars/
     - assets/reactions/
+    - assets/animated_emojis/joy/test_angry_1.png
+    - assets/animated_emojis/joy/test_angry_2.png
 
   fonts:
     - family: NotoSans

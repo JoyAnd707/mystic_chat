@@ -354,6 +354,7 @@ String _formatReplyDurationMs(int ms) {
 String _replyPreviewForMessage(ChatMessage msg) {
   switch (msg.type) {
     case ChatMessageType.image:
+    case ChatMessageType.animatedEmoji:
       return '📷 Photo';
 
 
@@ -1109,239 +1110,45 @@ Widget buildImageHeartOverlay({
 
 
 void _openStickerPicker() {
-  showModalBottomSheet(
+  showMysticStickerPickerSheet(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.black.withOpacity(0.92),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-    ),
-    builder: (sheetContext) {
-      return SafeArea(
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: FirestoreChatService.loadStickerArchive(
-            userId: widget.currentUserId,
-          ),
-          builder: (context, snapshot) {
-            final bool isLoading =
-                snapshot.connectionState == ConnectionState.waiting;
+    currentUserId: widget.currentUserId,
+    onCreateSticker: (localFilePath, ts) async {
+      _pendingScrollToBottomTs = ts;
 
-            final List<Map<String, dynamic>> stickers =
-                snapshot.data ?? <Map<String, dynamic>>[];
-
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                24 + MediaQuery.of(context).padding.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Stickers',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: 330,
-                    child: isLoading
-                        ? const Center(
-                            child: CircularProgressIndicator(),
-                          )
-                        : GridView.builder(
-                            itemCount: stickers.length + 1,
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              mainAxisSpacing: 10,
-                              crossAxisSpacing: 10,
-                              childAspectRatio: 1,
-                            ),
-                            itemBuilder: (context, index) {
-                              if (index == 0) {
-                                return GestureDetector(
-                                  onTap: () async {
-                                    final XFile? picked =
-                                        await _stickerPicker.pickImage(
-                                      source: ImageSource.gallery,
-                                      imageQuality: 70,
-                                    );
-
-                                    if (picked == null) return;
-                                    if (!mounted) return;
-
-                                    final int ts =
-                                        DateTime.now().millisecondsSinceEpoch;
-                                    _pendingScrollToBottomTs = ts;
-
-                                    Navigator.pop(sheetContext);
-
-                                    await FirestoreChatService
-                                        .sendStickerMessage(
-                                      roomId: widget.roomId,
-                                      senderId: widget.currentUserId,
-                                      localFilePath: picked.path,
-                                      ts: ts,
-                                    );
-
-                                    Sfx.I.playSend();
-                                  },
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.06),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: Colors.white.withOpacity(0.18),
-                                      ),
-                                    ),
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.add_photo_alternate_outlined,
-                                          color: Colors.white.withOpacity(0.9),
-                                          size: 30,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'Create',
-                                          style: TextStyle(
-                                            color:
-                                                Colors.white.withOpacity(0.75),
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }
-
-                              final sticker = stickers[index - 1];
-                              final stickerId =
-                                  (sticker['id'] ?? '').toString();
-                              final stickerUrl =
-                                  (sticker['stickerUrl'] ?? '').toString();
-                              final storagePath =
-                                  (sticker['storagePath'] ?? '').toString();
-
-                              if (stickerUrl.isEmpty) {
-                                return const SizedBox.shrink();
-                              }
-
-                              return GestureDetector(
-                                onLongPress: () async {
-                                  if (stickerId.isEmpty) return;
-
-                                  final bool? shouldDelete =
-                                      await showDialog<bool>(
-                                    context: context,
-                                    builder: (dialogContext) {
-                                      return AlertDialog(
-                                        backgroundColor: Colors.black,
-                                        title: const Text(
-                                          'Delete sticker?',
-                                          style:
-                                              TextStyle(color: Colors.white),
-                                        ),
-                                        content: const Text(
-                                          'Remove this sticker from your archive?',
-                                          style:
-                                              TextStyle(color: Colors.white70),
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(
-                                              dialogContext,
-                                              false,
-                                            ),
-                                            child: const Text('Cancel'),
-                                          ),
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(
-                                              dialogContext,
-                                              true,
-                                            ),
-                                            child: const Text('Delete'),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  );
-
-                                  if (shouldDelete != true) return;
-
-                                  await FirestoreChatService
-                                      .deleteArchivedSticker(
-                                    userId: widget.currentUserId,
-                                    stickerId: stickerId,
-                                    storagePath: storagePath,
-                                  );
-
-                                  if (!mounted) return;
-
-                                  Navigator.pop(sheetContext);
-                                  _openStickerPicker();
-                                },
-                                onTap: () async {
-                                  final int ts =
-                                      DateTime.now().millisecondsSinceEpoch;
-                                  _pendingScrollToBottomTs = ts;
-
-                                  Navigator.pop(sheetContext);
-
-                                  await FirestoreChatService
-                                      .sendArchivedStickerMessage(
-                                    roomId: widget.roomId,
-                                    senderId: widget.currentUserId,
-                                    stickerUrl: stickerUrl,
-                                    storagePath: storagePath,
-                                    ts: ts,
-                                  );
-
-                                  Sfx.I.playSend();
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.06),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.white.withOpacity(0.12),
-                                    ),
-                                  ),
-                                  child: Image.network(
-                                    stickerUrl,
-                                    fit: BoxFit.contain,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                  if (!isLoading && stickers.isEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      'No saved stickers yet',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.55),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          },
-        ),
+      await FirestoreChatService.sendStickerMessage(
+        roomId: widget.roomId,
+        senderId: widget.currentUserId,
+        localFilePath: localFilePath,
+        ts: ts,
       );
+
+      Sfx.I.playSend();
+    },
+    onSendArchivedSticker: (stickerUrl, storagePath, ts) async {
+      _pendingScrollToBottomTs = ts;
+
+      await FirestoreChatService.sendArchivedStickerMessage(
+        roomId: widget.roomId,
+        senderId: widget.currentUserId,
+        stickerUrl: stickerUrl,
+        storagePath: storagePath,
+        ts: ts,
+      );
+
+      Sfx.I.playSend();
+    },
+    onSendAnimatedEmoji: (emoji, ts) async {
+      _pendingScrollToBottomTs = ts;
+
+      await FirestoreChatService.sendAnimatedEmojiMessage(
+        roomId: widget.roomId,
+        senderId: widget.currentUserId,
+        emoji: emoji,
+        ts: ts,
+      );
+
+      Sfx.I.playSend();
     },
   );
 }
@@ -3232,11 +3039,16 @@ messageType: (msg.type == ChatMessageType.image)
             ? 'voice'
             : (msg.type == ChatMessageType.video)
                 ? 'video'
-                : 'text',
+                : (msg.type == ChatMessageType.animatedEmoji)
+                    ? 'animatedEmoji'
+                    : 'text',
 imageUrl: msg.imageUrl,
 videoUrl: msg.videoUrl,
 stickerUrl: msg.stickerUrl,
 stickerLocalPath: msg.stickerLocalPath,
+animatedEmojiId: msg.animatedEmojiId,
+frame1Asset: msg.frame1Asset,
+frame2Asset: msg.frame2Asset,
 
 onLongPressSticker: msg.type == ChatMessageType.sticker && !isMe
     ? () async {

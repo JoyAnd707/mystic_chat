@@ -15,6 +15,7 @@ import '../services/presence_service.dart';
 import '../services/notifications_service.dart'; // ✅ ADD THIS
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
+import '../widgets/sticker_picker_sheet.dart';
 // ✅ ADD THIS
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../services/image_message_service.dart';
@@ -135,7 +136,15 @@ const Map<String, ChatUser> users = {
 /// MESSAGE MODEL
 /// =======================
 
-enum ChatMessageType { text, system, image, voice, video, sticker }
+enum ChatMessageType {
+  text,
+  system,
+  image,
+  voice,
+  video,
+  sticker,
+  animatedEmoji,
+}
 
 class ChatMessage {
   /// Firestore doc id (we use ts.toString())
@@ -153,7 +162,9 @@ class ChatMessage {
   /// For sticker messages
   final String? stickerUrl;
   final String? stickerLocalPath;
-
+final String? animatedEmojiId;
+final String? frame1Asset;
+final String? frame2Asset;
   /// For video messages
   final String? videoUrl;
 
@@ -180,12 +191,17 @@ class ChatMessage {
     required this.senderId,
     required this.text,
     required this.ts,
-    this.imageUrl,
-    this.stickerUrl,
-        this.stickerLocalPath,
-    this.videoUrl,
-    this.voicePath,
-    this.voiceDurationMs,
+this.imageUrl,
+this.stickerUrl,
+this.stickerLocalPath,
+
+this.animatedEmojiId,
+this.frame1Asset,
+this.frame2Asset,
+
+this.videoUrl,
+this.voicePath,
+this.voiceDurationMs,
     this.bubbleTemplate = BubbleTemplate.normal,
     this.decor = BubbleDecor.none,
     this.fontFamily,
@@ -200,10 +216,15 @@ class ChatMessage {
     ChatMessageType? type,
     String? senderId,
     String? text,
-    String? imageUrl,
-    String? stickerUrl,
-        String? stickerLocalPath,
-    String? videoUrl,
+String? imageUrl,
+String? stickerUrl,
+String? stickerLocalPath,
+
+String? animatedEmojiId,
+String? frame1Asset,
+String? frame2Asset,
+
+String? videoUrl,
     String? voicePath,
     int? voiceDurationMs,
     int? ts,
@@ -220,10 +241,15 @@ class ChatMessage {
       type: type ?? this.type,
       senderId: senderId ?? this.senderId,
       text: text ?? this.text,
-      imageUrl: imageUrl ?? this.imageUrl,
-      stickerUrl: stickerUrl ?? this.stickerUrl,
-            stickerLocalPath: stickerLocalPath ?? this.stickerLocalPath,
-      videoUrl: videoUrl ?? this.videoUrl,
+imageUrl: imageUrl ?? this.imageUrl,
+stickerUrl: stickerUrl ?? this.stickerUrl,
+stickerLocalPath: stickerLocalPath ?? this.stickerLocalPath,
+
+animatedEmojiId: animatedEmojiId ?? this.animatedEmojiId,
+frame1Asset: frame1Asset ?? this.frame1Asset,
+frame2Asset: frame2Asset ?? this.frame2Asset,
+
+videoUrl: videoUrl ?? this.videoUrl,
       voicePath: voicePath ?? this.voicePath,
       voiceDurationMs: voiceDurationMs ?? this.voiceDurationMs,
       ts: ts ?? this.ts,
@@ -252,7 +278,8 @@ class ChatMessage {
 
       case ChatMessageType.sticker:
         return 'Sticker';
-
+case ChatMessageType.animatedEmoji:
+  return '✨ Animated Emoji';
       case ChatMessageType.voice:
         final dur = _formatReplyDurationMs(message.voiceDurationMs ?? 0);
         return '🎙️ Voice message • $dur';
@@ -341,6 +368,25 @@ class ChatMessage {
             ? null
             : m['stickerLocalPath'].toString();
 
+
+            final animatedEmojiId =
+    (m['animatedEmojiId'] == null ||
+            m['animatedEmojiId'].toString().trim().isEmpty)
+        ? null
+        : m['animatedEmojiId'].toString();
+
+final frame1Asset =
+    (m['frame1Asset'] == null ||
+            m['frame1Asset'].toString().trim().isEmpty)
+        ? null
+        : m['frame1Asset'].toString();
+
+final frame2Asset =
+    (m['frame2Asset'] == null ||
+            m['frame2Asset'].toString().trim().isEmpty)
+        ? null
+        : m['frame2Asset'].toString();
+
     final vid =
         (m['videoUrl'] == null || m['videoUrl'].toString().trim().isEmpty)
             ? null
@@ -372,9 +418,14 @@ class ChatMessage {
       senderId: (m['senderId'] ?? '').toString(),
       text: (m['text'] ?? '').toString(),
       imageUrl: img,
-      stickerUrl: sticker,
-            stickerLocalPath: stickerLocal,
-      videoUrl: vid,
+stickerUrl: sticker,
+stickerLocalPath: stickerLocal,
+
+animatedEmojiId: animatedEmojiId,
+frame1Asset: frame1Asset,
+frame2Asset: frame2Asset,
+
+videoUrl: vid,
       voicePath: vp,
       voiceDurationMs: vDur,
       ts: ts,
