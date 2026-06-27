@@ -359,7 +359,11 @@ late final AnimationController _enterController;
 late final Animation<double> _enterScale;
   bool _isTyping = false;
   bool _nearBottomCached = true;
+// ✅ NEW: unread messages badge (DM)
+int _newBelowCount = 0;
 
+// How many messages were in the previous snapshot
+int _previousMessageCount = 0;
 // ✅ Reply jump + highlight
 final Map<String, GlobalKey> _messageKeys = <String, GlobalKey>{};
 final Set<String> _highlightedMessageIds = <String>{};
@@ -560,7 +564,18 @@ void _onDmScroll() {
   });
 }
 
+void _clearNewBelowBadge() {
+  if (!mounted) return;
+
+  if (_newBelowCount == 0) return;
+
+  setState(() {
+    _newBelowCount = 0;
+  });
+}
+
 void _onTapScrollToBottomButton() {
+  _clearNewBelowBadge();
   _scrollToBottom(keepFocus: false);
 }
   void _onTapType() {
@@ -829,14 +844,53 @@ Widget build(BuildContext context) {
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: _msgsStream,
                       builder: (context, snap) {
-                        final docs = snap.data?.docs ?? const [];
-                        _messageIdsInOrder = docs.map((d) => d.id).toList();
+       final docs = snap.data?.docs ?? const [];
+_messageIdsInOrder = docs.map((d) => d.id).toList();
 
-                        if (snap.hasData) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) async {
-                            await _markReadNow();
-                          });
-                        }
+if (snap.hasData) {
+  final int currentCount = docs.length;
+
+  if (_previousMessageCount == 0) {
+    _previousMessageCount = currentCount;
+  } else if (currentCount > _previousMessageCount) {
+    final addedDocs = docs.sublist(_previousMessageCount);
+
+    int incomingAdded = 0;
+
+    for (final d in addedDocs) {
+      final data = d.data();
+
+      final String sender =
+          (data['senderId'] ?? '').toString();
+
+      final String type =
+          (data['type'] ?? 'text').toString();
+
+      if (sender != widget.currentUserId && type != 'system') {
+        incomingAdded++;
+      }
+    }
+
+    if (incomingAdded > 0 && !_isNearBottom()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        setState(() {
+          _newBelowCount += incomingAdded;
+        });
+      });
+    }
+  }
+
+  _previousMessageCount = currentCount;
+
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    if (_isNearBottom()) {
+      _clearNewBelowBadge();
+      await _markReadNow();
+    }
+  });
+}
 
                  // ✅ Auto-scroll only when sending / new message flow asks for it.
 // Do not force-scroll on every rebuild, because Reply Jump needs to stay in place.
@@ -1022,36 +1076,85 @@ child: GestureDetector(
                       },
                     ),
 
-                    if (!_nearBottomCached)
-                      Positioned(
-                        right: s(18),
-                        bottom: s(18),
-                        child: GestureDetector(
-                          onTap: _onTapScrollToBottomButton,
-                          child: AnimatedScale(
-                            scale: _nearBottomCached ? 0 : 1,
-                            duration: const Duration(milliseconds: 180),
-                            curve: Curves.easeOutBack,
-                            child: Container(
-                              width: s(42),
-                              height: s(42),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.72),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: const Color(0xFF46F5D6),
-                                  width: s(1.2),
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                color: Colors.white,
-                                size: s(28),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+  if (!_nearBottomCached)
+  Positioned(
+    right: s(18),
+    bottom: s(18),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (_newBelowCount > 0)
+          GestureDetector(
+            onTap: _onTapScrollToBottomButton,
+            child: AnimatedScale(
+              scale: _newBelowCount > 0 ? 1 : 0,
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutBack,
+              child: Container(
+                margin: EdgeInsets.only(bottom: s(8)),
+                padding: EdgeInsets.symmetric(
+                  horizontal: s(12),
+                  vertical: s(7),
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.78),
+                  borderRadius: BorderRadius.circular(s(999)),
+                  border: Border.all(
+                    color: const Color(0xFF46F5D6),
+                    width: s(1.2),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF46F5D6).withOpacity(0.35),
+                      blurRadius: s(10),
+                      spreadRadius: s(1),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  _newBelowCount == 1
+                      ? '1 New Message'
+                      : '$_newBelowCount New Messages',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: s(12),
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        GestureDetector(
+          onTap: _onTapScrollToBottomButton,
+          child: AnimatedScale(
+            scale: _nearBottomCached ? 0 : 1,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutBack,
+            child: Container(
+              width: s(42),
+              height: s(42),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.72),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFF46F5D6),
+                  width: s(1.2),
+                ),
+              ),
+              child: Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: Colors.white,
+                size: s(28),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
 
                   ],
                 ),
