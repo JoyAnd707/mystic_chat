@@ -442,43 +442,51 @@ void _clearReplyTarget() {
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
   }
 
-  Future<void> _send() async {
-    final text = _c.text.trim();
-    if (text.isEmpty) return;
+Future<void> _send() async {
+  final text = _c.text.trim();
+  if (text.isEmpty) return;
 
-    // 🔊 SFX — do NOT await
-    try {
-      Sfx.I.playSend();
-    } catch (_) {}
+  final String? replyMessageId = _replyToMessageId;
+  final String? replySenderId = _replyToSenderId;
+  final String? replySenderName = _replyToSenderName;
+  final String? replyText = _replyToText;
 
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
+  try {
+    Sfx.I.playSend();
+  } catch (_) {}
 
- _c.clear();
-setState(() {
-  _isTyping = true;
-  _replyToMessageId = null;
-  _replyToSenderId = null;
-  _replyToSenderName = null;
-  _replyToText = null;
-});
+  final nowMs = DateTime.now().millisecondsSinceEpoch;
 
-    // ✅ write message
-    await _msgsRef.add({
-      'type': 'text',
-      'senderId': widget.currentUserId,
-      'text': text,
-      'tsMs': nowMs,
-    });
+  _c.clear();
 
-    // ✅ update room meta for list + unread
-    await _roomRef.set({
-      'lastUpdatedMs': nowMs,
-      'lastSenderId': widget.currentUserId,
-      'lastText': text,
-    }, SetOptions(merge: true));
+  setState(() {
+    _isTyping = true;
+    _replyToMessageId = null;
+    _replyToSenderId = null;
+    _replyToSenderName = null;
+    _replyToText = null;
+  });
 
-    _scrollToBottom(keepFocus: true);
-  }
+  await _msgsRef.add({
+    'type': 'text',
+    'senderId': widget.currentUserId,
+    'text': text,
+    'tsMs': nowMs,
+
+    'replyToMessageId': replyMessageId,
+    'replyToSenderId': replySenderId,
+    'replyToSenderName': replySenderName,
+    'replyToText': replyText,
+  });
+
+  await _roomRef.set({
+    'lastUpdatedMs': nowMs,
+    'lastSenderId': widget.currentUserId,
+    'lastText': text,
+  }, SetOptions(merge: true));
+
+  _scrollToBottom(keepFocus: true);
+}
 
   @override
   void initState() {
@@ -794,24 +802,35 @@ Widget build(BuildContext context) {
           _dragDx = 0.0;
         },
 
-        child: _DmMessageRow(
-          isMe: isMe,
-          text: text,
-          time: timeLabel,
-          uiScale: uiScale,
-          meLetter: (dmUsers[widget.currentUserId]
-                      ?.name
-                      .characters
-                      .first ??
-                  ' ')
-              .toUpperCase(),
-          otherLetter: (dmUsers[widget.otherUserId]
-                      ?.name
-                      .characters
-                      .first ??
-                  ' ')
-              .toUpperCase(),
-        ),
+child: _DmMessageRow(
+  isMe: isMe,
+  text: text,
+  time: timeLabel,
+  uiScale: uiScale,
+  meLetter: (dmUsers[widget.currentUserId]
+              ?.name
+              .characters
+              .first ??
+          ' ')
+      .toUpperCase(),
+  otherLetter: (dmUsers[widget.otherUserId]
+              ?.name
+              .characters
+              .first ??
+          ' ')
+      .toUpperCase(),
+
+  replyToSenderName: m['replyToSenderName']?.toString(),
+  replyToText: m['replyToText']?.toString(),
+
+  onTapReplyPreview: () {
+    final id = m['replyToMessageId']?.toString();
+
+    if (id == null || id.isEmpty) return;
+
+    // נחבר את הקפיצה בשלב הבא
+  },
+),
       ),
     ],
   ),

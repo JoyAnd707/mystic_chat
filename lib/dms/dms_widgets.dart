@@ -1012,9 +1012,13 @@ class _DmMessageRow extends StatelessWidget {
   final String time;
   final double uiScale;
 
-  // ✅ NEW
   final String meLetter;
   final String otherLetter;
+
+  // ✅ NEW: reply preview inside sent message bubble
+  final String? replyToSenderName;
+  final String? replyToText;
+  final VoidCallback? onTapReplyPreview;
 
   const _DmMessageRow({
     required this.isMe,
@@ -1023,23 +1027,27 @@ class _DmMessageRow extends StatelessWidget {
     required this.uiScale,
     required this.meLetter,
     required this.otherLetter,
+    this.replyToSenderName,
+    this.replyToText,
+    this.onTapReplyPreview,
   });
+
+  bool get _hasReplyPreview {
+    return (replyToSenderName?.trim().isNotEmpty ?? false) ||
+        (replyToText?.trim().isNotEmpty ?? false);
+  }
 
   @override
   Widget build(BuildContext context) {
-
     double s(double v) => v * uiScale;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // ✅ DM bubble body transparency (Mystic vibe)
-        // Alpha guide:
-        // 0xFF = fully opaque, 0xCC ≈ 80%, 0xB3 ≈ 70%, 0x99 ≈ 60%
         const Color bodyFill = Color(0xB3606060);
 
-        final Color borderColor = isMe ? Colors.white : const Color(0xFF46F5D6);
+        final Color borderColor =
+            isMe ? Colors.white : const Color(0xFF46F5D6);
         const Color textColor = Colors.white;
-
 
         final double strokeW = s(2);
 
@@ -1047,37 +1055,91 @@ class _DmMessageRow extends StatelessWidget {
             ? 'assets/ui/DMSbubbleCornerISME.png'
             : 'assets/ui/DMSbubbleCornerOTHERS.png';
 
-        // 🎛️ KNOBS
         final double cornerWidth = s(28);
         final double chamfer = s(8.5);
         final double cornerInset = s(0.5);
 
-        // ✅ sizes
         final double avatarSize = s(48);
         final double gap = s(18);
 
-        // ✅ time: fixed box width (Mystic vibe + stable layout)
-        final double timeBoxW = s(64);
-        final double timeGap = s(8);
-
-        // ✅ desired bubble width like your preview
         final double desiredBubbleMax = s(232);
 
-        // ✅ reserve ONLY what is actually on the row
-        // Row also sits inside ListView padding (left/right 14) + your row padding (8),
-        // so we add a small safety.
         final double reserved =
             avatarSize +
             gap +
-            (time.isNotEmpty ? (timeBoxW + timeGap) : 0.0) +
-            s(20); // safety
+            (time.isNotEmpty ? (s(64) + s(8)) : 0.0) +
+            s(20);
 
-        final double availableForBubble = (constraints.maxWidth - reserved);
+        final double availableForBubble = constraints.maxWidth - reserved;
 
         final double bubbleMaxWidth = min(
           desiredBubbleMax,
           availableForBubble.clamp(s(140), desiredBubbleMax),
         );
+
+        Widget replyPreviewBox() {
+          if (!_hasReplyPreview) return const SizedBox.shrink();
+
+          final String sender = replyToSenderName ?? '';
+          final String preview = replyToText ?? '';
+
+          return GestureDetector(
+            onTap: onTapReplyPreview,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: double.infinity,
+              margin: EdgeInsets.only(bottom: s(8)),
+              padding: EdgeInsets.fromLTRB(
+                s(8),
+                s(7),
+                s(8),
+                s(7),
+              ),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.28),
+                border: Border(
+                  left: BorderSide(
+                    color: borderColor.withOpacity(0.95),
+                    width: s(3),
+                  ),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (sender.trim().isNotEmpty)
+                    Text(
+                      sender,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'NanumGothic',
+                        color: borderColor,
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w800,
+                        height: 1.0,
+                      ),
+                    ),
+                  if (preview.trim().isNotEmpty) ...[
+                    SizedBox(height: s(4)),
+                    Text(
+                      preview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'NanumGothic',
+                        color: Colors.white.withOpacity(0.74),
+                        fontSize: s(12),
+                        fontWeight: FontWeight.w500,
+                        height: 1.1,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }
 
         final bubble = ConstrainedBox(
           constraints: BoxConstraints(
@@ -1103,29 +1165,34 @@ class _DmMessageRow extends StatelessWidget {
                       s(14),
                       s(10),
                     ),
-child: Builder(
-  builder: (context) {
-    final bool isRtl = RegExp(r'[\u0590-\u05FF]').hasMatch(text);
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        replyPreviewBox(),
+                        Builder(
+                          builder: (context) {
+                            final bool isRtl =
+                                RegExp(r'[\u0590-\u05FF]').hasMatch(text);
 
-    return Text(
-      text,
-      textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
-      textAlign: TextAlign.start, // יתיישר נכון לפי הכיוון
-      style: TextStyle(
-        fontFamily: 'NanumGothic',
-        color: textColor,
-        fontSize: s(20),
-        fontWeight: FontWeight.w400,
-        height: 1.3,
-        letterSpacing: -0.3,
-      ),
-    );
-  },
-),
-
-
-
-
+                            return Text(
+                              text,
+                              textDirection:
+                                  isRtl ? TextDirection.rtl : TextDirection.ltr,
+                              textAlign: TextAlign.start,
+                              style: TextStyle(
+                                fontFamily: 'NanumGothic',
+                                color: textColor,
+                                fontSize: s(20),
+                                fontWeight: FontWeight.w400,
+                                height: 1.3,
+                                letterSpacing: -0.3,
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                   Positioned(
                     top: cornerInset,
@@ -1137,7 +1204,8 @@ child: Builder(
                         width: cornerWidth,
                         fit: BoxFit.contain,
                         filterQuality: FilterQuality.high,
-                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                        errorBuilder: (_, __, ___) =>
+                            const SizedBox.shrink(),
                       ),
                     ),
                   ),
@@ -1147,125 +1215,89 @@ child: Builder(
           ),
         );
 
-       final leftAvatar = _Avatar(letter: otherLetter, size: avatarSize);
-final rightAvatar = _Avatar(letter: meLetter, size: avatarSize);
+        final leftAvatar = _Avatar(letter: otherLetter, size: avatarSize);
+        final rightAvatar = _Avatar(letter: meLetter, size: avatarSize);
 
-
-        final timeWidget = (time.isEmpty)
-            ? const SizedBox.shrink()
-            : SizedBox(
-                width: timeBoxW,
-                child: Align(
-                  alignment: Alignment.bottomRight,
-                  child: Text(
-                    time,
-                    maxLines: 1,
-                    overflow: TextOverflow.clip,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.65),
-                      fontSize: s(14),
-                      fontWeight: FontWeight.w300,
-                      height: 1.0,
-                    ),
-                  ),
-                ),
-              );
-
-final row = Padding(
-  padding: EdgeInsets.only(
-    right: isMe ? s(8) : 0.0,
-    left: isMe ? 0.0 : s(8),
-  ),
-  child: Row(
-    mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-
-    // ✅ זה מה שמחזיר את תמונת הפרופיל למעלה
-    crossAxisAlignment: CrossAxisAlignment.start,
-
-    children: [
-      if (!isMe) ...[
-        Align(
-          alignment: Alignment.topCenter,
-          child: leftAvatar,
-        ),
-        SizedBox(width: gap),
-      ],
-
-      // ✅ הזמן נשאר מיושר למטה מול הבועה בזכות ה-row הפנימי
-      Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (isMe && time.isNotEmpty) ...[
-            Padding(
-              padding: EdgeInsets.only(bottom: s(2)),
-              child: Text(
-                time,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.65),
-                  fontSize: s(14),
-                  fontWeight: FontWeight.w500,
-                  height: 1.0,
-                ),
-              ),
-            ),
-            SizedBox(width: s(8)),
-          ],
-
-          Padding(
-            padding: EdgeInsets.only(
-              left: isMe ? 0.0 : s(2.5),
-              right: isMe ? s(2.5) : 0.0,
-            ),
-            child: bubble,
+        final row = Padding(
+          padding: EdgeInsets.only(
+            right: isMe ? s(8) : 0.0,
+            left: isMe ? 0.0 : s(8),
           ),
-
-          if (!isMe && time.isNotEmpty) ...[
-            SizedBox(width: s(8)),
-            Padding(
-              padding: EdgeInsets.only(bottom: s(2)),
-              child: Text(
-                time,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.65),
-                  fontSize: s(14),
-                  fontWeight: FontWeight.w500,
-                  height: 1.0,
-                ),
+          child: Row(
+            mainAxisAlignment:
+                isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!isMe) ...[
+                Align(alignment: Alignment.topCenter, child: leftAvatar),
+                SizedBox(width: gap),
+              ],
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (isMe && time.isNotEmpty) ...[
+                    Padding(
+                      padding: EdgeInsets.only(bottom: s(2)),
+                      child: Text(
+                        time,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.65),
+                          fontSize: s(14),
+                          fontWeight: FontWeight.w500,
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: s(8)),
+                  ],
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: isMe ? 0.0 : s(2.5),
+                      right: isMe ? s(2.5) : 0.0,
+                    ),
+                    child: bubble,
+                  ),
+                  if (!isMe && time.isNotEmpty) ...[
+                    SizedBox(width: s(8)),
+                    Padding(
+                      padding: EdgeInsets.only(bottom: s(2)),
+                      child: Text(
+                        time,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.65),
+                          fontSize: s(14),
+                          fontWeight: FontWeight.w500,
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ),
-          ],
-        ],
-      ),
+              if (isMe) ...[
+                SizedBox(width: gap),
+                Align(alignment: Alignment.topCenter, child: rightAvatar),
+              ],
+            ],
+          ),
+        );
 
-      if (isMe) ...[
-        SizedBox(width: gap),
-        Align(
-          alignment: Alignment.topCenter,
-          child: rightAvatar,
-        ),
-      ],
-    ],
-  ),
-);
-
-
-        // ✅ keep your tail + stem exactly as you had them
         final double tailSize = s(16.0);
         final double tailTop = s(0.0);
         final double tailToBubbleGap = s(5.0);
         final double stemBottomInset = s(0.0);
 
-        final double tailOffset = (avatarSize + gap - tailToBubbleGap) - s(3.0);
+        final double tailOffset =
+            (avatarSize + gap - tailToBubbleGap) - s(3.0);
 
         final String tailAsset = isMe
             ? 'assets/ui/DMSbubbleTailISME.png'
             : 'assets/ui/DMSbubbleTailOTHERS.png';
 
-return Stack(
-  clipBehavior: Clip.none,
-  alignment: Alignment.center,
-  children: [
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
             CustomPaint(
               foregroundPainter: _MysticStemFromPngTipPainter(
                 isRightSide: isMe,
@@ -1306,7 +1338,6 @@ return Stack(
     );
   }
 }
-
 
 class _Avatar extends StatelessWidget {
   final String letter;
