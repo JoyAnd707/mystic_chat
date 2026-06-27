@@ -744,7 +744,43 @@ class _DmBottomBar extends StatelessWidget {
     );
   }
 }
+class _DmMediaClipper extends CustomClipper<Path> {
+  final bool isMe;
+  final double cut;
 
+  const _DmMediaClipper({
+    required this.isMe,
+    required this.cut,
+  });
+
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+
+    if (isMe) {
+      path.moveTo(cut, 0);
+      path.lineTo(size.width, 0);
+      path.lineTo(size.width, size.height);
+      path.lineTo(0, size.height);
+      path.lineTo(0, cut);
+      path.close();
+    } else {
+      path.moveTo(0, 0);
+      path.lineTo(size.width - cut, 0);
+      path.lineTo(size.width, cut);
+      path.lineTo(size.width, size.height);
+      path.lineTo(0, size.height);
+      path.close();
+    }
+
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant _DmMediaClipper oldClipper) {
+    return oldClipper.isMe != isMe || oldClipper.cut != cut;
+  }
+}
 class _DmMediaMessageRow extends StatelessWidget {
   final bool isMe;
   final String messageType;
@@ -975,8 +1011,12 @@ if (mediaUrl.trim().isEmpty) {
           child: SizedBox(
             width: mediaW,
             height: mediaH,
-            child: ClipRect(
-              child: Stack(
+           child: ClipPath(
+  clipper: _DmMediaClipper(
+    isMe: isMe,
+    cut: s(28),
+  ),
+  child: Stack(
                 fit: StackFit.expand,
                 children: [
                   VideoPreviewTile(
@@ -1017,8 +1057,12 @@ if (mediaUrl.trim().isEmpty) {
         child: SizedBox(
           width: mediaW,
           height: mediaH,
-          child: ClipRect(
-            child: Image.network(
+       child: ClipPath(
+  clipper: _DmMediaClipper(
+    isMe: isMe,
+    cut: s(28),
+  ),
+  child: Image.network(
               mediaUrl,
               fit: BoxFit.cover,
               loadingBuilder: (context, child, progress) {
@@ -1049,44 +1093,62 @@ if (mediaUrl.trim().isEmpty) {
       );
     }
 
-    final Widget bubble = Container(
-      decoration: BoxDecoration(
-        color: bodyFill,
-        border: Border.all(
-          color: borderColor,
-          width: s(2),
+final double chamfer = s(8.5);
+final double strokeW = s(2);
+
+final double cornerInset = s(0.5);
+
+final Widget bubble = Stack(
+  clipBehavior: Clip.none,
+  children: [
+    ClipPath(
+      clipper: _ChamferBubbleClipper(
+        isMe: isMe,
+        chamfer: chamfer,
+      ),
+      child: CustomPaint(
+        painter: _ChamferBubblePainter(
+          isMe: isMe,
+          chamfer: chamfer,
+          fill: bodyFill,
+          stroke: borderColor,
+          strokeWidth: strokeW,
+        ),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            s(10),
+            s(10),
+            s(10),
+            s(10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              replyPreviewBox(),
+              mediaContent(),
+            ],
+          ),
         ),
       ),
-      child: Stack(
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(s(10), s(10), s(10), s(10)),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                replyPreviewBox(),
-                mediaContent(),
-              ],
-            ),
-          ),
-          Positioned(
-            top: s(0.5),
-            left: isMe ? s(0.5) : null,
-            right: isMe ? null : s(0.5),
-            child: IgnorePointer(
-              child: Image.asset(
-                cornerAsset,
-                width: s(28),
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-              ),
-            ),
-          ),
-        ],
+    ),
+
+    Positioned(
+      top: cornerInset,
+      left: isMe ? cornerInset : null,
+      right: isMe ? null : cornerInset,
+      child: IgnorePointer(
+        child: Image.asset(
+          cornerAsset,
+          width: s(28),
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        ),
       ),
-    );
+    ),
+  ],
+);
 
     final Widget avatar = _simpleAvatar(
       letter: isMe ? meLetter : otherLetter,
