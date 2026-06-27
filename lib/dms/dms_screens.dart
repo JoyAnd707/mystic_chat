@@ -840,7 +840,33 @@ Widget build(BuildContext context) {
           uiScale: uiScale,
         ),
 
-      GestureDetector(
+      Builder(
+  builder: (context) {
+    final String messageId = docs[i].id;
+    final bool isHighlighted =
+        _highlightedMessageIds.contains(messageId);
+
+    return AnimatedContainer(
+      key: _keyForMessageId(messageId),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.all(isHighlighted ? s(4) : 0),
+      decoration: BoxDecoration(
+        color: isHighlighted
+            ? const Color(0xFF46F5D6).withOpacity(0.18)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(s(12)),
+        boxShadow: isHighlighted
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF46F5D6).withOpacity(0.65),
+                  blurRadius: 22,
+                  spreadRadius: 2,
+                ),
+              ]
+            : const [],
+      ),
+      child: GestureDetector(
         behavior: HitTestBehavior.translucent,
 
         onHorizontalDragStart: (_) {
@@ -850,13 +876,11 @@ Widget build(BuildContext context) {
         onHorizontalDragUpdate: (details) {
           _dragDx += details.delta.dx;
 
-          final bool swipeOk = _dragDx > 28;
-
-          if (swipeOk) {
+          if (_dragDx > 28) {
             _dragDx = 0.0;
 
             _setReplyTarget(
-              messageId: docs[i].id,
+              messageId: messageId,
               senderId: sender,
               text: text,
             );
@@ -867,35 +891,37 @@ Widget build(BuildContext context) {
           _dragDx = 0.0;
         },
 
-child: _DmMessageRow(
-  isMe: isMe,
-  text: text,
-  time: timeLabel,
-  uiScale: uiScale,
-  meLetter: (dmUsers[widget.currentUserId]
-              ?.name
-              .characters
-              .first ??
-          ' ')
-      .toUpperCase(),
-  otherLetter: (dmUsers[widget.otherUserId]
-              ?.name
-              .characters
-              .first ??
-          ' ')
-      .toUpperCase(),
+        child: _DmMessageRow(
+          isMe: isMe,
+          text: text,
+          time: timeLabel,
+          uiScale: uiScale,
+          meLetter: (dmUsers[widget.currentUserId]
+                      ?.name
+                      .characters
+                      .first ??
+                  ' ')
+              .toUpperCase(),
+          otherLetter: (dmUsers[widget.otherUserId]
+                      ?.name
+                      .characters
+                      .first ??
+                  ' ')
+              .toUpperCase(),
+          replyToSenderName: m['replyToSenderName']?.toString(),
+          replyToText: m['replyToText']?.toString(),
+          onTapReplyPreview: () {
+            final id = m['replyToMessageId']?.toString();
 
-  replyToSenderName: m['replyToSenderName']?.toString(),
-  replyToText: m['replyToText']?.toString(),
+            if (id == null || id.isEmpty) return;
 
-  onTapReplyPreview: () {
-    final id = m['replyToMessageId']?.toString();
-
-    if (id == null || id.isEmpty) return;
-_jumpToMessage(id);// נחבר את הקפיצה בשלב הבא
+            _jumpToMessage(id);
+          },
+        ),
+      ),
+    );
   },
 ),
-      ),
     ],
   ),
 );
