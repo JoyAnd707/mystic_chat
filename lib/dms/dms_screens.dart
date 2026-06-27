@@ -78,6 +78,9 @@ _enterScale = Tween<double>(
 );
 
 _enterController.forward();
+
+
+
 }
 
 
@@ -354,6 +357,7 @@ class _DmChatScreenState extends State<DmChatScreen>
 late final AnimationController _enterController;
 late final Animation<double> _enterScale;
   bool _isTyping = false;
+  bool _nearBottomCached = true;
 
 // ✅ Reply jump + highlight
 final Map<String, GlobalKey> _messageKeys = <String, GlobalKey>{};
@@ -508,14 +512,37 @@ Future<void> _clearActiveDmWith() async {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
       _scroll.animateTo(
-        _scroll.position.maxScrollExtent,
+        _scroll.position.maxScrollExtent + 200,
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
       );
       if (keepFocus) _focus.requestFocus();
     });
   }
+bool _isNearBottom() {
+  if (!_scroll.hasClients) return true;
 
+  final distanceFromBottom =
+      _scroll.position.maxScrollExtent - _scroll.position.pixels;
+
+  return distanceFromBottom <= 80;
+}
+
+void _onDmScroll() {
+  if (!mounted) return;
+
+  final nearBottom = _isNearBottom();
+
+  if (nearBottom == _nearBottomCached) return;
+
+  setState(() {
+    _nearBottomCached = nearBottom;
+  });
+}
+
+void _onTapScrollToBottomButton() {
+  _scrollToBottom(keepFocus: false);
+}
   void _onTapType() {
     if (_isTyping) {
       _focus.requestFocus();
@@ -599,6 +626,7 @@ _enterScale = Tween<double>(
 );
 
 _enterController.forward();
+_scroll.addListener(_onDmScroll);
     _focus.addListener(() {
       if (!_focus.hasFocus) {
         if (mounted) {
@@ -632,7 +660,10 @@ void dispose() {
 
   _twinkleController.dispose();
   _enterController.dispose();
+
+  _scroll.removeListener(_onDmScroll);
   _scroll.dispose();
+
   _c.dispose();
   _focus.dispose();
   super.dispose();
@@ -951,9 +982,40 @@ Widget build(BuildContext context) {
 );
 },
                         );
-                        
                       },
                     ),
+
+                    if (!_nearBottomCached)
+                      Positioned(
+                        right: s(18),
+                        bottom: s(18),
+                        child: GestureDetector(
+                          onTap: _onTapScrollToBottomButton,
+                          child: AnimatedScale(
+                            scale: _nearBottomCached ? 0 : 1,
+                            duration: const Duration(milliseconds: 180),
+                            curve: Curves.easeOutBack,
+                            child: Container(
+                              width: s(42),
+                              height: s(42),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.72),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: const Color(0xFF46F5D6),
+                                  width: s(1.2),
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                color: Colors.white,
+                                size: s(28),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
                   ],
                 ),
               ),
