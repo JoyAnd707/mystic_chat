@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../audio/bgm.dart';
 import '../../audio/sfx.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/app_settings.dart';
+
 class SettingsSoundSliders extends StatefulWidget {
   const SettingsSoundSliders({super.key});
 
@@ -19,6 +21,7 @@ class _SettingsSoundSlidersState extends State<SettingsSoundSliders> {
 void initState() {
   super.initState();
   _loadSettings();
+  
 }
 
 Future<void> _loadSettings() async {
@@ -51,15 +54,17 @@ Future<void> _loadSettings() async {
           top: 34,
           child: MysticPlanetSlider(
 value: _bgmValue,
-onChanged: (value) {
+onChanged: (value) async {
   setState(() {
     _bgmValue = value;
   });
 
-Bgm.I.setVolume(value);
-SharedPreferences.getInstance().then((prefs) {
-  prefs.setDouble('bgm_volume', value);
-});},
+  AppSettings.bgmVolume = value;
+  await Bgm.I.setVolume(value);
+
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setDouble('bgm_volume', value);
+},
           ),
         ),
 
@@ -69,15 +74,17 @@ SharedPreferences.getInstance().then((prefs) {
           top: 68,
           child: MysticPlanetSlider(
  value: _sfxValue,
-onChanged: (value) {
+onChanged: (value) async {
   setState(() {
     _sfxValue = value;
   });
 
-Sfx.I.setVolume(value);
-SharedPreferences.getInstance().then((prefs) {
-  prefs.setDouble('sfx_volume', value);
-});},
+  AppSettings.sfxVolume = value;
+  await Sfx.I.setVolume(value);
+
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setDouble('sfx_volume', value);
+},
           ),
         ),
                 Positioned(
@@ -137,7 +144,14 @@ class _MysticPlanetSliderState extends State<MysticPlanetSlider> {
     super.initState();
     _value = widget.value;
   }
+  @override
+  void didUpdateWidget(covariant MysticPlanetSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
 
+    if (oldWidget.value != widget.value) {
+      _value = widget.value;
+    }
+  }
 @override
 Widget build(BuildContext context) {
  return GestureDetector(

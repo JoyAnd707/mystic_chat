@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
-
+import '../services/app_settings.dart';
 enum _BgmScope { homeDm, group }
 
 class Bgm {
@@ -71,8 +71,7 @@ final Map<String, Duration> _groupPosByAsset = <String, Duration>{};
     await _player.setReleaseMode(ReleaseMode.loop);
 
     // ✅ use our tracked volume
-    await _setVolume(0.45);
-  }
+await _setVolume(AppSettings.bgmVolume);  }
 
 
 
@@ -276,7 +275,7 @@ await _player.setSource(AssetSource(asset));
 // start creepy at 0 volume then fade in
 await _setVolume(0.0);
 await _player.resume();
-await fadeTo(0.45, const Duration(milliseconds: 900));
+await fadeTo(AppSettings.bgmVolume, const Duration(milliseconds: 900));
 
 
 _eggCompleteSub = _player.onPlayerComplete.listen((_) async {
@@ -317,7 +316,7 @@ Future<void> _restoreAfterEgg() async {
     }
 
     await _player.resume();
-    await fadeTo(0.45, const Duration(milliseconds: 1200));
+    await fadeTo(AppSettings.bgmVolume, const Duration(milliseconds: 1200));
 
     _currentAsset = prev;
   } catch (_) {

@@ -1,6 +1,6 @@
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/foundation.dart';
-
+import '../services/app_settings.dart';
 class Sfx {
   Sfx._();
   static final Sfx I = Sfx._();
@@ -16,7 +16,7 @@ class Sfx {
     Future<void> init() async {
     for (int i = 0; i < _poolSize; i++) {
       final p = AudioPlayer();
-      await p.setVolume(0.9);
+      await p.setVolume(AppSettings.sfxVolume);
       _pool.add(p);
     }
   }

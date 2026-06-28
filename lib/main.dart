@@ -122,17 +122,19 @@ Future<void> main() async {
     debugPrint('AudioSession configure failed: $e');
   }
 
-  try {
-    await Bgm.I.init();
-  } catch (e) {
-    debugPrint('Bgm.init failed: $e');
-  }
+try {
+  await Bgm.I.init();
+  await Bgm.I.setVolume(AppSettings.bgmVolume);
+} catch (e) {
+  debugPrint('Bgm.init failed: $e');
+}
 
-  try {
-    await Sfx.I.init();
-  } catch (e) {
-    debugPrint('Sfx.init failed: $e');
-  }
+try {
+  await Sfx.I.init();
+  await Sfx.I.setVolume(AppSettings.sfxVolume);
+} catch (e) {
+  debugPrint('Sfx.init failed: $e');
+}
 
   runApp(const MysticChatApp());
 }
