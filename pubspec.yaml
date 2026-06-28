@@ -85,6 +85,7 @@ flutter:
     - assets/ui/settings/tabs/SoundOff.png
     - assets/ui/settings/tabs/OthersOn.png
     - assets/ui/settings/tabs/OtherOff.png
+    - assets/ui/TopBarSettings.png
   fonts:
     - family: NotoSans
       fonts:

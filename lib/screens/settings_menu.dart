@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../widgets/mystic_title_bar.dart';
 import '../widgets/settings/settings_tabs.dart';
-
+import '../widgets/mystic_top_status_bar.dart';
+import '../widgets/mystic_settings_top_status_bar.dart';
 class SettingsMenuScreen extends StatefulWidget {
   final String currentUserId;
 
@@ -24,6 +25,9 @@ class _SettingsMenuScreenState extends State<SettingsMenuScreen> {
       body: SafeArea(
         child: Column(
 children: [
+  MysticSettingsTopStatusBar(
+  now: DateTime.now(),
+),
 Padding(
   padding: const EdgeInsets.only(top: 8),
   child: Padding(
