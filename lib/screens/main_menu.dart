@@ -11,8 +11,6 @@ import '../widgets/mystic_top_status_bar.dart';
 import 'chat_screen.dart';
 import 'settings_menu.dart';
 import '../widgets/settings/settings_tabs.dart';
-
-
 class MainMenuScreen extends StatefulWidget {
   final String currentUserId;
 
@@ -25,16 +23,20 @@ class MainMenuScreen extends StatefulWidget {
   State<MainMenuScreen> createState() => _MainMenuScreenState();
 }
 
-class _MainMenuScreenState extends State<MainMenuScreen> {
-  bool _botStarted = false;
+class _MainMenuScreenState extends State<MainMenuScreen>
+    with TickerProviderStateMixin {  bool _botStarted = false;
 
   Timer? _clockTimer;
   DateTime _now = DateTime.now();
+  late final AnimationController _twinkleController;
 
   @override
   void initState() {
     super.initState();
-
+_twinkleController = AnimationController(
+  vsync: this,
+  duration: const Duration(seconds: 6),
+)..repeat();
     _now = DateTime.now();
 
     _clockTimer = Timer.periodic(
@@ -60,39 +62,55 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    _clockTimer?.cancel();
-    super.dispose();
-  }
-
+@override
+void dispose() {
+  _clockTimer?.cancel();
+  _twinkleController.dispose();
+  super.dispose();
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: Stack(
-          children: [
-Positioned(
-  top: 30,
-  right: 15,
-  child: GestureDetector(
-    behavior: HitTestBehavior.translucent,
-    onTap: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => SettingsMenuScreen(
-            currentUserId: widget.currentUserId,
-          ),
-        ),
-      );
-    },
-    child: const SizedBox(
-      width: 80,
-      height: 80,
+child: Stack(
+  children: [
+    Positioned.fill(
+      child: Image.asset(
+        'assets/backgrounds/StarsBG.png',
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      ),
     ),
+
+Positioned.fill(
+  child: MysticStarTwinkleOverlay(
+    animation: _twinkleController,
+    starCount: 58,
+    sizeMultiplier: 1.25,
   ),
 ),
+
+    Positioned(
+      top: 30,
+      right: 15,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => SettingsMenuScreen(
+                currentUserId: widget.currentUserId,
+              ),
+            ),
+          );
+        },
+        child: const SizedBox(
+          width: 80,
+          height: 80,
+        ),
+      ),
+    ),
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
