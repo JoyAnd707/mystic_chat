@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../audio/bgm.dart';
 import '../audio/sfx.dart';
@@ -8,9 +10,9 @@ import '../bots/daily_fact_bot.dart';
 import '../dms/dms_screens.dart';
 import '../firebase/push_service.dart';
 import '../widgets/mystic_top_status_bar.dart';
+import '../widgets/mystic_starfield.dart';
 import 'chat_screen.dart';
 import 'settings_menu.dart';
-import '../widgets/mystic_starfield.dart';
 
 
 
@@ -36,6 +38,9 @@ class _MainMenuScreenState extends State<MainMenuScreen>
 
   late final AnimationController _twinkleController;
   late final AnimationController _chatroomRingController;
+  late final AnimationController _messagePulseController;
+late final Animation<double> _messagePulse;
+late final AnimationController _messageRingController;
 
   @override
   void initState() {
@@ -49,6 +54,23 @@ class _MainMenuScreenState extends State<MainMenuScreen>
       vsync: this,
       duration: const Duration(seconds: 9),
     )..repeat();
+        _messagePulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 950),
+    )..repeat(reverse: true);
+    _messageRingController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    )..repeat();
+    _messagePulse = Tween<double>(
+      begin: 1.0,
+      end: 1.045,
+    ).animate(
+      CurvedAnimation(
+        parent: _messagePulseController,
+        curve: Curves.easeInOut,
+      ),
+    );
     _now = DateTime.now();
 
     _clockTimer = Timer.periodic(
@@ -79,7 +101,76 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     _clockTimer?.cancel();
     _twinkleController.dispose();
     _chatroomRingController.dispose();
+    _messagePulseController.dispose();
     super.dispose();
+  }
+
+
+    String _dmRoomId(String a, String b) {
+    final pair = [a, b]..sort();
+    return 'dm_${pair[0]}_${pair[1]}';
+  }
+
+  String _lastReadKeyFor(String roomId) {
+    return 'lastReadMs__${widget.currentUserId}__$roomId';
+  }
+
+  Stream<int> _unreadDmMessageCountStream() async* {
+    final prefs = await SharedPreferences.getInstance();
+
+    final others = dmUsers.values
+        .where((u) => u.id != widget.currentUserId)
+        .toList();
+
+    await for (final snap in FirebaseFirestore.instance
+        .collection('dm_rooms')
+        .where('participants', arrayContains: widget.currentUserId)
+        .snapshots()) {
+      int totalUnreadMessages = 0;
+
+      for (final u in others) {
+        final roomId = _dmRoomId(widget.currentUserId, u.id);
+
+        final matchingDocs = snap.docs.where((d) => d.id == roomId).toList();
+        if (matchingDocs.isEmpty) continue;
+
+        final data = matchingDocs.first.data();
+
+        final int lastUpdatedMs =
+            (data['lastUpdatedMs'] is int) ? data['lastUpdatedMs'] as int : 0;
+
+        final String lastSenderId = (data['lastSenderId'] ?? '').toString();
+
+        final int lastReadMs = prefs.getInt(_lastReadKeyFor(roomId)) ?? 0;
+
+        final bool roomHasUnread =
+            lastUpdatedMs > lastReadMs &&
+            lastSenderId != widget.currentUserId;
+
+        if (!roomHasUnread) continue;
+
+        final messagesSnap = await FirebaseFirestore.instance
+            .collection('dm_rooms')
+            .doc(roomId)
+            .collection('messages')
+            .where('tsMs', isGreaterThan: lastReadMs)
+            .get();
+
+        for (final messageDoc in messagesSnap.docs) {
+          final messageData = messageDoc.data();
+
+          final String senderId = (messageData['senderId'] ?? '').toString();
+          final String type = (messageData['type'] ?? 'text').toString();
+
+          if (senderId == widget.currentUserId) continue;
+          if (type == 'system') continue;
+
+          totalUnreadMessages++;
+        }
+      }
+
+      yield totalUnreadMessages;
+    }
   }
   @override
   Widget build(BuildContext context) {
@@ -103,6 +194,39 @@ Positioned.fill(
     sizeMultiplier: 1.25,
   ),
 ),
+    Positioned(
+      left: 145,
+      top: 110,
+      child: StreamBuilder<int>(
+        stream: _unreadDmMessageCountStream(),
+        builder: (context, snapshot) {
+          final int unreadCount = snapshot.data ?? 0;
+
+   return AnimatedMessageButton(
+  unreadCount: unreadCount,
+  pulseAnimation: _messagePulse,
+  ringAnimation: _messageRingController,
+  onTap: () {
+              try {
+                Sfx.I.playEnterDmsMenu();
+              } catch (_) {}
+
+              Navigator.of(context)
+                  .push(
+                MaterialPageRoute(
+                  builder: (_) => DmsListScreen(
+                    currentUserId: widget.currentUserId,
+                  ),
+                ),
+              )
+                  .then((_) {
+                if (mounted) setState(() {});
+              });
+            },
+          );
+        },
+      ),
+    ),
     Positioned(
       left: 85,
       top: 375,
@@ -157,48 +281,13 @@ Positioned.fill(
                 children: [
                   MysticTopStatusBar(now: _now),
 
-                  const SizedBox(height: 10),
-
-                     const Text(
-                    'Mystic Chat',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  const Text(
-                    'בחרי מצב:',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 16),
-                  ),
-
-                  const SizedBox(height: 26),
+const SizedBox(height: 10),
 
                   const SizedBox(height: 215),
 
                   const SizedBox(height: 12),
 
-ElevatedButton(
-  onPressed: () {
-    try {
-      Sfx.I.playEnterDmsMenu();
-    } catch (_) {}
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => DmsListScreen(
-          currentUserId: widget.currentUserId,
-        ),
-      ),
-    );
-  },
-  child: const Text('DMs'),
-),
+const SizedBox.shrink(),
                 ],
               ),
             ),
@@ -271,3 +360,113 @@ class AnimatedChatroomButton extends StatelessWidget {
   }
 }
 
+class AnimatedMessageButton extends StatelessWidget {
+  final int unreadCount;
+  final Animation<double> pulseAnimation;
+  final Animation<double> ringAnimation;
+  final VoidCallback onTap;
+
+  const AnimatedMessageButton({
+    super.key,
+    required this.unreadCount,
+    required this.pulseAnimation,
+    required this.ringAnimation,
+    required this.onTap,
+  });
+
+  bool get hasUnread => unreadCount > 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget button = SizedBox(
+      width: 128,
+      height: 128,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            if (hasUnread)
+              Container(
+                width: 114,
+                height: 114,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF00EEDB).withOpacity(0.18),
+                      blurRadius: 14,
+                      spreadRadius: 0,
+                    ),
+                  ],
+                ),
+              ),
+            RotationTransition(
+              turns: ringAnimation,
+              child: Image.asset(
+                hasUnread
+                    ? 'assets/ui/main_menu/DMS/NewMessgaeOuterRing.png'
+                    : 'assets/ui/main_menu/DMS/MessgaeOuterRing.png',
+                width: 118,
+                height: 118,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
+            ),
+            Image.asset(
+              hasUnread
+                  ? 'assets/ui/main_menu/DMS/MessageNew.png'
+                  : 'assets/ui/main_menu/DMS/Message.png',
+              width: 104,
+              height: 104,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+            ),
+            if (hasUnread)
+              Positioned(
+                right: 2,
+                top: 2,
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFFF5F73),
+                    border: Border.all(
+                      color: const Color(0xFFFFA6B2),
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF5F73).withOpacity(0.35),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      unreadCount > 99 ? '99+' : unreadCount.toString(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        height: 1.0,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (!hasUnread) return button;
+
+return button;
+  }
+}

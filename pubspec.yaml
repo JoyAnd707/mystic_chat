@@ -96,7 +96,10 @@ flutter:
     - assets/ui/main_menu/chatroom/ChatroomButton.png
     - assets/ui/main_menu/chatroom/GreenBlueCircle.png
     - assets/ui/main_menu/chatroom/Atsushi'sFundraisingAssociation.png
-
+    - assets/ui/main_menu/DMS/Message.png
+    - assets/ui/main_menu/DMS/MessageNew.png
+    - assets/ui/main_menu/DMS/MessgaeOuterRing.png
+    - assets/ui/main_menu/DMS/NewMessgaeOuterRing.png
     
   fonts:
     - family: NotoSans
