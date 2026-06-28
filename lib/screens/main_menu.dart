@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -104,7 +103,33 @@ Positioned.fill(
     sizeMultiplier: 1.25,
   ),
 ),
+    Positioned(
+      left: 85,
+      top: 375,
+      child: AnimatedChatroomButton(
+        ringAnimation: _chatroomRingController,
+        onTap: () {
+          try {
+            Sfx.I.playEnterGroupChat();
+          } catch (_) {}
 
+          Navigator.of(context)
+              .push(
+            MaterialPageRoute(
+              builder: (_) => ChatScreen(
+                currentUserId: widget.currentUserId,
+                roomId: 'group_main',
+                title: 'Group Chat',
+                enableBgm: true,
+              ),
+            ),
+          )
+              .then((_) async {
+            await Bgm.I.leaveGroupAndResumeHomeDm();
+          });
+        },
+      ),
+    ),
     Positioned(
       top: 30,
       right: 15,
@@ -134,7 +159,7 @@ Positioned.fill(
 
                   const SizedBox(height: 10),
 
-                  const Text(
+                     const Text(
                     'Mystic Chat',
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -154,31 +179,7 @@ Positioned.fill(
 
                   const SizedBox(height: 26),
 
-                  Center(
-                    child: AnimatedChatroomButton(
-                      ringAnimation: _chatroomRingController,
-                      onTap: () {
-                        try {
-                          Sfx.I.playEnterGroupChat();
-                        } catch (_) {}
-
-                        Navigator.of(context)
-                            .push(
-                          MaterialPageRoute(
-                            builder: (_) => ChatScreen(
-                              currentUserId: widget.currentUserId,
-                              roomId: 'group_main',
-                              title: 'Group Chat',
-                              enableBgm: true,
-                            ),
-                          ),
-                        )
-                            .then((_) async {
-                          await Bgm.I.leaveGroupAndResumeHomeDm();
-                        });
-                      },
-                    ),
-                  ),
+                  const SizedBox(height: 215),
 
                   const SizedBox(height: 12),
 
@@ -220,8 +221,8 @@ class AnimatedChatroomButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 250,
-      height: 250,
+      width: 265,
+      height: 265,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: onTap,
@@ -229,41 +230,38 @@ class AnimatedChatroomButton extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Container(
-              width: 220,
-              height: 220,
+              width: 232,
+              height: 232,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-          boxShadow: [
-  BoxShadow(
-    color: const Color(0xFF00EEDB).withOpacity(0.10),
-    blurRadius: 14,
-    spreadRadius: 0,
-  ),
-],
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF00EEDB).withOpacity(0.10),
+                    blurRadius: 14,
+                    spreadRadius: 0,
+                  ),
+                ],
               ),
             ),
-
             Image.asset(
               'assets/ui/main_menu/chatroom/GreenBlueCircle.png',
-              width: 214,
-              height: 214,
+              width: 228,
+              height: 228,
               fit: BoxFit.contain,
             ),
-
             RotationTransition(
               turns: ringAnimation,
               child: Image.asset(
-  "assets/ui/main_menu/chatroom/Atsushi'sFundraisingAssociation.png",
-                width: 202,
-                height: 202,
+                "assets/ui/main_menu/chatroom/Atsushi'sFundraisingAssociation.png",
+                width: 220,
+                height: 220,
                 fit: BoxFit.contain,
               ),
             ),
-
             Image.asset(
               'assets/ui/main_menu/chatroom/ChatroomButton.png',
-              width: 154,
-              height: 154,
+              width: 170,
+              height: 170,
               fit: BoxFit.contain,
             ),
           ],
@@ -273,114 +271,3 @@ class AnimatedChatroomButton extends StatelessWidget {
   }
 }
 
-class _RotatingChatroomOuterRingPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Offset center = size.center(Offset.zero);
-
-    final Paint blackRing = Paint()
-      ..color = Colors.black.withOpacity(0.72)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 23;
-
-    final Paint whiteRing = Paint()
-      ..color = Colors.white.withOpacity(0.82)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2;
-
-    final Paint tealRing = Paint()
-      ..color = const Color(0xFF11DAD0).withOpacity(0.55)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-
-    canvas.drawCircle(center, 92, blackRing);
-    canvas.drawCircle(center, 104, whiteRing);
-    canvas.drawCircle(center, 80, whiteRing);
-    canvas.drawCircle(center, 107, tealRing);
-
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: "Rika's Fundraising Association",
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.9),
-          fontSize: 17,
-          fontWeight: FontWeight.w400,
-          letterSpacing: 1.1,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(-math.pi / 2);
-
-    final double radius = 92;
-    final String text = "Rika's Fundraising Association";
-
-    double angle = -1.88;
-
-    for (int i = 0; i < text.length; i++) {
-      final String char = text[i];
-
-      final charPainter = TextPainter(
-        text: TextSpan(
-          text: char,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.9),
-            fontSize: 17,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
-      final double charAngle = angle + (i * 0.075);
-
-      canvas.save();
-      canvas.rotate(charAngle);
-      canvas.translate(0, -radius);
-      canvas.rotate(math.pi / 2);
-      charPainter.paint(
-        canvas,
-        Offset(
-          -charPainter.width / 2,
-          -charPainter.height / 2,
-        ),
-      );
-      canvas.restore();
-    }
-
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return false;
-  }
-}
-
-class _StaticChatroomInnerRingsPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Offset center = size.center(Offset.zero);
-
-    final Paint whiteThin = Paint()
-      ..color = Colors.white.withOpacity(0.72)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2;
-
-    final Paint grayThin = Paint()
-      ..color = Colors.white.withOpacity(0.28)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-
-    canvas.drawCircle(center, 84, whiteThin);
-    canvas.drawCircle(center, 63, grayThin);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return false;
-  }
-}
