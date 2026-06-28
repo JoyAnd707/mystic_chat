@@ -64,13 +64,21 @@ Expanded(
   'assets/ui/settings/account/AccountSettingsDecoy.png',
   width: 270,
 ),
-      1 => const Text(
-          'Sound',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 28,
-          ),
-        ),
+1 => Column(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+ Image.asset(
+  'assets/ui/settings/sound/SoundAdjustWindow.png',
+  width: 330,
+),
+const SizedBox(height: 12),
+    Image.asset(
+      'assets/ui/settings/sound/VoiceDecoy.png',
+      width: 330,
+      
+    ),
+  ],
+),
       _ => const Text(
           'Others',
           style: TextStyle(

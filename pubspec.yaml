@@ -87,6 +87,10 @@ flutter:
     - assets/ui/settings/tabs/OtherOff.png
     - assets/ui/TopBarSettings.png
     - assets/ui/settings/account/AccountSettingsDecoy.png
+    - assets/ui/settings/sound/VoiceDecoy.png
+    - assets/ui/settings/sound/SoundAdjustWindow.png
+
+    
   fonts:
     - family: NotoSans
       fonts:
