@@ -122,40 +122,48 @@ Positioned(
 
                   const SizedBox(height: 26),
 
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context)
-                          .push(
-                        MaterialPageRoute(
-                          builder: (_) => ChatScreen(
-                            currentUserId: widget.currentUserId,
-                            roomId: 'group_main',
-                            title: 'Group Chat',
-                            enableBgm: true,
-                          ),
-                        ),
-                      )
-                          .then((_) async {
-                        await Bgm.I.leaveGroupAndResumeHomeDm();
-                      });
-                    },
-                    child: const Text('Group Chat'),
-                  ),
+       ElevatedButton(
+  onPressed: () {
+    try {
+      Sfx.I.playEnterGroupChat();
+    } catch (_) {}
+
+    Navigator.of(context)
+        .push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          currentUserId: widget.currentUserId,
+          roomId: 'group_main',
+          title: 'Group Chat',
+          enableBgm: true,
+        ),
+      ),
+    )
+        .then((_) async {
+      await Bgm.I.leaveGroupAndResumeHomeDm();
+    });
+  },
+  child: const Text('Group Chat'),
+),
 
                   const SizedBox(height: 12),
 
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => DmsListScreen(
-                            currentUserId: widget.currentUserId,
-                          ),
-                        ),
-                      );
-                    },
-                    child: const Text('DMs'),
-                  ),
+ElevatedButton(
+  onPressed: () {
+    try {
+      Sfx.I.playEnterDmsMenu();
+    } catch (_) {}
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DmsListScreen(
+          currentUserId: widget.currentUserId,
+        ),
+      ),
+    );
+  },
+  child: const Text('DMs'),
+),
                 ],
               ),
             ),
