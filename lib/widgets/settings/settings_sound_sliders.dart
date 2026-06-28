@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../audio/bgm.dart';
 import '../../audio/sfx.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 class SettingsSoundSliders extends StatefulWidget {
   const SettingsSoundSliders({super.key});
 
@@ -14,7 +15,32 @@ class _SettingsSoundSlidersState extends State<SettingsSoundSliders> {
   double _sfxValue = 0.7;
   double _voiceValue = 0.7;
   double _voiceSfxValue = 0.7;
+@override
+void initState() {
+  super.initState();
+  _loadSettings();
+}
 
+Future<void> _loadSettings() async {
+  final prefs = await SharedPreferences.getInstance();
+
+  final bgm = prefs.getDouble('bgm_volume') ?? 0.7;
+  final sfx = prefs.getDouble('sfx_volume') ?? 0.7;
+  final voice = prefs.getDouble('voice_volume') ?? 0.7;
+  final voiceSfx = prefs.getDouble('voice_sfx_volume') ?? 0.7;
+
+  if (!mounted) return;
+
+  setState(() {
+    _bgmValue = bgm;
+    _sfxValue = sfx;
+    _voiceValue = voice;
+    _voiceSfxValue = voiceSfx;
+  });
+
+  await Bgm.I.setVolume(bgm);
+  await Sfx.I.setVolume(sfx);
+}
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -30,8 +56,10 @@ onChanged: (value) {
     _bgmValue = value;
   });
 
-  Bgm.I.setVolume(value);
-},
+Bgm.I.setVolume(value);
+SharedPreferences.getInstance().then((prefs) {
+  prefs.setDouble('bgm_volume', value);
+});},
           ),
         ),
 
@@ -46,8 +74,10 @@ onChanged: (value) {
     _sfxValue = value;
   });
 
-  Sfx.I.setVolume(value);
-},
+Sfx.I.setVolume(value);
+SharedPreferences.getInstance().then((prefs) {
+  prefs.setDouble('sfx_volume', value);
+});},
           ),
         ),
                 Positioned(
