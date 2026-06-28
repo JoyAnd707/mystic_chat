@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'mystic_toggle.dart';
 class SettingsOthersPage extends StatelessWidget {
   const SettingsOthersPage({super.key});
 
@@ -8,10 +8,26 @@ class SettingsOthersPage extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Image.asset(
-          'assets/ui/settings/others/PushNotificationsWindow.png',
-          width: 330,
+   SizedBox(
+  width: 330,
+  child: Stack(
+    children: [
+      Image.asset(
+        'assets/ui/settings/others/PushNotificationsWindow.png',
+        width: 330,
+      ),
+
+Positioned(
+  left: 28,
+  top: 46,
+  child: MysticToggle(
+          value: true,
+          onChanged: (_) {},
         ),
+      ),
+    ],
+  ),
+),
 
         const SizedBox(height: 12),
 
