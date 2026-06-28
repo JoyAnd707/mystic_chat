@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../audio/sfx.dart';
+
 class MysticToggle extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
@@ -14,17 +16,21 @@ class MysticToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
+        try {
+          Sfx.I.playToggle();
+        } catch (_) {}
+
         onChanged(!value);
       },
       child: SizedBox(
         width: 66,
-height: 24,
+        height: 24,
         child: Stack(
           children: [
             Positioned(
               left: 5,
-right: 5,
-top: 7,
+              right: 5,
+              top: 7,
               child: Container(
                 height: 10,
                 decoration: BoxDecoration(
@@ -39,13 +45,12 @@ top: 7,
                 ),
               ),
             ),
-
             Positioned(
               left: value ? 39 : 2,
-top: 3,
+              top: 3,
               child: Container(
                 width: 24,
-height: 24,
+                height: 24,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: value

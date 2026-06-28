@@ -57,6 +57,11 @@ await p.setVolume(volume * _volume);
 
   Future<void> playSend() => _playOne('assets/fx/send.mp3', volume: 0.8);
   Future<void> playSelectDm() => _playOne('assets/fx/SelectDMsfx.mp3', volume: 0.9);
+  Future<void> playSettingsTabChange() =>
+    _playOne('assets/fx/ChangeTabSFX.mp3', volume: 0.9);
+
+Future<void> playToggle() =>
+    _playOne('assets/fx/ToggleSfx.mp3', volume: 0.9);
   
 
 

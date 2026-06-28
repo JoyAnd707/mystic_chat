@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import '../widgets/mystic_title_bar.dart';
-import '../widgets/settings/settings_tabs.dart';
-import '../widgets/mystic_top_status_bar.dart';
+
+import '../audio/sfx.dart';
 import '../widgets/mystic_settings_top_status_bar.dart';
-import '../widgets/settings/settings_sound_sliders.dart';
+import '../widgets/mystic_title_bar.dart';
 import '../widgets/settings/settings_others_page.dart';
+import '../widgets/settings/settings_sound_sliders.dart';
+import '../widgets/settings/settings_tabs.dart';
 class SettingsMenuScreen extends StatefulWidget {
   final String currentUserId;
 
@@ -36,25 +37,35 @@ Padding(
   padding: const EdgeInsets.only(top: 30),
   child: MysticTitleBar(
     title: 'Setting',
-    onBack: () async {
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-    },
+onBack: () async {
+  try {
+    Sfx.I.playBack();
+  } catch (_) {}
+
+  if (mounted) {
+    Navigator.of(context).pop();
+  }
+},
   ),
 ),
 ),
 
   const SizedBox(height: 16),
 
-  SettingsTabs(
-    selectedIndex: _selectedTab,
-    onChanged: (index) {
-      setState(() {
-        _selectedTab = index;
-      });
-    },
-  ),
+SettingsTabs(
+  selectedIndex: _selectedTab,
+  onChanged: (index) {
+    if (index != _selectedTab) {
+      try {
+        Sfx.I.playSettingsTabChange();
+      } catch (_) {}
+    }
+
+    setState(() {
+      _selectedTab = index;
+    });
+  },
+),
 
             const SizedBox(height: 24),
 
