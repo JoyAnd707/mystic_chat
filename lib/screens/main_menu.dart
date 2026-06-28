@@ -9,8 +9,8 @@ import '../dms/dms_screens.dart';
 import '../firebase/push_service.dart';
 import '../widgets/mystic_top_status_bar.dart';
 import 'chat_screen.dart';
-
-
+import 'settings_menu.dart';
+import '../widgets/settings/settings_tabs.dart';
 
 
 class MainMenuScreen extends StatefulWidget {
@@ -73,6 +73,26 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       body: SafeArea(
         child: Stack(
           children: [
+Positioned(
+  top: 30,
+  right: 15,
+  child: GestureDetector(
+    behavior: HitTestBehavior.translucent,
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => SettingsMenuScreen(
+            currentUserId: widget.currentUserId,
+          ),
+        ),
+      );
+    },
+    child: const SizedBox(
+      width: 80,
+      height: 80,
+    ),
+  ),
+),
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
