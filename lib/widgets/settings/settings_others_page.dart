@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/app_settings.dart';
 import 'mystic_toggle.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+
+
 class SettingsOthersPage extends StatefulWidget {
   const SettingsOthersPage({super.key});
 
@@ -13,6 +18,16 @@ class _SettingsOthersPageState extends State<SettingsOthersPage> {
   bool _textPush = true;
   bool _chatroomPush = true;
   bool _touchEffect = true;
+  Future<void> _savePushSettingsToFirestore() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+    'textPushEnabled': _textPush,
+    'chatroomPushEnabled': _chatroomPush,
+    'pushSettingsUpdatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
 @override
 void initState() {
   super.initState();
@@ -61,6 +76,7 @@ Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('text_push', value);
     AppSettings.textPushEnabled = value;
+    await _savePushSettingsToFirestore();
   },
 ),
 
@@ -79,6 +95,7 @@ Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('chatroom_push', value);
     AppSettings.chatroomPushEnabled = value;
+    await _savePushSettingsToFirestore();
   },
 ),
 
