@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import '../../audio/bgm.dart';
+import '../../audio/sfx.dart';
 class SettingsSoundSliders extends StatefulWidget {
   const SettingsSoundSliders({super.key});
 
@@ -23,12 +24,14 @@ class _SettingsSoundSlidersState extends State<SettingsSoundSliders> {
           right: 34,
           top: 34,
           child: MysticPlanetSlider(
-            value: _bgmValue,
-            onChanged: (value) {
-              setState(() {
-                _bgmValue = value;
-              });
-            },
+value: _bgmValue,
+onChanged: (value) {
+  setState(() {
+    _bgmValue = value;
+  });
+
+  Bgm.I.setVolume(value);
+},
           ),
         ),
 
@@ -37,12 +40,14 @@ class _SettingsSoundSlidersState extends State<SettingsSoundSliders> {
           right: 34,
           top: 68,
           child: MysticPlanetSlider(
-            value: _sfxValue,
-            onChanged: (value) {
-              setState(() {
-                _sfxValue = value;
-              });
-            },
+ value: _sfxValue,
+onChanged: (value) {
+  setState(() {
+    _sfxValue = value;
+  });
+
+  Sfx.I.setVolume(value);
+},
           ),
         ),
                 Positioned(

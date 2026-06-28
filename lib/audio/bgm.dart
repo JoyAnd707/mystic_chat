@@ -38,6 +38,11 @@ class Bgm {
     _volume = v.clamp(0.0, 1.0);
     await _player.setVolume(_volume);
   }
+  Future<void> setVolume(double value) async {
+  await _setVolume(value);
+}
+
+double get volume => _volume;
 // ✅ NEW: resume positions only for GROUP assets
 final Map<String, Duration> _groupPosByAsset = <String, Duration>{};
   // ✅ NEW: remember GROUP position when temporarily switching to Home/DM

@@ -6,19 +6,30 @@ class Sfx {
   static final Sfx I = Sfx._();
 
   bool enabled = true;
+  double _volume = 0.9;
 
   // Small pool so SFX can overlap without stealing the BGM engine
   final int _poolSize = 4;
   final List<AudioPlayer> _pool = [];
   int _next = 0;
 
-  Future<void> init() async {
+    Future<void> init() async {
     for (int i = 0; i < _poolSize; i++) {
       final p = AudioPlayer();
       await p.setVolume(0.9);
       _pool.add(p);
     }
   }
+
+  Future<void> setVolume(double value) async {
+    _volume = value.clamp(0.0, 1.0);
+
+    for (final p in _pool) {
+      await p.setVolume(_volume);
+    }
+  }
+
+  double get volume => _volume;
 Future<void> playCloseImage() =>
     _playOne('assets/fx/CloseImage.mp3', volume: 0.9);
 
@@ -34,8 +45,7 @@ Future<void> playCloseImage() =>
     final p = _take();
 
     try {
-      await p.setVolume(volume);
-
+await p.setVolume(volume * _volume);
       // Stop anything this player was doing, then play the new SFX
       await p.stop();
       await p.setAudioSource(AudioSource.asset(assetPath));
