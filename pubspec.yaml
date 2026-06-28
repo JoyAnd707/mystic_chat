@@ -89,6 +89,10 @@ flutter:
     - assets/ui/settings/account/AccountSettingsDecoy.png
     - assets/ui/settings/sound/VoiceDecoy.png
     - assets/ui/settings/sound/SoundAdjustWindow.png
+    - assets/ui/settings/others/PushNotificationsWindow.png
+    - assets/ui/settings/others/RingtoneDecoyWindow.png
+    - assets/ui/settings/others/MaxChatBubbleDecoy.png
+    - assets/ui/settings/others/EffectWindow.png
 
     
   fonts:

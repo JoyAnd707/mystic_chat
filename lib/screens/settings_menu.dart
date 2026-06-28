@@ -4,6 +4,7 @@ import '../widgets/settings/settings_tabs.dart';
 import '../widgets/mystic_top_status_bar.dart';
 import '../widgets/mystic_settings_top_status_bar.dart';
 import '../widgets/settings/settings_sound_sliders.dart';
+import '../widgets/settings/settings_others_page.dart';
 class SettingsMenuScreen extends StatefulWidget {
   final String currentUserId;
 
@@ -91,13 +92,7 @@ const SizedBox(height: 12),
     ),
   ],
 ),
-      _ => const Text(
-          'Others',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 28,
-          ),
-        ),
+_ => const SettingsOthersPage(),
     },
   ),
 ),
