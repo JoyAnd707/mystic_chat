@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../screens/settings_menu.dart';
 class MysticTopStatusBar extends StatelessWidget {
   final DateTime now;
 
@@ -49,6 +49,27 @@ class MysticTopStatusBar extends StatelessWidget {
                 ),
               ),
             ),
+            Positioned(
+  right: 0,
+  top: 0,
+  child: GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+         builder: (_) => const SettingsMenuScreen(
+  currentUserId: '',
+),
+        ),
+      );
+    },
+    child: const SizedBox(
+      width: 72,
+      height: 64,
+    ),
+  ),
+),
           ],
         ),
       ),
