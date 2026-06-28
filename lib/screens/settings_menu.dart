@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../widgets/mystic_title_bar.dart';
 import '../widgets/settings/settings_tabs.dart';
 
 class SettingsMenuScreen extends StatefulWidget {
@@ -23,17 +23,32 @@ class _SettingsMenuScreenState extends State<SettingsMenuScreen> {
       backgroundColor: Colors.black,
       body: SafeArea(
         child: Column(
-          children: [
-            const SizedBox(height: 70),
+children: [
+Padding(
+  padding: const EdgeInsets.only(top: 8),
+  child: Padding(
+  padding: const EdgeInsets.only(top: 30),
+  child: MysticTitleBar(
+    title: 'Setting',
+    onBack: () async {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    },
+  ),
+),
+),
 
-            SettingsTabs(
-              selectedIndex: _selectedTab,
-              onChanged: (index) {
-                setState(() {
-                  _selectedTab = index;
-                });
-              },
-            ),
+  const SizedBox(height: 16),
+
+  SettingsTabs(
+    selectedIndex: _selectedTab,
+    onChanged: (index) {
+      setState(() {
+        _selectedTab = index;
+      });
+    },
+  ),
 
             const SizedBox(height: 24),
 
