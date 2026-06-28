@@ -18,7 +18,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'services/notifications_service.dart';
 import 'firebase_options.dart';
 import 'screens/main_menu.dart';
-
+import 'services/app_settings.dart';
 
 
 class _NoTransitionsBuilder extends PageTransitionsBuilder {
@@ -84,8 +84,10 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+    await AppSettings.load();
 
   await NotificationsService.instance.init();
+
 
   try {
     await FirebaseFirestore.instance.collection('debug').doc('ping').set({
@@ -294,6 +296,7 @@ Future<void> _submit() async {
   final userId = _resolveUserId(_controller.text);
   if (userId == null) {
     setState(() => _error = 'שם לא נמצא ברשימה. נסי שוב בדיוק כמו שמופיע.');
+    
     return;
   }
 

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-
+import '../services/app_settings.dart';
 class TapSparkleLayer extends StatefulWidget {
   final Widget child;
 
@@ -51,13 +51,15 @@ class _TapSparkleLayerState extends State<TapSparkleLayer> {
     debugPrint('TapSparkleLayer BUILD ✅  scale=${widget.debugScale}');
     return Listener(
       behavior: HitTestBehavior.translucent,
-      onPointerDown: (event) {
-        final box = context.findRenderObject() as RenderBox?;
-        if (box == null) return;
-        final local = box.globalToLocal(event.position);
-        debugPrint('TapSparkleLayer TAP ✅  local=$local  scale=${widget.debugScale}');
-        _spawn(local);
-      },
+onPointerDown: (event) {
+  if (!AppSettings.touchEffectEnabled) return;
+
+  final box = context.findRenderObject() as RenderBox?;
+  if (box == null) return;
+  final local = box.globalToLocal(event.position);
+  debugPrint('TapSparkleLayer TAP ✅  local=$local  scale=${widget.debugScale}');
+  _spawn(local);
+},
       child: Stack(
         children: [
           widget.child,
