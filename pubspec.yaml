@@ -93,6 +93,9 @@ flutter:
     - assets/ui/settings/others/RingtoneDecoyWindow.png
     - assets/ui/settings/others/MaxChatBubbleDecoy.png
     - assets/ui/settings/others/EffectWindow.png
+    - assets/ui/main_menu/chatroom/ChatroomButton.png
+    - assets/ui/main_menu/chatroom/GreenBlueCircle.png
+    - assets/ui/main_menu/chatroom/Atsushi'sFundraisingAssociation.png
 
     
   fonts:
