@@ -3438,7 +3438,11 @@ class _AnimatedEmojiMessageContentState
     super.initState();
 
     Future.doWhile(() async {
-      await Future.delayed(const Duration(milliseconds: 450));
+      await Future.delayed(
+  _showFirstFrame
+      ? const Duration(milliseconds: 400)
+      : const Duration(milliseconds: 1000),
+);
 
       if (!mounted) return false;
 
@@ -3454,27 +3458,17 @@ class _AnimatedEmojiMessageContentState
   Widget build(BuildContext context) {
     final double size = 180 * widget.uiScale;
 
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(
-            widget.frame1Asset,
-            fit: BoxFit.contain,
-            gaplessPlayback: true,
-            filterQuality: FilterQuality.high,
-          ),
-          if (!_showFirstFrame)
-            Image.asset(
-              widget.frame2Asset,
-              fit: BoxFit.contain,
-              gaplessPlayback: true,
-              filterQuality: FilterQuality.high,
-            ),
-        ],
-      ),
-    );
+return SizedBox(
+  width: size,
+  height: size,
+  child: Image.asset(
+    _showFirstFrame
+        ? widget.frame1Asset
+        : widget.frame2Asset,
+    fit: BoxFit.contain,
+    gaplessPlayback: true,
+    filterQuality: FilterQuality.high,
+  ),
+);
   }
 }

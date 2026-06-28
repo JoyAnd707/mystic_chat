@@ -335,7 +335,11 @@ class _AnimatedEmojiTestTileState extends State<_AnimatedEmojiTestTile> {
     super.initState();
 
     Future.doWhile(() async {
-      await Future.delayed(const Duration(milliseconds: 450));
+      await Future.delayed(
+  _showFirstFrame
+      ? const Duration(milliseconds: 400)
+      : const Duration(milliseconds: 1000),
+);
 
       if (!mounted) return false;
 

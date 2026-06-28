@@ -66,9 +66,16 @@ flutter:
     - assets/fonts/
     - assets/avatars/
     - assets/reactions/
-    - assets/animated_emojis/joy/test_angry_1.png
-    - assets/animated_emojis/joy/test_angry_2.png
-
+    - assets/animated_emojis/joy/joy_angry_1.png
+    - assets/animated_emojis/joy/joy_angry_2.png
+    - assets/animated_emojis/joy/joy_happy_1.png
+    - assets/animated_emojis/joy/joy_happy_2.png
+    - assets/animated_emojis/joy/joy_sad_1.png
+    - assets/animated_emojis/joy/joy_sad_2.png
+    - assets/animated_emojis/adi/adi_happy_1.png
+    - assets/animated_emojis/adi/adi_happy_2.png
+    - assets/animated_emojis/adi/adi_angry_1.png
+    - assets/animated_emojis/adi/adi_angry_2.png
   fonts:
     - family: NotoSans
       fonts:
