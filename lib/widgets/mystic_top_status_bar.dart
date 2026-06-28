@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import '../screens/settings_menu.dart';
 class MysticTopStatusBar extends StatelessWidget {
   final DateTime now;
+  final String currentUserId;
 
   const MysticTopStatusBar({
     super.key,
     required this.now,
+    this.currentUserId = '',
   });
 
   String _timeText(DateTime t) {
@@ -58,8 +60,8 @@ class MysticTopStatusBar extends StatelessWidget {
       Navigator.push(
         context,
         MaterialPageRoute(
-         builder: (_) => const SettingsMenuScreen(
-  currentUserId: '',
+builder: (_) => SettingsMenuScreen(
+  currentUserId: currentUserId,
 ),
         ),
       );

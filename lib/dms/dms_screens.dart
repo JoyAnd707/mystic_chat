@@ -240,7 +240,10 @@ Widget build(BuildContext context) {
 SafeArea(
   child: Column(
     children: [
-      MysticTopStatusBar(now: _now),
+      MysticTopStatusBar(
+  now: _now,
+  currentUserId: widget.currentUserId,
+),
 
       _DmTopBar(
   onBack: () async {
@@ -1257,7 +1260,10 @@ Widget build(BuildContext context) {
             child: Column(
               mainAxisSize: MainAxisSize.min,
          children: [
-  MysticTopStatusBar(now: _now),
+  MysticTopStatusBar(
+  now: _now,
+  currentUserId: widget.currentUserId,
+),
   LayoutBuilder(
                   builder: (context, c) {
                     const double barAspect = 2048 / 212;
