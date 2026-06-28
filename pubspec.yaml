@@ -86,6 +86,7 @@ flutter:
     - assets/ui/settings/tabs/OthersOn.png
     - assets/ui/settings/tabs/OtherOff.png
     - assets/ui/TopBarSettings.png
+    - assets/ui/settings/account/AccountSettingsDecoy.png
   fonts:
     - family: NotoSans
       fonts:

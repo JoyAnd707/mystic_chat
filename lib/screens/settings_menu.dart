@@ -56,21 +56,31 @@ Padding(
 
             const SizedBox(height: 24),
 
-            Expanded(
-              child: Center(
-                child: Text(
-                  switch (_selectedTab) {
-                    0 => 'Account',
-                    1 => 'Sound',
-                    _ => 'Others',
-                  },
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                  ),
-                ),
-              ),
-            ),
+Expanded(
+  child: Align(
+  alignment: Alignment.topCenter,
+    child: switch (_selectedTab) {
+0 => Image.asset(
+  'assets/ui/settings/account/AccountSettingsDecoy.png',
+  width: 270,
+),
+      1 => const Text(
+          'Sound',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 28,
+          ),
+        ),
+      _ => const Text(
+          'Others',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 28,
+          ),
+        ),
+    },
+  ),
+),
           ],
         ),
       ),
