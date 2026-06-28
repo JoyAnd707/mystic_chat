@@ -3,6 +3,7 @@ import '../widgets/mystic_title_bar.dart';
 import '../widgets/settings/settings_tabs.dart';
 import '../widgets/mystic_top_status_bar.dart';
 import '../widgets/mystic_settings_top_status_bar.dart';
+import '../widgets/settings/settings_sound_sliders.dart';
 class SettingsMenuScreen extends StatefulWidget {
   final String currentUserId;
 
@@ -67,9 +68,20 @@ Expanded(
 1 => Column(
   mainAxisSize: MainAxisSize.min,
   children: [
- Image.asset(
-  'assets/ui/settings/sound/SoundAdjustWindow.png',
+SizedBox(
   width: 330,
+  child: Stack(
+    children: [
+      Image.asset(
+        'assets/ui/settings/sound/SoundAdjustWindow.png',
+        width: 330,
+      ),
+
+      const Positioned.fill(
+        child: SettingsSoundSliders(),
+      ),
+    ],
+  ),
 ),
 const SizedBox(height: 12),
     Image.asset(
