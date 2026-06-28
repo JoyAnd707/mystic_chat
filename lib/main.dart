@@ -17,7 +17,7 @@ import 'firebase/push_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'services/notifications_service.dart';
 import 'firebase_options.dart';
-
+import 'screens/main_menu.dart';
 
 
 
@@ -233,7 +233,7 @@ builder: (context, child) {
       if (savedId == null) {
         return const UsernameScreen();
       }
-      return ChatModePicker(currentUserId: savedId);
+     return MainMenuScreen(currentUserId: savedId);
     },
   ),
 );
@@ -311,7 +311,7 @@ Future<void> _submit() async {
   // 3) ✅ Now navigate
   Navigator.of(context).pushReplacement(
     MaterialPageRoute(
-      builder: (_) => ChatModePicker(currentUserId: userId),
+      builder: (_) => MainMenuScreen(currentUserId: userId),
     ),
   );
 }
