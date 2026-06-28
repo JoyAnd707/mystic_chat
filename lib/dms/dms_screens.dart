@@ -19,7 +19,7 @@ import '../fx/heart_reaction_fly_layer.dart';
 import '../services/presence_service.dart';
 import '../widgets/fullscreen_video_player.dart';
 import '../widgets/video_preview_tile.dart';
-
+import '../widgets/mystic_top_status_bar.dart';
 part 'dms_core.dart';
 part 'dms_widgets.dart';
 part 'dms_painters.dart';
@@ -53,7 +53,8 @@ bool _suppressNextPopSound = false;
 
 @override
 void initState() {
-  super.initState();
+  
+  
 _now = DateTime.now();
 
 _clockTimer = Timer.periodic(
@@ -367,6 +368,8 @@ final TextEditingController _c = TextEditingController();
 final FocusNode _focus = FocusNode();
 final ImagePicker _mediaPicker = ImagePicker();
   late final AnimationController _twinkleController;
+  Timer? _clockTimer;
+DateTime _now = DateTime.now();
 late final AnimationController _enterController;
 late final Animation<double> _enterScale;
 bool _isTyping = false;
@@ -1117,13 +1120,26 @@ await _msgsRef.add({
   _scrollToBottom(keepFocus: true);
 }
 
-  @override
-  void initState() {
-    super.initState();
+@override
+void initState() {
+  super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Bgm.I.playHomeDm();
-    });
+  _now = DateTime.now();
+
+  _clockTimer = Timer.periodic(
+    const Duration(seconds: 1),
+    (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _now = DateTime.now();
+      });
+    },
+  );
+
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await Bgm.I.playHomeDm();
+  });
 
     _twinkleController = AnimationController(
       vsync: this,
@@ -1202,6 +1218,8 @@ _typingSub = PresenceService.I.streamTypingUserIds(
 
 @override
 void dispose() {
+  _clockTimer?.cancel();
+
   _typingSub?.cancel();
   _typingStopTimer?.cancel();
   _sendTypingState(false);
@@ -1238,9 +1256,9 @@ Widget build(BuildContext context) {
             bottom: false,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 34, width: double.infinity),
-                LayoutBuilder(
+         children: [
+  MysticTopStatusBar(now: _now),
+  LayoutBuilder(
                   builder: (context, c) {
                     const double barAspect = 2048 / 212;
                     final w = c.maxWidth;
@@ -1915,63 +1933,6 @@ height: (_replyToText != null && _replyToText!.trim().isNotEmpty)
 
 }
 
-
-class MysticTopStatusBar extends StatelessWidget {
-  final DateTime now;
-
-  const MysticTopStatusBar({
-    super.key,
-    required this.now,
-  });
-
-  String _timeText(DateTime t) {
-    final hour = t.hour % 12 == 0 ? 12 : t.hour % 12;
-    final minute = t.minute.toString().padLeft(2, '0');
-    final ampm = t.hour >= 12 ? 'PM' : 'AM';
-
-    return '$hour:$minute$ampm';
-  }
-
-@override
-Widget build(BuildContext context) {
-  return Padding(
-    padding: const EdgeInsets.only(top: 25),
-    child: SizedBox(
-      width: double.infinity,
-      height: 64,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: -25,
-            child: Image.asset(
-              'assets/ui/TopBar.png',
-              fit: BoxFit.fitWidth,
-            ),
-          ),
-
-          Positioned(
-            left: 12,
-            top: 67,
-            child: Text(
-              _timeText(now),
-              style: const TextStyle(
-                fontFamily: 'Roboto',
-                fontSize: 17,
-                color: Colors.white,
-                fontWeight: FontWeight.w400,
-                height: 1,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-}
 
 
 

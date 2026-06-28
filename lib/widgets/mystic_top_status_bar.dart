@@ -1,0 +1,57 @@
+import 'package:flutter/material.dart';
+
+class MysticTopStatusBar extends StatelessWidget {
+  final DateTime now;
+
+  const MysticTopStatusBar({
+    super.key,
+    required this.now,
+  });
+
+  String _timeText(DateTime t) {
+    final hour = t.hour % 12 == 0 ? 12 : t.hour % 12;
+    final minute = t.minute.toString().padLeft(2, '0');
+    final ampm = t.hour >= 12 ? 'PM' : 'AM';
+
+    return '$hour:$minute$ampm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 0),
+      child: SizedBox(
+        width: double.infinity,
+        height: 64,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 30,
+              child: Image.asset(
+                'assets/ui/TopBar.png',
+                fit: BoxFit.fitWidth,
+              ),
+            ),
+            Positioned(
+              left: 12,
+              top: 10,
+              child: Text(
+                _timeText(now),
+                style: const TextStyle(
+                  fontFamily: 'Roboto',
+                  fontSize: 17,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w400,
+                  height: 1,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
