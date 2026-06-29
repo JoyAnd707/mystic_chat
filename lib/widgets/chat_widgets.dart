@@ -10,7 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../widgets/fullscreen_video_player.dart';
 import '../widgets/video_preview_tile.dart';
 
-
+import '../widgets/fullscreen_image_viewer.dart';
 import '../audio/sfx.dart';
 import 'dart:math' as math;
 import 'rotating_envelope.dart';
@@ -839,51 +839,8 @@ List<InlineSpan> _buildMentionSpans(String s, {required double uiScale}) {
   return spans;
 }
 void _openImageViewer(BuildContext context, String url) {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      fullscreenDialog: true,
-      builder: (_) => Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          backgroundColor: Colors.black,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          titleSpacing: 12,
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: () {
-                  Sfx.I.playCloseImage(); // 🔊 סאונד סגירה
-                  Navigator.of(context).pop();
-                },
-                child: const Text(
-                  'Close',
-                  style: TextStyle(color: Colors.white, fontSize: 18),
-                ),
-              ),
-              TextButton(
-                onPressed: () {}, // אם תרצי בעתיד: כפתור "+" לפיצ׳רים
-                child: const Text(
-                  '[ + ]',
-                  style: TextStyle(color: Colors.white, fontSize: 18),
-                ),
-              ),
-            ],
-          ),
-        ),
-        body: Center(
-          child: InteractiveViewer(
-            minScale: 1.0,
-            maxScale: 4.0,
-            child: Image.network(url, fit: BoxFit.contain),
-          ),
-        ),
-      ),
-    ),
-  );
+  openFullscreenImageViewer(context, url);
 }
-
 
 // ✅ NEW: extract plain display text without bidi isolates (for parsing)
 String _plainForMentions(String s) => s; // keep it simple for now

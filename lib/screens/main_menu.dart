@@ -243,15 +243,19 @@ Positioned(
         left: 0,
         top: 6,
         child: GestureDetector(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => GalleryScreen(
-                  currentUserId: widget.currentUserId,
-                ),
-              ),
-            );
-          },
+onTap: () {
+  try {
+    Sfx.I.playMainMenuButtonRow();
+  } catch (_) {}
+
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => GalleryScreen(
+        currentUserId: widget.currentUserId,
+      ),
+    ),
+  );
+},
           child: Container(
             width: 72,
             height: 50,

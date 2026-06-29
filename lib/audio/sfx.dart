@@ -64,14 +64,16 @@ Future<void> playToggle() =>
     _playOne('assets/fx/ToggleSfx.mp3', volume: 0.9);
   Future<void> playEnterDmsMenu() =>
     _playOne('assets/fx/EnterDMSMenuSFX.mp3', volume: 0.9);
-
+Future<void> playGoIntoPhoto() =>
+    _playOne('assets/fx/GoIntophotoSFX.mp3', volume: 0.9);
 Future<void> playEnterGroupChat() =>
     _playOne('assets/fx/EnterGroupChatSFX.mp3', volume: 0.9);
   Future<void> playBack() => _playOne('assets/fx/back.mp3', volume: 0.8);
 Future<void> playStopListeningToVoiceMessage() =>
     _playOne('assets/fx/StopListeningToVoiceMessage.mp3', volume: 0.9);
 
-
+Future<void> playMainMenuButtonRow() =>
+    _playOne('assets/fx/MainMenuButtonRowSFX.mp3', volume: 0.9);
 
   Future<void> play707VoiceLine() =>
       _playOne('assets/fx/707VoiceLine.mp3', volume: 0.95);

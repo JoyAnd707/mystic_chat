@@ -105,7 +105,7 @@ flutter:
     - assets/ui/main_menu/MainMenuButtonRow.png
     - assets/ui/gallery/PhotoAlbumFrames.png
     - assets/ui/gallery/TextMessageBarMenu.png
-
+    - assets/fx/MainMenuButtonRowSFX.mp3
     - assets/ui/gallery/EmptyPhotoFrame.png
     - assets/ui/gallery/EmptyPhoto.png
     

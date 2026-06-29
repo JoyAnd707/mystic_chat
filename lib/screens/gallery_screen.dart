@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
+import '../widgets/fullscreen_image_viewer.dart';
+import '../audio/sfx.dart';
 import '../widgets/mystic_top_status_bar.dart';
 
 class GalleryScreen extends StatelessWidget {
@@ -222,26 +223,32 @@ class GalleryPhotoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: Padding(
-            padding: const EdgeInsets.all(3),
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
+    return GestureDetector(
+      onTap: () {
+        Sfx.I.playGoIntoPhoto();
+        openFullscreenImageViewer(context, imageUrl);
+      },
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.all(3),
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.high,
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: Image.asset(
+              'assets/ui/gallery/EmptyPhotoFrame.png',
+              fit: BoxFit.fill,
               filterQuality: FilterQuality.high,
             ),
           ),
-        ),
-        Positioned.fill(
-          child: Image.asset(
-            'assets/ui/gallery/EmptyPhotoFrame.png',
-            fit: BoxFit.fill,
-            filterQuality: FilterQuality.high,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
