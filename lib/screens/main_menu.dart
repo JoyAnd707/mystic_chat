@@ -201,7 +201,11 @@ Positioned(
   top: 60,
   child: MainMenuStatusRow(
     currentUserId: widget.currentUserId,
- onStatusTap: (userId) {
+onStatusTap: (userId) {
+  try {
+    Sfx.I.playViewStatus();
+  } catch (_) {}
+
   Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => ProfileStatusScreen(

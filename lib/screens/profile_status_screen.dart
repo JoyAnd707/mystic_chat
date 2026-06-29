@@ -10,7 +10,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../widgets/mystic_top_status_bar.dart';
 import '../widgets/mystic_star_twinkle.dart';
 import '../widgets/mystic_screen_top_bar.dart';
-
+import '../audio/sfx.dart';
 class ProfileStatusScreen extends StatefulWidget {
   final String currentUserId;
   final String profileUserId;
@@ -332,12 +332,16 @@ Future<void> _pickAndUploadBanner() async {
                   child: MysticTopStatusBar(now: _now),
                 ),
                 const SizedBox(height: 6),
-                MysticScreenTopBar(
-                  title: 'Profile',
-                  onBack: () {
-                    Navigator.of(context).pop();
-                  },
-                ),
+          MysticScreenTopBar(
+  title: 'Profile',
+  onBack: () {
+    try {
+      Sfx.I.playBack();
+    } catch (_) {}
+
+    Navigator.of(context).pop();
+  },
+),
                 Expanded(
                   child: Stack(
                     children: [

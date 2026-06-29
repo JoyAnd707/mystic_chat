@@ -119,7 +119,7 @@ flutter:
     - assets/ui/gallery/NellaGalleryImage.png
 
     - assets/ui/gallery/GalleryNameplateBase.png
-
+    - assets/fx/ViewStatusSFX.mp3
 
     - assets/ui/status/JoyNewStatus.png
     - assets/ui/status/JoyNoStatus.png

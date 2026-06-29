@@ -79,6 +79,9 @@ Future<void> playMainMenuButtonRow() =>
   Future<void> play707VoiceLine() =>
       _playOne('assets/fx/707VoiceLine.mp3', volume: 0.95);
 
+Future<void> playViewStatus() =>
+    _playOne('assets/fx/ViewStatusSFX.mp3', volume: 0.9);
+
   Future<void> dispose() async {
     for (final p in _pool) {
       await p.dispose();
