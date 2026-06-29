@@ -20,15 +20,15 @@ Widget build(BuildContext context) {
       Positioned(
         left: 22,
         top: 8,
-        child: Text(
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontFamily: 'Roboto',
-            fontWeight: FontWeight.w400,
-          ),
-        ),
+      child: Text(
+  '${now.hour % 12 == 0 ? 12 : now.hour % 12}:${now.minute.toString().padLeft(2, '0')}${now.hour >= 12 ? 'PM' : 'AM'}',
+  style: const TextStyle(
+    color: Colors.white,
+    fontSize: 18,
+    fontFamily: 'Roboto',
+    fontWeight: FontWeight.w400,
+  ),
+),
       ),
     ],
   );

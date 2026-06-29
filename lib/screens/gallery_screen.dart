@@ -1,16 +1,42 @@
+import 'dart:ui';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../widgets/fullscreen_image_viewer.dart';
 import '../audio/sfx.dart';
+import '../widgets/fullscreen_image_viewer.dart';
 import '../widgets/mystic_top_status_bar.dart';
-import 'dart:ui';
-class GalleryScreen extends StatelessWidget {
+import '../widgets/mystic_star_twinkle.dart';
+class GalleryScreen extends StatefulWidget {
   final String currentUserId;
 
   const GalleryScreen({
     super.key,
     required this.currentUserId,
   });
+
+  @override
+  State<GalleryScreen> createState() => _GalleryScreenState();
+}
+
+class _GalleryScreenState extends State<GalleryScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _twinkleController;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _twinkleController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _twinkleController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,39 +53,57 @@ class GalleryScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MysticTopStatusBar(now: DateTime.now()),
-            const GalleryTopBar(),
-  const SizedBox(height: 12),
-Expanded(
-  child: Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 24),
-    child: Column(
-      children: [
-        for (int i = 0; i < albums.length; i += 2) ...[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              GalleryAlbumTile(
-                title: albums[i][0],
-                userId: albums[i][1],
-              ),
-              GalleryAlbumTile(
-                title: albums[i + 1][0],
-                userId: albums[i + 1][1],
-              ),
-            ],
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              'assets/backgrounds/StarsBG.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
           ),
-          const SizedBox(height: 14),
-        ],
-      ],
-    ),
-  ),
+          Positioned.fill(
+child: MysticStarTwinkleOverlay(
+  animation: _twinkleController,
+  starCount: 58,
+  sizeMultiplier: 1.25,
 ),
-          ],
-        ),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                MysticTopStatusBar(now: DateTime.now()),
+                const GalleryTopBar(),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        for (int i = 0; i < albums.length; i += 2) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              GalleryAlbumTile(
+                                title: albums[i][0],
+                                userId: albums[i][1],
+                              ),
+                              GalleryAlbumTile(
+                                title: albums[i + 1][0],
+                                userId: albums[i + 1][1],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -69,72 +113,73 @@ class GalleryAlbumTile extends StatelessWidget {
   final String title;
   final String userId;
 
-
-Color _nameplateColor() {
-  switch (userId) {
-    case 'joy':
-      return const Color.fromARGB(170, 167, 123, 255); // סגול
-
-    case 'adi':
-      return const Color.fromARGB(170, 255, 127, 223); // ורוד
-
-    case 'danielle':
-      return const Color.fromARGB(170, 106, 146, 255); // תכלת
-
-    case 'lera':
-      return const Color.fromARGB(170, 255, 169, 41); // כתום
-
-    case 'lihi':
-      return const Color.fromARGB(170, 255, 232, 79); // צהוב
-
-    case 'nella':
-      return const Color.fromARGB(170, 38, 218, 212); // טורקיז
-
-    case 'lian':
-      return const Color.fromARGB(170, 241, 78, 75); // אדום
-
-    case 'tal':
-      return const Color(0xAA66BB6A); // ירוק
-
-    default:
-      return const Color.fromARGB(84, 255, 255, 255);
-  }
-}
-String _galleryImage() {
-  switch (userId) {
-    case 'joy':
-      return 'assets/ui/gallery/JoyGalleryImage.png';
-
-    case 'adi':
-      return 'assets/ui/gallery/AdiGalleryImage.png';
-
-    case 'danielle':
-      return 'assets/ui/gallery/DanielleGalleryImage.png';
-
-    case 'lera':
-      return 'assets/ui/gallery/LeraGalleryImage.png';
-
-    case 'lihi':
-      return 'assets/ui/gallery/LihiGalleryImage.png';
-
-    case 'lian':
-      return 'assets/ui/gallery/LianGalleryImage.png';
-
-    case 'tal':
-      return 'assets/ui/gallery/TalGalleryImage.png';
-
-    case 'nella':
-      return 'assets/ui/gallery/NellaGalleryImage.png';
-
-    default:
-      return 'assets/ui/gallery/PhotoAlbumFrames.png';
-  }
-}
   const GalleryAlbumTile({
     super.key,
     required this.title,
     required this.userId,
   });
+
+  Color _nameplateColor() {
+    switch (userId) {
+      case 'joy':
+        return const Color.fromARGB(170, 167, 123, 255);
+
+      case 'adi':
+        return const Color.fromARGB(170, 255, 127, 223);
+
+      case 'danielle':
+        return const Color.fromARGB(170, 106, 146, 255);
+
+      case 'lera':
+        return const Color.fromARGB(170, 255, 169, 41);
+
+      case 'lihi':
+        return const Color.fromARGB(170, 255, 232, 79);
+
+      case 'nella':
+        return const Color.fromARGB(170, 38, 218, 212);
+
+      case 'lian':
+        return const Color.fromARGB(170, 241, 78, 75);
+
+      case 'tal':
+        return const Color(0xAA66BB6A);
+
+      default:
+        return const Color.fromARGB(84, 255, 255, 255);
+    }
+  }
+
+  String _galleryImage() {
+    switch (userId) {
+      case 'joy':
+        return 'assets/ui/gallery/JoyGalleryImage.png';
+
+      case 'adi':
+        return 'assets/ui/gallery/AdiGalleryImage.png';
+
+      case 'danielle':
+        return 'assets/ui/gallery/DanielleGalleryImage.png';
+
+      case 'lera':
+        return 'assets/ui/gallery/LeraGalleryImage.png';
+
+      case 'lihi':
+        return 'assets/ui/gallery/LihiGalleryImage.png';
+
+      case 'lian':
+        return 'assets/ui/gallery/LianGalleryImage.png';
+
+      case 'tal':
+        return 'assets/ui/gallery/TalGalleryImage.png';
+
+      case 'nella':
+        return 'assets/ui/gallery/NellaGalleryImage.png';
+
+      default:
+        return 'assets/ui/gallery/PhotoAlbumFrames.png';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -165,12 +210,12 @@ String _galleryImage() {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-        Image.asset(
-  _galleryImage(),
-  width: 97,
-  fit: BoxFit.contain,
-  filterQuality: FilterQuality.high,
-),
+            Image.asset(
+              _galleryImage(),
+              width: 97,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+            ),
             const SizedBox(height: 6),
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: countQuery.snapshots(),
@@ -183,13 +228,13 @@ String _galleryImage() {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-               Image.asset(
-  'assets/ui/gallery/GalleryNameplateBase.png',
-  width: 138,
-  fit: BoxFit.contain,
-  color: _nameplateColor(),
-  colorBlendMode: BlendMode.srcIn,
-),
+                      Image.asset(
+                        'assets/ui/gallery/GalleryNameplateBase.png',
+                        width: 138,
+                        fit: BoxFit.contain,
+                        color: _nameplateColor(),
+                        colorBlendMode: BlendMode.srcIn,
+                      ),
                       Text(
                         '$title ($count)',
                         maxLines: 1,
@@ -214,7 +259,7 @@ String _galleryImage() {
   }
 }
 
-class UserGalleryScreen extends StatelessWidget {
+class UserGalleryScreen extends StatefulWidget {
   final String userId;
   final String title;
 
@@ -224,7 +269,31 @@ class UserGalleryScreen extends StatelessWidget {
     required this.title,
   });
 
+  @override
+  State<UserGalleryScreen> createState() => _UserGalleryScreenState();
+}
+
+class _UserGalleryScreenState extends State<UserGalleryScreen>
+    with SingleTickerProviderStateMixin {
   static const int maxPhotos = 100;
+
+  late final AnimationController _twinkleController;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _twinkleController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _twinkleController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -232,77 +301,95 @@ class UserGalleryScreen extends StatelessWidget {
         .collection('rooms')
         .doc('group_main')
         .collection('messages')
-        .where('senderId', isEqualTo: userId)
+        .where('senderId', isEqualTo: widget.userId)
         .where('type', isEqualTo: 'image')
         .orderBy('ts', descending: true)
         .limit(maxPhotos);
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            MysticTopStatusBar(now: DateTime.now()),
-            GalleryTopBar(title: title),
-            const SizedBox(height: 12),
-            Expanded(
-              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: photosQuery.snapshots(),
-                builder: (context, snapshot) {
-     if (snapshot.hasError) {
-  return Center(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Text(
-        snapshot.error.toString(),
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 14,
-        ),
-      ),
-    ),
-  );
-}
-
-                  if (!snapshot.hasData) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
-                  }
-
-                  final docs = snapshot.data!.docs;
-
-                  return GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    itemCount: maxPhotos,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 1,
-                    ),
-                    itemBuilder: (context, index) {
-                      if (index >= docs.length) {
-                        return const EmptyGalleryPhotoTile();
-                      }
-
-                      final data = docs[index].data();
-                      final imageUrl = data['imageUrl'] as String? ?? '';
-
-                      if (imageUrl.isEmpty) {
-                        return const EmptyGalleryPhotoTile();
-                      }
-
-                      return GalleryPhotoTile(imageUrl: imageUrl);
-                    },
-                  );
-                },
-              ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              'assets/backgrounds/StarsBG.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
             ),
-          ],
-        ),
+          ),
+          Positioned.fill(
+child: MysticStarTwinkleOverlay(
+  animation: _twinkleController,
+  starCount: 58,
+  sizeMultiplier: 1.25,
+),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                MysticTopStatusBar(now: DateTime.now()),
+                GalleryTopBar(title: widget.title),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: photosQuery.snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              snapshot.error.toString(),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      if (!snapshot.hasData) {
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
+                      }
+
+                      final docs = snapshot.data!.docs;
+
+                      return GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        itemCount: maxPhotos,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 1,
+                        ),
+                        itemBuilder: (context, index) {
+                          if (index >= docs.length) {
+                            return const EmptyGalleryPhotoTile();
+                          }
+
+                          final data = docs[index].data();
+                          final imageUrl = data['imageUrl'] as String? ?? '';
+
+                          if (imageUrl.isEmpty) {
+                            return const EmptyGalleryPhotoTile();
+                          }
+
+                          return GalleryPhotoTile(imageUrl: imageUrl);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -420,10 +507,10 @@ class GalleryTopBar extends StatelessWidget {
                       bottom: 0,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                      onTap: () {
-  Sfx.I.playBack();
-  Navigator.pop(context);
-},
+                        onTap: () {
+                          Sfx.I.playBack();
+                          Navigator.pop(context);
+                        },
                         child: const SizedBox(
                           width: 72,
                           height: double.infinity,

@@ -31,15 +31,15 @@ class MysticTopStatusBar extends StatelessWidget {
             Positioned(
               left: 0,
               right: 0,
-              bottom: 30,
+              bottom: 45,
               child: Image.asset(
                 'assets/ui/TopBar.png',
                 fit: BoxFit.fitWidth,
               ),
             ),
             Positioned(
-              left: 12,
-              top: 10,
+              left: 6,
+              top:6,
               child: Text(
                 _timeText(now),
                 style: const TextStyle(
