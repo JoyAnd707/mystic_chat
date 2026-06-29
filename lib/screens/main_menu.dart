@@ -200,7 +200,7 @@ Transform.scale(
   child: Stack(
     children: [
       Positioned(
-        left: 185,
+        left: 195,
         top: 125,
         child: StreamBuilder<int>(
           stream: _unreadDmMessageCountStream(),
@@ -270,7 +270,7 @@ Transform.scale(
         ),
       ),
       Positioned(
-        left: 100,
+        left: 110,
         top: 235,
         child: DecoyCircleMenuButton(
           ringAnimation: _messageRingController,
@@ -278,8 +278,8 @@ Transform.scale(
         ),
       ),
       Positioned(
-        left: 270,
-        top: 255,
+        left: 273,
+        top: 245,
         child: DecoyCircleMenuButton(
           ringAnimation: _messageRingController,
           imagePath: 'assets/ui/main_menu/CallDecoyButton.png',
