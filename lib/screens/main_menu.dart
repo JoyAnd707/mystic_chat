@@ -234,17 +234,17 @@ Transform.scale(
       ),
       Positioned(
         left: 8,
-        top: 170,
+        top: 250,
         child: Stack(
           children: [
             Image.asset(
               'assets/ui/main_menu/MainMenuButtonRow.png',
-              width: 72,
+              width: 78,
               fit: BoxFit.contain,
             ),
             Positioned(
               left: 0,
-              top: 6,
+              top: 15,
               child: GestureDetector(
                 onTap: () {
                   try {
@@ -261,9 +261,8 @@ Transform.scale(
                 },
                 child: Container(
                   width: 72,
-                  height: 50,
-                  color: Colors.white.withOpacity(0.45),
-                ),
+                  height: 60,
+color: Colors.transparent,                ),
               ),
             ),
           ],
