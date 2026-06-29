@@ -181,3 +181,7 @@ flutter:
         - asset: assets/fonts/Roboto-VariableFont_wdth,wght.ttf
         - asset: assets/fonts/Roboto-Italic-VariableFont_wdth,wght.ttf
           style: italic
+    - family: CormorantGaramond
+      fonts:
+        - asset: assets/fonts/CormorantGaramond-VariableFont_wght.ttf
+

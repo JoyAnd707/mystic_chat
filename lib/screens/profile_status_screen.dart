@@ -499,6 +499,7 @@ Future<void> _pickAndUploadBanner() async {
 
       final String statusText =
           (data?['statusText'] ?? 'Tap to set your status.').toString();
+          final bool hasHebrew = RegExp(r'[\u0590-\u05FF]').hasMatch(statusText);
 
       return GestureDetector(
    onTap: _canEditProfile
@@ -507,13 +508,14 @@ Future<void> _pickAndUploadBanner() async {
         child: Text(
           statusText,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontFamily: 'Roboto',
-            color: Colors.white,
-            fontSize: 24,
-            height: 1.25,
-            fontWeight: FontWeight.w300,
-          ),
+style: TextStyle(
+  fontFamily:
+      hasHebrew ? 'FrankRuhlLibre' : 'CormorantGaramond',
+  color: Colors.white,
+  fontSize: 24,
+  height: 1.25,
+  fontWeight: FontWeight.w300,
+),
         ),
       );
     },
