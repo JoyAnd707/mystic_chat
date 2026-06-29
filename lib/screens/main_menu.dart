@@ -227,6 +227,18 @@ Positioned.fill(
         },
       ),
     ),
+
+
+Positioned(
+  left: 60,
+  top: 220,
+  child: DecoyCircleMenuButton(
+    ringAnimation: _messageRingController,
+    imagePath: 'assets/ui/main_menu/EmailDecoyButton.png',
+  ),
+),
+
+
     Positioned(
       left: 85,
       top: 375,
@@ -468,5 +480,46 @@ class AnimatedMessageButton extends StatelessWidget {
     if (!hasUnread) return button;
 
 return button;
+  }
+}
+
+class DecoyCircleMenuButton extends StatelessWidget {
+  final Animation<double> ringAnimation;
+  final String imagePath;
+
+  const DecoyCircleMenuButton({
+    super.key,
+    required this.ringAnimation,
+    required this.imagePath,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 128,
+      height: 128,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          RotationTransition(
+            turns: ringAnimation,
+            child: Image.asset(
+              'assets/ui/main_menu/DMS/MessgaeOuterRing.png',
+              width: 118,
+              height: 118,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+            ),
+          ),
+          Image.asset(
+            imagePath,
+            width: 104,
+            height: 104,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+          ),
+        ],
+      ),
+    );
   }
 }

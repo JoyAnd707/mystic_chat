@@ -100,6 +100,8 @@ flutter:
     - assets/ui/main_menu/DMS/MessageNew.png
     - assets/ui/main_menu/DMS/MessgaeOuterRing.png
     - assets/ui/main_menu/DMS/NewMessgaeOuterRing.png
+    - assets/ui/main_menu/EmailDecoyButton.png
+    - assets/ui/main_menu/CallDecoyButton.png
     
   fonts:
     - family: NotoSans
