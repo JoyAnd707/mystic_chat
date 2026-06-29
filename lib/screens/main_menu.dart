@@ -238,7 +238,14 @@ Positioned(
   ),
 ),
 
-
+Positioned(
+  left: 240,
+  top: 240,
+  child: DecoyCircleMenuButton(
+    ringAnimation: _messageRingController,
+    imagePath: 'assets/ui/main_menu/CallDecoyButton.png',
+  ),
+),
     Positioned(
       left: 85,
       top: 375,
