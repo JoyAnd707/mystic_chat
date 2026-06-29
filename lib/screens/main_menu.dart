@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'profile_status_screen.dart';
 import '../audio/bgm.dart';
 import '../audio/sfx.dart';
 import '../bots/daily_fact_bot.dart';
@@ -201,9 +201,16 @@ Positioned(
   top: 60,
   child: MainMenuStatusRow(
     currentUserId: widget.currentUserId,
-    onStatusTap: (userId) {
-      debugPrint('Tapped status: $userId');
-    },
+ onStatusTap: (userId) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => ProfileStatusScreen(
+        currentUserId: widget.currentUserId,
+        profileUserId: userId,
+      ),
+    ),
+  );
+},
   ),
 ),
 Transform.scale(
@@ -338,8 +345,8 @@ Positioned(
             );
           },
           child: const SizedBox(
-            width: 80,
-            height: 80,
+            width: 42,
+            height: 35,
           ),
         ),
       ),
