@@ -77,11 +77,20 @@ class GalleryAlbumTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final countQuery = FirebaseFirestore.instance
+        .collection('rooms')
+        .doc('group_main')
+        .collection('messages')
+        .where('senderId', isEqualTo: userId)
+        .where('type', isEqualTo: 'image');
+
     return SizedBox(
       width: 135,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
+          Sfx.I.playGoIntoGallery();
+
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -102,15 +111,22 @@ class GalleryAlbumTile extends StatelessWidget {
               filterQuality: FilterQuality.high,
             ),
             const SizedBox(height: 6),
-            Text(
-              '$title (0)',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                height: 1.0,
-              ),
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: countQuery.snapshots(),
+              builder: (context, snapshot) {
+                final int count = snapshot.data?.docs.length ?? 0;
+
+                return Text(
+                  '$title ($count)',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    height: 1.0,
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -325,9 +341,10 @@ class GalleryTopBar extends StatelessWidget {
                       bottom: 0,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          Navigator.pop(context);
-                        },
+                      onTap: () {
+  Sfx.I.playBack();
+  Navigator.pop(context);
+},
                         child: const SizedBox(
                           width: 72,
                           height: double.infinity,

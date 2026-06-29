@@ -71,7 +71,8 @@ Future<void> playEnterGroupChat() =>
   Future<void> playBack() => _playOne('assets/fx/back.mp3', volume: 0.8);
 Future<void> playStopListeningToVoiceMessage() =>
     _playOne('assets/fx/StopListeningToVoiceMessage.mp3', volume: 0.9);
-
+Future<void> playGoIntoGallery() =>
+    _playOne('assets/fx/GoIntoSomeonesGallerySFX.mp3', volume: 0.9);
 Future<void> playMainMenuButtonRow() =>
     _playOne('assets/fx/MainMenuButtonRowSFX.mp3', volume: 0.9);
 
