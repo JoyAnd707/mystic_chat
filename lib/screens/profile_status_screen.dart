@@ -1,6 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'banner_adjust_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../widgets/mystic_top_status_bar.dart';
 import '../widgets/mystic_star_twinkle.dart';
@@ -27,6 +32,75 @@ class _ProfileStatusScreenState extends State<ProfileStatusScreen>
 
   late final AnimationController _twinkleController;
 
+  final ImagePicker _imagePicker = ImagePicker();
+
+  bool get _canEditProfile {
+    return widget.currentUserId == widget.profileUserId;
+  }
+
+  DocumentReference<Map<String, dynamic>> get _profileDoc {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.profileUserId);
+  }
+
+  Future<void> _pickAndUploadBanner() async {
+    if (!_canEditProfile) return;
+
+    final XFile? picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+    );
+
+    if (picked == null) return;
+    if (!mounted) return;
+
+    final BannerAdjustResult? adjustResult =
+        await Navigator.of(context).push<BannerAdjustResult>(
+      MaterialPageRoute(
+        builder: (_) => BannerAdjustScreen(
+          imagePath: picked.path,
+        ),
+      ),
+    );
+
+    if (adjustResult == null) return;
+
+    try {
+      final File file = File(picked.path);
+
+      final Reference ref = FirebaseStorage.instance
+          .ref()
+          .child('profile_banners')
+          .child(widget.profileUserId)
+          .child('banner.jpg');
+
+      await ref.putFile(
+        file,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+
+      final String downloadUrl = await ref.getDownloadURL();
+
+      await _profileDoc.set({
+        'bannerImageUrl': downloadUrl,
+        'bannerScale': adjustResult.scale,
+        'bannerOffsetX': adjustResult.offsetX,
+        'bannerOffsetY': adjustResult.offsetY,
+        'bannerUpdatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not update banner: $e'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -40,6 +114,7 @@ class _ProfileStatusScreenState extends State<ProfileStatusScreen>
       const Duration(seconds: 1),
       (_) {
         if (!mounted) return;
+
         setState(() {
           _now = DateTime.now();
         });
@@ -153,94 +228,159 @@ class _ProfileStatusScreenState extends State<ProfileStatusScreen>
                   child: MysticTopStatusBar(now: _now),
                 ),
                 const SizedBox(height: 6),
-          MysticScreenTopBar(
-  title: 'Profile',
-  onBack: () {
-    Navigator.of(context).pop();
-  },
-),
+                MysticScreenTopBar(
+                  title: 'Profile',
+                  onBack: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
                 Expanded(
                   child: Stack(
                     children: [
-Positioned(
-  left: 0,
-  right: 0,
-  top: 0,
-  height: 385,
-  child: Container(
-    color: Colors.white,
-    child: const Center(
-      child: Text(
-        'Banner',
-        style: TextStyle(
-          fontFamily: 'Roboto',
-          color: Colors.black54,
-          fontSize: 34,
-          fontWeight: FontWeight.w300,
-        ),
-      ),
-    ),
-  ),
-),
-Positioned(
-  left: 0,
-  right: 0,
-  top: 382,
-  bottom: 0,
-  child: Container(
-    color: userColor.withOpacity(0.38),
-  ),
-),
-Positioned(
-  left: 26,
-  top: 300,
-  child: Container(
-    width: 145,
-    height: 145,
-    decoration: BoxDecoration(
-      border: Border.all(
-        color: userColor,
-        width: 3,
-      ),
-    ),
-    child: Image.asset(
-      _profileAssetPath,
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.high,
-    ),
-  ),
-),
-Positioned(
-  left: 195,
-  right: 20,
-  top: 385,
-  child: Text(
-    _displayName,
-    style: const TextStyle(
-      fontFamily: 'Roboto',
-      color: Colors.white,
-      fontSize: 31,
-      fontWeight: FontWeight.w300,
-      height: 1.0,
-    ),
-  ),
-),
-const Positioned(
-  left: 38,
-  right: 38,
-  top: 560,
-  child: Text(
-    'Status text will appear here.',
-    textAlign: TextAlign.center,
-    style: TextStyle(
-      fontFamily: 'Roboto',
-      color: Colors.white,
-      fontSize: 24,
-      height: 1.25,
-      fontWeight: FontWeight.w300,
-    ),
-  ),
-),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        height: 385,
+                        child: StreamBuilder<
+                            DocumentSnapshot<Map<String, dynamic>>>(
+                          stream: _profileDoc.snapshots(),
+                          builder: (context, snapshot) {
+                            final Map<String, dynamic>? data =
+                                snapshot.data?.data();
+
+                            final String bannerImageUrl =
+                                (data?['bannerImageUrl'] ?? '').toString();
+
+                            final double bannerScale =
+                                (data?['bannerScale'] as num?)?.toDouble() ??
+                                    1.0;
+
+                            final double bannerOffsetX =
+                                (data?['bannerOffsetX'] as num?)?.toDouble() ??
+                                    0.0;
+
+                            final double bannerOffsetY =
+                                (data?['bannerOffsetY'] as num?)?.toDouble() ??
+                                    0.0;
+
+                            return GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTap:
+                                  _canEditProfile ? _pickAndUploadBanner : null,
+                              child: Container(
+                                color: Colors.white,
+                                child: bannerImageUrl.isEmpty
+                                    ? Center(
+                                        child: Text(
+                                          _canEditProfile
+                                              ? 'Tap to add banner'
+                                              : 'No banner yet',
+                                          style: const TextStyle(
+                                            fontFamily: 'Roboto',
+                                            color: Colors.black54,
+                                            fontSize: 30,
+                                            fontWeight: FontWeight.w300,
+                                          ),
+                                        ),
+                                      )
+                                    : ClipRect(
+                                        child: Transform.translate(
+                                          offset: Offset(
+                                            bannerOffsetX,
+                                            bannerOffsetY,
+                                          ),
+                                          child: Transform.scale(
+                                            scale: bannerScale,
+                                            child: Image.network(
+                                              bannerImageUrl,
+                                              fit: BoxFit.cover,
+                                              width: double.infinity,
+                                              height: double.infinity,
+                                              filterQuality:
+                                                  FilterQuality.high,
+                                              errorBuilder: (_, __, ___) {
+                                                return const Center(
+                                                  child: Text(
+                                                    'Banner',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Roboto',
+                                                      color: Colors.black54,
+                                                      fontSize: 30,
+                                                      fontWeight:
+                                                          FontWeight.w300,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: 382,
+                        bottom: 0,
+                        child: Container(
+                          color: userColor.withOpacity(0.38),
+                        ),
+                      ),
+                      Positioned(
+                        left: 26,
+                        top: 300,
+                        child: Container(
+                          width: 145,
+                          height: 145,
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: userColor,
+                              width: 3,
+                            ),
+                          ),
+                          child: Image.asset(
+                            _profileAssetPath,
+                            fit: BoxFit.cover,
+                            filterQuality: FilterQuality.high,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 195,
+                        right: 20,
+                        top: 385,
+                        child: Text(
+                          _displayName,
+                          style: const TextStyle(
+                            fontFamily: 'Roboto',
+                            color: Colors.white,
+                            fontSize: 31,
+                            fontWeight: FontWeight.w300,
+                            height: 1.0,
+                          ),
+                        ),
+                      ),
+                      const Positioned(
+                        left: 38,
+                        right: 38,
+                        top: 560,
+                        child: Text(
+                          'Status text will appear here.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Roboto',
+                            color: Colors.white,
+                            fontSize: 24,
+                            height: 1.25,
+                            fontWeight: FontWeight.w300,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
