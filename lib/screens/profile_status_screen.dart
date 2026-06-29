@@ -6,7 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-
+import 'package:cached_network_image/cached_network_image.dart';
 import '../widgets/mystic_top_status_bar.dart';
 import '../widgets/mystic_star_twinkle.dart';
 import '../widgets/mystic_screen_top_bar.dart';
@@ -38,13 +38,103 @@ class _ProfileStatusScreenState extends State<ProfileStatusScreen>
     return widget.currentUserId == widget.profileUserId;
   }
 
-  DocumentReference<Map<String, dynamic>> get _profileDoc {
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.profileUserId);
-  }
+DocumentReference<Map<String, dynamic>> get _profileDoc {
+  return FirebaseFirestore.instance
+      .collection('users')
+      .doc(widget.profileUserId);
+}
 
-  Future<void> _pickAndUploadBanner() async {
+Future<void> _editStatusText(String currentStatusText) async {
+  if (!_canEditProfile) return;
+
+  final TextEditingController controller = TextEditingController(
+    text: currentStatusText == 'Tap to set your status.' ? '' : currentStatusText,
+  );
+
+  final String? newStatusText = await showDialog<String>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        backgroundColor: const Color(0xFF101020),
+        title: const Text(
+          'Edit Status',
+          style: TextStyle(
+            fontFamily: 'Roboto',
+            color: Colors.white,
+            fontWeight: FontWeight.w300,
+          ),
+        ),
+        content: TextField(
+          controller: controller,
+          maxLength: 80,
+          maxLines: 3,
+          style: const TextStyle(
+            fontFamily: 'Roboto',
+            color: Colors.white,
+            fontSize: 18,
+          ),
+          decoration: const InputDecoration(
+            hintText: 'Write your status...',
+            hintStyle: TextStyle(
+              fontFamily: 'Roboto',
+              color: Colors.white54,
+            ),
+            counterStyle: TextStyle(
+              color: Colors.white54,
+            ),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white54),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(null);
+            },
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                fontFamily: 'Roboto',
+                color: Colors.white70,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(controller.text.trim());
+            },
+            child: const Text(
+              'Save',
+              style: TextStyle(
+                fontFamily: 'Roboto',
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+
+WidgetsBinding.instance.addPostFrameCallback((_) {
+  controller.dispose();
+});
+
+if (newStatusText == null) return;
+
+  await _profileDoc.set({
+    'statusText': newStatusText.isEmpty
+        ? 'Tap to set your status.'
+        : newStatusText,
+    'statusUpdatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
+
+Future<void> _pickAndUploadBanner() async {
     if (!_canEditProfile) return;
 
     final XFile? picked = await _imagePicker.pickImage(
@@ -99,6 +189,7 @@ class _ProfileStatusScreenState extends State<ProfileStatusScreen>
         ),
       );
     }
+    
   }
 
   @override
@@ -251,7 +342,7 @@ class _ProfileStatusScreenState extends State<ProfileStatusScreen>
 
                             final String bannerImageUrl =
                                 (data?['bannerImageUrl'] ?? '').toString();
-
+                                
                             final double bannerScale =
                                 (data?['bannerScale'] as num?)?.toDouble() ??
                                     1.0;
@@ -292,28 +383,43 @@ class _ProfileStatusScreenState extends State<ProfileStatusScreen>
                                           ),
                                           child: Transform.scale(
                                             scale: bannerScale,
-                                            child: Image.network(
-                                              bannerImageUrl,
-                                              fit: BoxFit.cover,
-                                              width: double.infinity,
-                                              height: double.infinity,
-                                              filterQuality:
-                                                  FilterQuality.high,
-                                              errorBuilder: (_, __, ___) {
-                                                return const Center(
-                                                  child: Text(
-                                                    'Banner',
-                                                    style: TextStyle(
-                                                      fontFamily: 'Roboto',
-                                                      color: Colors.black54,
-                                                      fontSize: 30,
-                                                      fontWeight:
-                                                          FontWeight.w300,
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            ),
+                               child: CachedNetworkImage(
+  imageUrl: bannerImageUrl,
+  fit: BoxFit.cover,
+  width: double.infinity,
+  height: double.infinity,
+  filterQuality: FilterQuality.high,
+  fadeInDuration: const Duration(milliseconds: 180),
+  fadeOutDuration: const Duration(milliseconds: 80),
+  placeholder: (context, url) {
+    return Container(
+      color: userColor.withOpacity(0.22),
+      child: const Center(
+        child: SizedBox(
+          width: 26,
+          height: 26,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  },
+  errorWidget: (context, url, error) {
+    return const Center(
+      child: Text(
+        'Banner',
+        style: TextStyle(
+          fontFamily: 'Roboto',
+          color: Colors.black54,
+          fontSize: 30,
+          fontWeight: FontWeight.w300,
+        ),
+      ),
+    );
+  },
+),
                                           ),
                                         ),
                                       ),
@@ -365,22 +471,37 @@ class _ProfileStatusScreenState extends State<ProfileStatusScreen>
                           ),
                         ),
                       ),
-                      const Positioned(
-                        left: 38,
-                        right: 38,
-                        top: 560,
-                        child: Text(
-                          'Status text will appear here.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontFamily: 'Roboto',
-                            color: Colors.white,
-                            fontSize: 24,
-                            height: 1.25,
-                            fontWeight: FontWeight.w300,
-                          ),
-                        ),
-                      ),
+   Positioned(
+  left: 38,
+  right: 38,
+  top: 530,
+  child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+    stream: _profileDoc.snapshots(),
+    builder: (context, snapshot) {
+      final data = snapshot.data?.data();
+
+      final String statusText =
+          (data?['statusText'] ?? 'Tap to set your status.').toString();
+
+      return GestureDetector(
+   onTap: _canEditProfile
+    ? () => _editStatusText(statusText)
+    : null,
+        child: Text(
+          statusText,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontFamily: 'Roboto',
+            color: Colors.white,
+            fontSize: 24,
+            height: 1.25,
+            fontWeight: FontWeight.w300,
+          ),
+        ),
+      );
+    },
+  ),
+),
                     ],
                   ),
                 ),
