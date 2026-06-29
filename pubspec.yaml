@@ -105,6 +105,9 @@ flutter:
     - assets/ui/main_menu/MainMenuButtonRow.png
     - assets/ui/gallery/PhotoAlbumFrames.png
     - assets/ui/gallery/TextMessageBarMenu.png
+
+    - assets/ui/gallery/EmptyPhotoFrame.png
+    - assets/ui/gallery/EmptyPhoto.png
     
   fonts:
     - family: NotoSans

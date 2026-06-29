@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../widgets/mystic_top_status_bar.dart';
@@ -13,10 +14,14 @@ class GalleryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const albums = [
-      ['Joy', 'Adi'],
-      ['Danielle', 'Lera'],
-      ['Lihi', 'Lian'],
-      ['Tal', 'Nella'],
+      ['Joy', 'joy'],
+      ['Adi', 'adi'],
+      ['Danielle', 'danielle'],
+      ['Lera', 'lera'],
+      ['Lihi', 'lihi'],
+      ['Lian', 'lian'],
+      ['Tal', 'tal'],
+      ['Nella', 'nella'],
     ];
 
     return Scaffold(
@@ -24,25 +29,26 @@ class GalleryScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            MysticTopStatusBar(
-              now: DateTime.now(),
-            ),
-const GalleryTopBar(),
-
-
+            MysticTopStatusBar(now: DateTime.now()),
+            const GalleryTopBar(),
             const SizedBox(height: 18),
-
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 22),
                 child: Column(
                   children: [
-                    for (final row in albums) ...[
+                    for (int i = 0; i < albums.length; i += 2) ...[
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          GalleryAlbumTile(title: row[0]),
-                          GalleryAlbumTile(title: row[1]),
+                          GalleryAlbumTile(
+                            title: albums[i][0],
+                            userId: albums[i][1],
+                          ),
+                          GalleryAlbumTile(
+                            title: albums[i + 1][0],
+                            userId: albums[i + 1][1],
+                          ),
                         ],
                       ),
                       const SizedBox(height: 22),
@@ -60,44 +66,206 @@ const GalleryTopBar(),
 
 class GalleryAlbumTile extends StatelessWidget {
   final String title;
+  final String userId;
 
   const GalleryAlbumTile({
     super.key,
     required this.title,
+    required this.userId,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 135,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset(
-            'assets/ui/gallery/PhotoAlbumFrames.png',
-            width: 105,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '$title (0)',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              height: 1.0,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => UserGalleryScreen(
+                userId: userId,
+                title: title,
+              ),
             ),
-          ),
-        ],
+          );
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/ui/gallery/PhotoAlbumFrames.png',
+              width: 105,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '$title (0)',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                height: 1.0,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
+class UserGalleryScreen extends StatelessWidget {
+  final String userId;
+  final String title;
+
+  const UserGalleryScreen({
+    super.key,
+    required this.userId,
+    required this.title,
+  });
+
+  static const int maxPhotos = 100;
+
+  @override
+  Widget build(BuildContext context) {
+    final photosQuery = FirebaseFirestore.instance
+        .collection('rooms')
+        .doc('group_main')
+        .collection('messages')
+        .where('senderId', isEqualTo: userId)
+        .where('type', isEqualTo: 'image')
+        .orderBy('ts', descending: true)
+        .limit(maxPhotos);
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Column(
+          children: [
+            MysticTopStatusBar(now: DateTime.now()),
+            GalleryTopBar(title: title),
+            const SizedBox(height: 12),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: photosQuery.snapshots(),
+                builder: (context, snapshot) {
+     if (snapshot.hasError) {
+  return Center(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Text(
+        snapshot.error.toString(),
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+        ),
+      ),
+    ),
+  );
+}
+
+                  if (!snapshot.hasData) {
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  }
+
+                  final docs = snapshot.data!.docs;
+
+                  return GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    itemCount: maxPhotos,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1,
+                    ),
+                    itemBuilder: (context, index) {
+                      if (index >= docs.length) {
+                        return const EmptyGalleryPhotoTile();
+                      }
+
+                      final data = docs[index].data();
+                      final imageUrl = data['imageUrl'] as String? ?? '';
+
+                      if (imageUrl.isEmpty) {
+                        return const EmptyGalleryPhotoTile();
+                      }
+
+                      return GalleryPhotoTile(imageUrl: imageUrl);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class GalleryPhotoTile extends StatelessWidget {
+  final String imageUrl;
+
+  const GalleryPhotoTile({
+    super.key,
+    required this.imageUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.high,
+            ),
+          ),
+        ),
+        Positioned.fill(
+          child: Image.asset(
+            'assets/ui/gallery/EmptyPhotoFrame.png',
+            fit: BoxFit.fill,
+            filterQuality: FilterQuality.high,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class EmptyGalleryPhotoTile extends StatelessWidget {
+  const EmptyGalleryPhotoTile({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/ui/gallery/EmptyPhoto.png',
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.high,
+    );
+  }
+}
+
 class GalleryTopBar extends StatelessWidget {
-  const GalleryTopBar({super.key});
+  final String title;
+
+  const GalleryTopBar({
+    super.key,
+    this.title = 'Photo Album',
+  });
 
   static const double _resourceBarHeight = 34;
   static const double _barAspect = 2048 / 212;
@@ -131,21 +299,19 @@ class GalleryTopBar extends StatelessWidget {
                         alignment: Alignment.center,
                       ),
                     ),
-
-                    const Align(
+                    Align(
                       alignment: Alignment.center,
                       child: Text(
-                        'Photo Album',
-                 style: const TextStyle(
-  fontFamily: 'Roboto',
-  color: Colors.white,
-  fontSize: 22,
-  fontWeight: FontWeight.w300,
-  height: 1.0,
-),
+                        title,
+                        style: const TextStyle(
+                          fontFamily: 'Roboto',
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w300,
+                          height: 1.0,
+                        ),
                       ),
                     ),
-
                     Positioned(
                       left: 0,
                       top: 0,
