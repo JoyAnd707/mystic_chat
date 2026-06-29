@@ -15,25 +15,16 @@ class SpaceSnackProgressBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: Container(
-  width: width ?? MediaQuery.of(context).size.width,
-  margin: const EdgeInsets.only(
-  left: 30,
-  right: 55,
-),
-        height: 60,
-        color: Colors.red.withOpacity(0.35),
+        width: width ?? MediaQuery.of(context).size.width,
+        margin: const EdgeInsets.only(
+          left: 18,
+          right: 55,
+        ),
         child: Image.asset(
           _assetPath,
           fit: BoxFit.fitWidth,
           filterQuality: FilterQuality.high,
-          errorBuilder: (_, __, ___) {
-            return const Center(
-              child: Text(
-                'VideoProgressionBar asset not found',
-                style: TextStyle(color: Colors.white),
-              ),
-            );
-          },
+          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
         ),
       ),
     );
