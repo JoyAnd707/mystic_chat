@@ -194,142 +194,147 @@ Positioned.fill(
     sizeMultiplier: 1.25,
   ),
 ),
- Positioned(
-  left: 170,
-  top: 125,
-      child: StreamBuilder<int>(
-        stream: _unreadDmMessageCountStream(),
-        builder: (context, snapshot) {
-          final int unreadCount = snapshot.data ?? 0;
-
-   return AnimatedMessageButton(
-  unreadCount: unreadCount,
-  pulseAnimation: _messagePulse,
-  ringAnimation: _messageRingController,
-  onTap: () {
-              try {
-                Sfx.I.playEnterDmsMenu();
-              } catch (_) {}
-
-              Navigator.of(context)
-                  .push(
-                MaterialPageRoute(
-                  builder: (_) => DmsListScreen(
-                    currentUserId: widget.currentUserId,
-                  ),
-                ),
-              )
-                  .then((_) {
-                if (mounted) setState(() {});
-              });
-            },
-          );
-        },
-      ),
-    ),
-
-Positioned(
-  left: 8,
-  top: 170,
+Transform.scale(
+  scale: 0.88,
+  alignment: Alignment.topLeft,
   child: Stack(
     children: [
-      Image.asset(
-        'assets/ui/main_menu/MainMenuButtonRow.png',
-        width: 72,
-        fit: BoxFit.contain,
-      ),
-
       Positioned(
-        left: 0,
-        top: 6,
-        child: GestureDetector(
-onTap: () {
-  try {
-    Sfx.I.playMainMenuButtonRow();
-  } catch (_) {}
+        left: 185,
+        top: 125,
+        child: StreamBuilder<int>(
+          stream: _unreadDmMessageCountStream(),
+          builder: (context, snapshot) {
+            final int unreadCount = snapshot.data ?? 0;
 
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => GalleryScreen(
-        currentUserId: widget.currentUserId,
+            return AnimatedMessageButton(
+              unreadCount: unreadCount,
+              pulseAnimation: _messagePulse,
+              ringAnimation: _messageRingController,
+              onTap: () {
+                try {
+                  Sfx.I.playEnterDmsMenu();
+                } catch (_) {}
+
+                Navigator.of(context)
+                    .push(
+                  MaterialPageRoute(
+                    builder: (_) => DmsListScreen(
+                      currentUserId: widget.currentUserId,
+                    ),
+                  ),
+                )
+                    .then((_) {
+                  if (mounted) setState(() {});
+                });
+              },
+            );
+          },
+        ),
       ),
-    ),
-  );
-},
-          child: Container(
-            width: 72,
-            height: 50,
-            color: Colors.white.withOpacity(0.45),
+      Positioned(
+        left: 8,
+        top: 170,
+        child: Stack(
+          children: [
+            Image.asset(
+              'assets/ui/main_menu/MainMenuButtonRow.png',
+              width: 72,
+              fit: BoxFit.contain,
+            ),
+            Positioned(
+              left: 0,
+              top: 6,
+              child: GestureDetector(
+                onTap: () {
+                  try {
+                    Sfx.I.playMainMenuButtonRow();
+                  } catch (_) {}
+
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => GalleryScreen(
+                        currentUserId: widget.currentUserId,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: 72,
+                  height: 50,
+                  color: Colors.white.withOpacity(0.45),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      Positioned(
+        left: 100,
+        top: 235,
+        child: DecoyCircleMenuButton(
+          ringAnimation: _messageRingController,
+          imagePath: 'assets/ui/main_menu/EmailDecoyButton.png',
+        ),
+      ),
+      Positioned(
+        left: 270,
+        top: 255,
+        child: DecoyCircleMenuButton(
+          ringAnimation: _messageRingController,
+          imagePath: 'assets/ui/main_menu/CallDecoyButton.png',
+        ),
+      ),
+Positioned(
+  left: 120,
+  top: 500,
+  child: AnimatedChatroomButton(
+    ringAnimation: _chatroomRingController,
+    onTap: () {
+      try {
+        Sfx.I.playEnterGroupChat();
+      } catch (_) {}
+
+      Navigator.of(context)
+          .push(
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            currentUserId: widget.currentUserId,
+            roomId: 'group_main',
+            title: 'Group Chat',
+            enableBgm: true,
+          ),
+        ),
+      )
+          .then((_) async {
+        await Bgm.I.leaveGroupAndResumeHomeDm();
+      });
+    },
+  ),
+),
+      Positioned(
+        top: 30,
+        right: 15,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SettingsMenuScreen(
+                  currentUserId: widget.currentUserId,
+                ),
+              ),
+            );
+          },
+          child: const SizedBox(
+            width: 80,
+            height: 80,
           ),
         ),
       ),
     ],
   ),
 ),
-Positioned(
-  left: 85,
-  top: 235,
-  child: DecoyCircleMenuButton(
-    ringAnimation: _messageRingController,
-    imagePath: 'assets/ui/main_menu/EmailDecoyButton.png',
-  ),
-),
-
-Positioned(
-  left: 255,
-  top: 255,
-  child: DecoyCircleMenuButton(
-    ringAnimation: _messageRingController,
-    imagePath: 'assets/ui/main_menu/CallDecoyButton.png',
-  ),
-),
-  Positioned(
-  left: 100,
-  top: 390,
-      child: AnimatedChatroomButton(
-        ringAnimation: _chatroomRingController,
-        onTap: () {
-          try {
-            Sfx.I.playEnterGroupChat();
-          } catch (_) {}
-
-          Navigator.of(context)
-              .push(
-            MaterialPageRoute(
-              builder: (_) => ChatScreen(
-                currentUserId: widget.currentUserId,
-                roomId: 'group_main',
-                title: 'Group Chat',
-                enableBgm: true,
-              ),
-            ),
-          )
-              .then((_) async {
-            await Bgm.I.leaveGroupAndResumeHomeDm();
-          });
-        },
-      ),
-    ),
-    Positioned(
-      top: 30,
-      right: 15,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => SettingsMenuScreen(
-                currentUserId: widget.currentUserId,
-              ),
-            ),
-          );
-        },
-        child: const SizedBox(
-          width: 80,
-          height: 80,
-        ),
-      ),
-    ),
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -435,8 +440,8 @@ class AnimatedMessageButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Widget button = SizedBox(
-      width: 128,
-      height: 128,
+      width: 112,
+      height: 112,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: onTap,
@@ -446,8 +451,8 @@ class AnimatedMessageButton extends StatelessWidget {
           children: [
             if (hasUnread)
               Container(
-                width: 114,
-                height: 114,
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   boxShadow: [
@@ -465,8 +470,8 @@ class AnimatedMessageButton extends StatelessWidget {
                 hasUnread
                     ? 'assets/ui/main_menu/DMS/NewMessgaeOuterRing.png'
                     : 'assets/ui/main_menu/DMS/MessgaeOuterRing.png',
-                width: 118,
-                height: 118,
+                width: 104,
+                height: 104,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
               ),
@@ -475,8 +480,8 @@ class AnimatedMessageButton extends StatelessWidget {
               hasUnread
                   ? 'assets/ui/main_menu/DMS/MessageNew.png'
                   : 'assets/ui/main_menu/DMS/Message.png',
-              width: 104,
-              height: 104,
+              width: 92,
+              height: 92,
               fit: BoxFit.contain,
               filterQuality: FilterQuality.high,
             ),
@@ -523,7 +528,7 @@ class AnimatedMessageButton extends StatelessWidget {
 
     if (!hasUnread) return button;
 
-return button;
+    return button;
   }
 }
 
@@ -540,8 +545,8 @@ class DecoyCircleMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 128,
-      height: 128,
+      width: 118,
+      height: 118,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -549,16 +554,16 @@ class DecoyCircleMenuButton extends StatelessWidget {
             turns: ringAnimation,
             child: Image.asset(
               'assets/ui/main_menu/DMS/MessgaeOuterRing.png',
-              width: 118,
-              height: 118,
+              width: 108,
+              height: 108,
               fit: BoxFit.contain,
               filterQuality: FilterQuality.high,
             ),
           ),
           Image.asset(
             imagePath,
-            width: 104,
-            height: 104,
+            width: 96,
+            height: 96,
             fit: BoxFit.contain,
             filterQuality: FilterQuality.high,
           ),
