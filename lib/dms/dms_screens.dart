@@ -20,6 +20,7 @@ import '../services/presence_service.dart';
 import '../widgets/fullscreen_video_player.dart';
 import '../widgets/video_preview_tile.dart';
 import '../widgets/mystic_top_status_bar.dart';
+import '../widgets/mystic_profile_avatar.dart';
 part 'dms_core.dart';
 part 'dms_widgets.dart';
 part 'dms_painters.dart';
@@ -1729,13 +1730,15 @@ if (i > 0) {
                           },
                         )
                       : _DmMessageRow(
-                          isMe: isMe,
-                          text: text,
-                          time: timeLabel,
-                          uiScale: uiScale,
-                          heartReactorIds: List<String>.from(
-                            m['heartReactorIds'] ?? const [],
-                          ),
+  isMe: isMe,
+  text: text,
+  time: timeLabel,
+  uiScale: uiScale,
+  meUserId: widget.currentUserId,
+  otherUserId: widget.otherUserId,
+  heartReactorIds: List<String>.from(
+    m['heartReactorIds'] ?? const [],
+  ),
                           meLetter: (dmUsers[widget.currentUserId]
                                       ?.name
                                       .characters

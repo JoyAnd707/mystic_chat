@@ -53,15 +53,32 @@ class MainMenuStatusRow extends StatelessWidget {
       newStatusAssetPath: 'assets/ui/status/NellaNewStatus.png',
     ),
   ];
-
-  bool _hasRealStatusText(String statusText) {
-    final String cleaned = statusText.trim();
-
-    if (cleaned.isEmpty) return false;
-    if (cleaned == 'Tap to set your status.') return false;
-
-    return true;
+int _timestampToMs(dynamic value) {
+  if (value is Timestamp) {
+    return value.millisecondsSinceEpoch;
   }
+
+  if (value is int) {
+    return value;
+  }
+
+  return 0;
+}
+
+int _latestProfileUpdateMs(Map<String, dynamic>? data) {
+  if (data == null) return 0;
+
+  final int statusUpdatedAtMs = _timestampToMs(data['statusUpdatedAt']);
+  final int profileImageUpdatedAtMs =
+      _timestampToMs(data['profileImageUpdatedAt']);
+  final int bannerUpdatedAtMs = _timestampToMs(data['bannerUpdatedAt']);
+
+  return [
+    statusUpdatedAtMs,
+    profileImageUpdatedAtMs,
+    bannerUpdatedAtMs,
+  ].reduce((a, b) => a > b ? a : b);
+}
 
   @override
   Widget build(BuildContext context) {
@@ -83,24 +100,22 @@ class MainMenuStatusRow extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: _users.map((user) {
               final Map<String, dynamic>? data = usersData[user.userId];
-
-              final String statusText =
-                  (data?['statusText'] ?? '').toString();
-
-      final Map<String, dynamic> statusSeenBy =
+final Map<String, dynamic> statusSeenBy =
     (data?['statusSeenBy'] is Map<String, dynamic>)
         ? data!['statusSeenBy'] as Map<String, dynamic>
         : <String, dynamic>{};
-
-final bool hasRealStatus = _hasRealStatusText(statusText);
 
 final bool isOwnStatus = user.userId == currentUserId;
 
 final bool currentUserAlreadySawStatus =
     statusSeenBy[currentUserId] == true;
 
+final int latestProfileUpdateMs = _latestProfileUpdateMs(data);
+
+final bool hasProfileUpdate = latestProfileUpdateMs > 0;
+
 final bool shouldShowNewStatus =
-    hasRealStatus && !isOwnStatus && !currentUserAlreadySawStatus;
+    hasProfileUpdate && !isOwnStatus && !currentUserAlreadySawStatus;
 
 final String assetPath = shouldShowNewStatus
     ? user.newStatusAssetPath

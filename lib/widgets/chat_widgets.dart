@@ -14,7 +14,7 @@ import '../widgets/fullscreen_image_viewer.dart';
 import '../audio/sfx.dart';
 import 'dart:math' as math;
 import 'rotating_envelope.dart';
-
+import '../widgets/mystic_profile_avatar.dart';
 
 
 enum BubbleTemplate {
@@ -1153,15 +1153,23 @@ final double hardCap = 360 * uiScale;
 
 final double maxBubbleWidth = math.min(hardCap, mysticMax);
 
-    final avatar = SizedBox(
-      width: avatarSize,
-      height: avatarSize,
-      child: SquareAvatar(
-        size: avatarSize,
-        letter: user.name[0],
-        imagePath: user.avatarPath,
+final avatar = SizedBox(
+  width: avatarSize,
+  height: avatarSize,
+  child: Container(
+    decoration: BoxDecoration(
+      color: Colors.black,
+      border: Border.all(
+        color: Colors.white24,
+        width: 1,
       ),
-    );
+    ),
+    child: MysticProfileAvatar(
+      userId: user.id,
+      size: avatarSize,
+    ),
+  ),
+);
 
     final BubbleTemplate effectiveTemplate = bubbleTemplate;
 

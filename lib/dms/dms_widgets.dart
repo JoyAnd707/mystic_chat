@@ -222,23 +222,14 @@ child: Container(
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  SizedBox(
-                    width: avatarSize,
-                    height: avatarSize,
-                    child: Container(
-                      color: Colors.black,
-                      alignment: Alignment.center,
-                      child: Text(
-                        user.name.characters.first.toUpperCase(),
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: s(22),
-                          fontWeight: FontWeight.w700,
-                          height: 1.0,
-                        ),
-                      ),
-                    ),
-                  ),
+   SizedBox(
+  width: avatarSize,
+  height: avatarSize,
+  child: MysticProfileAvatar(
+    userId: user.id,
+    size: avatarSize,
+  ),
+),
                   SizedBox(width: gapAfterAvatar),
 
                           Expanded(
@@ -1704,6 +1695,9 @@ final String text;
 final String time;
 final double uiScale;
 
+final String meUserId;
+final String otherUserId;
+
 final String meLetter;
 final String otherLetter;
 
@@ -1721,11 +1715,13 @@ const _DmMessageRow({
   required this.isMe,
   required this.text,
   required this.time,
-  required this.uiScale,
-  required this.meLetter,
-  required this.otherLetter,
+required this.uiScale,
+required this.meUserId,
+required this.otherUserId,
+required this.meLetter,
+required this.otherLetter,
 
-  required this.heartReactorIds,
+required this.heartReactorIds,
 
   this.replyToSenderName,
   this.replyToText,
@@ -1918,8 +1914,15 @@ const _DmMessageRow({
           ),
         );
 
-        final leftAvatar = _Avatar(letter: otherLetter, size: avatarSize);
-        final rightAvatar = _Avatar(letter: meLetter, size: avatarSize);
+       final leftAvatar = MysticProfileAvatar(
+  userId: otherUserId,
+  size: avatarSize,
+);
+
+final rightAvatar = MysticProfileAvatar(
+  userId: meUserId,
+  size: avatarSize,
+);
 
         final row = Padding(
           padding: EdgeInsets.only(
