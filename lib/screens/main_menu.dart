@@ -228,7 +228,15 @@ Positioned.fill(
       ),
     ),
 
-
+Positioned(
+  left: 8,
+  top: 170,
+  child: Image.asset(
+    'assets/ui/main_menu/MainMenuButtonRow.png',
+    width: 72,
+    fit: BoxFit.contain,
+  ),
+),
 Positioned(
   left: 60,
   top: 220,
