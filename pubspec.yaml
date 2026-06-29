@@ -144,6 +144,12 @@ flutter:
 
     - assets/ui/status/NellaNewStatus.png
     - assets/ui/status/NellaNoStatus.png
+
+     
+    - assets/ui/main_menu/VideoProgressionBar.png
+
+
+
     
   fonts:
     - family: NotoSans

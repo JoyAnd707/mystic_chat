@@ -15,7 +15,7 @@ import 'chat_screen.dart';
 import 'settings_menu.dart';
 import 'gallery_screen.dart';
 import '../widgets/main_menu_status_row.dart';
-
+import '../widgets/space_snack_progress_bar.dart';
 
 
 class MainMenuScreen extends StatefulWidget {
@@ -215,6 +215,14 @@ onStatusTap: (userId) {
     ),
   );
 },
+  ),
+),
+Positioned(
+  left: 0,
+  right: 0,
+  bottom: 35,
+  child: const Center(
+    child: SpaceSnackProgressBar(),
   ),
 ),
 Transform.scale(
