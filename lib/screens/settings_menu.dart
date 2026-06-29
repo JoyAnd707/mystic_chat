@@ -5,6 +5,9 @@ import '../widgets/mystic_settings_top_status_bar.dart';
 import '../widgets/mystic_title_bar.dart';
 import '../widgets/settings/settings_others_page.dart';
 import '../widgets/settings/settings_sound_sliders.dart';
+import '../main.dart';
+
+
 import '../widgets/settings/settings_tabs.dart';
 class SettingsMenuScreen extends StatefulWidget {
   final String currentUserId;
@@ -73,9 +76,30 @@ Expanded(
   child: Align(
   alignment: Alignment.topCenter,
     child: switch (_selectedTab) {
-0 => Image.asset(
-  'assets/ui/settings/account/AccountSettingsDecoy.png',
+0 => SizedBox(
   width: 270,
+  child: Stack(
+    children: [
+      Image.asset(
+        'assets/ui/settings/account/AccountSettingsDecoy.png',
+        width: 270,
+      ),
+Positioned(
+  right: 0,
+  bottom: 0,
+  child: GestureDetector(
+    behavior: HitTestBehavior.translucent,
+    onTap: () async {
+      await devReset(context);
+    },
+    child: const SizedBox(
+      width: 120,
+      height: 65,
+    ),
+  ),
+),
+    ],
+  ),
 ),
 1 => Column(
   mainAxisSize: MainAxisSize.min,
