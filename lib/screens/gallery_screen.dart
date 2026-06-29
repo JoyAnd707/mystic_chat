@@ -100,7 +100,36 @@ Color _nameplateColor() {
       return const Color.fromARGB(84, 255, 255, 255);
   }
 }
+String _galleryImage() {
+  switch (userId) {
+    case 'joy':
+      return 'assets/ui/gallery/JoyGalleryImage.png';
 
+    case 'adi':
+      return 'assets/ui/gallery/AdiGalleryImage.png';
+
+    case 'danielle':
+      return 'assets/ui/gallery/DanielleGalleryImage.png';
+
+    case 'lera':
+      return 'assets/ui/gallery/LeraGalleryImage.png';
+
+    case 'lihi':
+      return 'assets/ui/gallery/LihiGalleryImage.png';
+
+    case 'lian':
+      return 'assets/ui/gallery/LianGalleryImage.png';
+
+    case 'tal':
+      return 'assets/ui/gallery/TalGalleryImage.png';
+
+    case 'nella':
+      return 'assets/ui/gallery/NellaGalleryImage.png';
+
+    default:
+      return 'assets/ui/gallery/PhotoAlbumFrames.png';
+  }
+}
   const GalleryAlbumTile({
     super.key,
     required this.title,
@@ -136,12 +165,12 @@ Color _nameplateColor() {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset(
-              'assets/ui/gallery/PhotoAlbumFrames.png',
-              width: 97,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.high,
-            ),
+        Image.asset(
+  _galleryImage(),
+  width: 97,
+  fit: BoxFit.contain,
+  filterQuality: FilterQuality.high,
+),
             const SizedBox(height: 6),
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: countQuery.snapshots(),

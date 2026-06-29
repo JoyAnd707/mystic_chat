@@ -108,7 +108,14 @@ flutter:
     - assets/fx/MainMenuButtonRowSFX.mp3
     - assets/ui/gallery/EmptyPhotoFrame.png
     - assets/ui/gallery/EmptyPhoto.png
-    
+    - assets/ui/gallery/JoyGalleryImage.png
+    - assets/ui/gallery/AdiGalleryImage.png
+    - assets/ui/gallery/DanielleGalleryImage.png
+    - assets/ui/gallery/LeraGalleryImage.png
+    - assets/ui/gallery/LihiGalleryImage.png
+    - assets/ui/gallery/LianGalleryImage.png
+    - assets/ui/gallery/TalGalleryImage.png
+    - assets/ui/gallery/NellaGalleryImage.png
     - assets/ui/gallery/GalleryNameplateBase.png
     
   fonts:
