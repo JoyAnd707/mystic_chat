@@ -23,6 +23,7 @@ class ProfileStatusScreen extends StatefulWidget {
 
   @override
   State<ProfileStatusScreen> createState() => _ProfileStatusScreenState();
+  
 }
 
 class _ProfileStatusScreenState extends State<ProfileStatusScreen>
@@ -43,7 +44,15 @@ DocumentReference<Map<String, dynamic>> get _profileDoc {
       .collection('users')
       .doc(widget.profileUserId);
 }
+Future<void> _markStatusAsSeen() async {
+  if (widget.currentUserId == widget.profileUserId) return;
 
+  await _profileDoc.set({
+    'statusSeenBy': {
+      widget.currentUserId: true,
+    },
+  }, SetOptions(merge: true));
+}
 Future<void> _editStatusText(String currentStatusText) async {
   if (!_canEditProfile) return;
 
@@ -126,12 +135,13 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
 
 if (newStatusText == null) return;
 
-  await _profileDoc.set({
-    'statusText': newStatusText.isEmpty
-        ? 'Tap to set your status.'
-        : newStatusText,
-    'statusUpdatedAt': FieldValue.serverTimestamp(),
-  }, SetOptions(merge: true));
+await _profileDoc.set({
+  'statusText': newStatusText.isEmpty
+      ? 'Tap to set your status.'
+      : newStatusText,
+  'statusUpdatedAt': FieldValue.serverTimestamp(),
+  'statusSeenBy': <String, bool>{},
+}, SetOptions(merge: true));
 }
 
 Future<void> _pickAndUploadBanner() async {
@@ -195,6 +205,9 @@ Future<void> _pickAndUploadBanner() async {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+  _markStatusAsSeen();
+});
 
     _twinkleController = AnimationController(
       vsync: this,
