@@ -109,6 +109,8 @@ flutter:
     - assets/ui/gallery/EmptyPhotoFrame.png
     - assets/ui/gallery/EmptyPhoto.png
     
+    - assets/ui/gallery/GalleryNameplateBase.png
+    
   fonts:
     - family: NotoSans
       fonts:

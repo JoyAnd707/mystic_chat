@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import '../audio/sfx.dart';
 import '../widgets/mystic_top_status_bar.dart';
-
+import 'dart:ui';
 class GalleryScreen extends StatelessWidget {
   final String currentUserId;
 
@@ -16,7 +16,7 @@ class GalleryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     const albums = [
       ['Joy', 'joy'],
-      ['Adi', 'adi'],
+      ['Adi★', 'adi'],
       ['Danielle', 'danielle'],
       ['Lera', 'lera'],
       ['Lihi', 'lihi'],
@@ -32,32 +32,32 @@ class GalleryScreen extends StatelessWidget {
           children: [
             MysticTopStatusBar(now: DateTime.now()),
             const GalleryTopBar(),
-            const SizedBox(height: 18),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
-                child: Column(
-                  children: [
-                    for (int i = 0; i < albums.length; i += 2) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          GalleryAlbumTile(
-                            title: albums[i][0],
-                            userId: albums[i][1],
-                          ),
-                          GalleryAlbumTile(
-                            title: albums[i + 1][0],
-                            userId: albums[i + 1][1],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 22),
-                    ],
-                  ],
-                ),
+  const SizedBox(height: 12),
+Expanded(
+  child: Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 24),
+    child: Column(
+      children: [
+        for (int i = 0; i < albums.length; i += 2) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              GalleryAlbumTile(
+                title: albums[i][0],
+                userId: albums[i][1],
               ),
-            ),
+              GalleryAlbumTile(
+                title: albums[i + 1][0],
+                userId: albums[i + 1][1],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+        ],
+      ],
+    ),
+  ),
+),
           ],
         ),
       ),
@@ -68,6 +68,38 @@ class GalleryScreen extends StatelessWidget {
 class GalleryAlbumTile extends StatelessWidget {
   final String title;
   final String userId;
+
+
+Color _nameplateColor() {
+  switch (userId) {
+    case 'joy':
+      return const Color.fromARGB(170, 167, 123, 255); // סגול
+
+    case 'adi':
+      return const Color.fromARGB(170, 255, 127, 223); // ורוד
+
+    case 'danielle':
+      return const Color.fromARGB(170, 106, 146, 255); // תכלת
+
+    case 'lera':
+      return const Color.fromARGB(170, 255, 169, 41); // כתום
+
+    case 'lihi':
+      return const Color.fromARGB(170, 255, 232, 79); // צהוב
+
+    case 'nella':
+      return const Color.fromARGB(170, 38, 218, 212); // טורקיז
+
+    case 'lian':
+      return const Color.fromARGB(170, 241, 78, 75); // אדום
+
+    case 'tal':
+      return const Color(0xAA66BB6A); // ירוק
+
+    default:
+      return const Color.fromARGB(84, 255, 255, 255);
+  }
+}
 
   const GalleryAlbumTile({
     super.key,
@@ -106,7 +138,7 @@ class GalleryAlbumTile extends StatelessWidget {
           children: [
             Image.asset(
               'assets/ui/gallery/PhotoAlbumFrames.png',
-              width: 105,
+              width: 97,
               fit: BoxFit.contain,
               filterQuality: FilterQuality.high,
             ),
@@ -116,14 +148,32 @@ class GalleryAlbumTile extends StatelessWidget {
               builder: (context, snapshot) {
                 final int count = snapshot.data?.docs.length ?? 0;
 
-                return Text(
-                  '$title ($count)',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    height: 1.0,
+                return SizedBox(
+                  width: 132,
+                  height: 40,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+               Image.asset(
+  'assets/ui/gallery/GalleryNameplateBase.png',
+  width: 138,
+  fit: BoxFit.contain,
+  color: _nameplateColor(),
+  colorBlendMode: BlendMode.srcIn,
+),
+                      Text(
+                        '$title ($count)',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Roboto',
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w400,
+                          height: 1,
+                        ),
+                      ),
+                    ],
                   ),
                 );
               },
