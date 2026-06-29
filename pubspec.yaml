@@ -116,7 +116,33 @@ flutter:
     - assets/ui/gallery/LianGalleryImage.png
     - assets/ui/gallery/TalGalleryImage.png
     - assets/ui/gallery/NellaGalleryImage.png
+
     - assets/ui/gallery/GalleryNameplateBase.png
+
+
+    - assets/ui/status/JoyNewStatus.png
+    - assets/ui/status/JoyNoStatus.png
+
+    - assets/ui/status/AdiNewStatus.png
+    - assets/ui/status/AdiNoStatus.png
+
+    - assets/ui/status/DanielleNewStatus.png
+    - assets/ui/status/DanielleNoStatus.png
+
+    - assets/ui/status/LeraNewStatus.png
+    - assets/ui/status/LeraNoStatus.png
+
+    - assets/ui/status/LihiNewStatus.png
+    - assets/ui/status/LihiNoStatus.png
+
+    - assets/ui/status/LianNewStatus.png
+    - assets/ui/status/LianNoStatus.png
+
+    - assets/ui/status/TalNewStatus.png
+    - assets/ui/status/TalNoStatus.png
+
+    - assets/ui/status/NellaNewStatus.png
+    - assets/ui/status/NellaNoStatus.png
     
   fonts:
     - family: NotoSans

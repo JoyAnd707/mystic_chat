@@ -14,6 +14,7 @@ import '../widgets/mystic_starfield.dart';
 import 'chat_screen.dart';
 import 'settings_menu.dart';
 import 'gallery_screen.dart';
+import '../widgets/main_menu_status_row.dart';
 
 
 
@@ -192,6 +193,17 @@ Positioned.fill(
     animation: _twinkleController,
     starCount: 58,
     sizeMultiplier: 1.25,
+  ),
+),
+Positioned(
+  left: 0,
+  right: 0,
+  top: 60,
+  child: MainMenuStatusRow(
+    currentUserId: widget.currentUserId,
+    onStatusTap: (userId) {
+      debugPrint('Tapped status: $userId');
+    },
   ),
 ),
 Transform.scale(
