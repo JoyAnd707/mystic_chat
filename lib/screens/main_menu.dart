@@ -13,7 +13,7 @@ import '../widgets/mystic_top_status_bar.dart';
 import '../widgets/mystic_starfield.dart';
 import 'chat_screen.dart';
 import 'settings_menu.dart';
-
+import 'gallery_screen.dart';
 
 
 
@@ -194,9 +194,9 @@ Positioned.fill(
     sizeMultiplier: 1.25,
   ),
 ),
-    Positioned(
-      left: 145,
-      top: 110,
+ Positioned(
+  left: 170,
+  top: 125,
       child: StreamBuilder<int>(
         stream: _unreadDmMessageCountStream(),
         builder: (context, snapshot) {
@@ -231,15 +231,40 @@ Positioned.fill(
 Positioned(
   left: 8,
   top: 170,
-  child: Image.asset(
-    'assets/ui/main_menu/MainMenuButtonRow.png',
-    width: 72,
-    fit: BoxFit.contain,
+  child: Stack(
+    children: [
+      Image.asset(
+        'assets/ui/main_menu/MainMenuButtonRow.png',
+        width: 72,
+        fit: BoxFit.contain,
+      ),
+
+      Positioned(
+        left: 0,
+        top: 6,
+        child: GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => GalleryScreen(
+                  currentUserId: widget.currentUserId,
+                ),
+              ),
+            );
+          },
+          child: Container(
+            width: 72,
+            height: 50,
+            color: Colors.white.withOpacity(0.45),
+          ),
+        ),
+      ),
+    ],
   ),
 ),
 Positioned(
-  left: 60,
-  top: 220,
+  left: 85,
+  top: 235,
   child: DecoyCircleMenuButton(
     ringAnimation: _messageRingController,
     imagePath: 'assets/ui/main_menu/EmailDecoyButton.png',
@@ -247,16 +272,16 @@ Positioned(
 ),
 
 Positioned(
-  left: 240,
-  top: 240,
+  left: 255,
+  top: 255,
   child: DecoyCircleMenuButton(
     ringAnimation: _messageRingController,
     imagePath: 'assets/ui/main_menu/CallDecoyButton.png',
   ),
 ),
-    Positioned(
-      left: 85,
-      top: 375,
+  Positioned(
+  left: 100,
+  top: 390,
       child: AnimatedChatroomButton(
         ringAnimation: _chatroomRingController,
         onTap: () {

@@ -103,6 +103,7 @@ flutter:
     - assets/ui/main_menu/EmailDecoyButton.png
     - assets/ui/main_menu/CallDecoyButton.png
     - assets/ui/main_menu/MainMenuButtonRow.png
+    - assets/ui/gallery/PhotoAlbumFrames.png
     
   fonts:
     - family: NotoSans
