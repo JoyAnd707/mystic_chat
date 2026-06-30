@@ -158,6 +158,7 @@ flutter:
     - assets/ui/main_menu/Cloud3.png
     - assets/ui/main_menu/Cloud4.png
     - assets/ui/main_menu/Cloud5.png
+    - assets/ui/main_menu/Tap.png
 
     
   fonts:

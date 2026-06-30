@@ -1,6 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-
+import '../audio/sfx.dart';
 class SpaceSnackProgressBar extends StatefulWidget {
   const SpaceSnackProgressBar({
     super.key,
@@ -203,11 +203,14 @@ class _SpaceSnackProgressBarState extends State<SpaceSnackProgressBar>
             top: 14,
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
-              onTap: _claimReward,
-              child: AnimatedBuilder(
-                animation: _readyController,
-                builder: (context, _) {
-                  final double t = _readyController.value;
+             onTap: () async {
+  Sfx.I.playBack();
+  _claimReward();
+},
+      child: AnimatedBuilder(
+  animation: _readyController,
+  builder: (context, _) {
+    final double t = _readyController.value;
                   final double snackShiftX =
     (_rewardReady && !_claimingReward) ? sin(t * pi * 2) * 2.5 : 0.0;
 
@@ -243,22 +246,7 @@ class _SpaceSnackProgressBarState extends State<SpaceSnackProgressBar>
                               const SizedBox.shrink(),
                         ),
                       ),
-                      if (_rewardReady)
-                        Positioned(
-                          right: 18,
-                          top: -34,
-                          child: Transform.scale(
-                            scale: 0.80 + (0.06 * t),
-                            child: Image.asset(
-                              _tapAssetPath,
-                              width: 86,
-                              fit: BoxFit.contain,
-                              filterQuality: FilterQuality.high,
-                              errorBuilder: (_, __, ___) =>
-                                  const SizedBox.shrink(),
-                            ),
-                          ),
-                        ),
+   
                     ],
                   );
                 },
@@ -398,7 +386,10 @@ Widget _openingDoritos() {
 
       return GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onTap: _startOpening,
+        onTap: () async {
+  Sfx.I.playBack();
+  _startOpening();
+},
         child: SizedBox(
           width: 310,
           height: 300,
@@ -416,7 +407,19 @@ children: [
       errorBuilder: (_, __, ___) => const SizedBox.shrink(),
     ),
   ),
-
+if (!_startedOpening)
+  Positioned(
+    right: -18,
+    top: -38,
+    child: Transform.rotate(
+      angle: 0.28,
+      child: const Image(
+        image: AssetImage('assets/ui/main_menu/Tap.png'),
+        width: 120,
+        filterQuality: FilterQuality.high,
+      ),
+    ),
+  ),
 if (_startedOpening)
   cloud(
     asset: 'assets/ui/main_menu/Cloud1.png',
@@ -551,7 +554,10 @@ style: const TextStyle(
           bottom: 38,
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onTap: widget.onClose,
+            onTap: () async {
+  Sfx.I.playBack();
+  widget.onClose();
+},
             child: const SizedBox(
               height: 42,
             ),
