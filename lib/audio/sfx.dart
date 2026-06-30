@@ -13,13 +13,15 @@ class Sfx {
   final List<AudioPlayer> _pool = [];
   int _next = 0;
 
-    Future<void> init() async {
-    for (int i = 0; i < _poolSize; i++) {
-      final p = AudioPlayer();
-      await p.setVolume(AppSettings.sfxVolume);
-      _pool.add(p);
-    }
+Future<void> init() async {
+  _volume = AppSettings.sfxVolume;
+
+  for (int i = 0; i < _poolSize; i++) {
+    final p = AudioPlayer();
+    await p.setVolume(_volume);
+    _pool.add(p);
   }
+}
 
   Future<void> setVolume(double value) async {
     _volume = value.clamp(0.0, 1.0);

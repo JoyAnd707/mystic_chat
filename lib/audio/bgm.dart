@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import '../services/app_settings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 enum _BgmScope { homeDm, group }
 
 class Bgm {
@@ -50,28 +51,32 @@ final Map<String, Duration> _groupPosByAsset = <String, Duration>{};
   Duration? _groupResumePosition;
 
 
-  Future<void> init() async {
-    final bgmContext = AudioContext(
-      android: AudioContextAndroid(
-        isSpeakerphoneOn: false,
-        stayAwake: true,
-        contentType: AndroidContentType.music,
-        usageType: AndroidUsageType.media,
-        audioFocus: AndroidAudioFocus.none,
-      ),
-      iOS: AudioContextIOS(
-        category: AVAudioSessionCategory.ambient,
-        options: <AVAudioSessionOptions>{
-          AVAudioSessionOptions.mixWithOthers,
-        },
-      ),
-    );
+Future<void> init() async {
+  final bgmContext = AudioContext(
+    android: AudioContextAndroid(
+      isSpeakerphoneOn: false,
+      stayAwake: true,
+      contentType: AndroidContentType.music,
+      usageType: AndroidUsageType.media,
+      audioFocus: AndroidAudioFocus.none,
+    ),
+    iOS: AudioContextIOS(
+      category: AVAudioSessionCategory.ambient,
+      options: <AVAudioSessionOptions>{
+        AVAudioSessionOptions.mixWithOthers,
+      },
+    ),
+  );
 
-    await _player.setAudioContext(bgmContext);
-    await _player.setReleaseMode(ReleaseMode.loop);
+  await _player.setAudioContext(bgmContext);
+  await _player.setReleaseMode(ReleaseMode.loop);
 
-    // ✅ use our tracked volume
-await _setVolume(AppSettings.bgmVolume);  }
+  final prefs = await SharedPreferences.getInstance();
+  final savedVolume = prefs.getDouble('bgm_volume') ?? AppSettings.bgmVolume;
+
+  AppSettings.bgmVolume = savedVolume;
+  await _setVolume(savedVolume);
+}
 
 
 
@@ -196,12 +201,18 @@ String assetForHour(int hour) {
   // ==========================
 Future<void> _playLoopingAsset(String asset) async {
   if (!enabled) return;
-  if (_currentAsset == asset) return;
 
-  // We treat ONLY the home/dm asset as "home"
+  final double savedVolume = AppSettings.bgmVolume.clamp(0.0, 1.0);
+  _volume = savedVolume;
+
+  // ✅ Even if same asset is already playing, re-apply volume
+  if (_currentAsset == asset) {
+    await _player.setVolume(_volume);
+    return;
+  }
+
   final bool switchingToHome = (asset == _homeDmAsset);
 
-  // ✅ Save position ONLY for group tracks (never for home/dm)
   final String? prevAsset = _currentAsset;
   if (prevAsset != null && prevAsset != _homeDmAsset) {
     try {
@@ -209,41 +220,44 @@ Future<void> _playLoopingAsset(String asset) async {
       if (pos != null) {
         _groupPosByAsset[prevAsset] = pos;
       }
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
   }
 
-  // ✅ Decide resume position:
-  // - GROUP: resume from saved position (if exists)
-  // - HOME/DM: ALWAYS start from beginning (no resume)
   final Duration? resumePos = switchingToHome ? null : _groupPosByAsset[asset];
-
 
   _currentAsset = asset;
 
   try {
     debugPrint('🎵 BGM set source: $asset');
+    debugPrint('🎚️ BGM volume: $_volume');
 
     await _player.setReleaseMode(ReleaseMode.loop);
 
     await _player.stop();
+
+    // ✅ force volume before source
+    await _player.setVolume(_volume);
+
     await _player.setSource(AssetSource(asset));
+
+    // ✅ force volume after source
+    await _player.setVolume(_volume);
 
     if (resumePos != null) {
       await _player.seek(resumePos);
     } else {
-      // ✅ explicit start at 0 for home/dm (or group without saved pos)
       await _player.seek(Duration.zero);
     }
 
     await _player.resume();
+await _player.setVolume(_volume);
+    // ✅ force volume after resume too
+    await _player.setVolume(_volume);
   } catch (e, s) {
     debugPrint('❌ BGM failed: $e');
     debugPrint('$s');
   }
 }
-
 
   // ==========================
   // Easter egg
