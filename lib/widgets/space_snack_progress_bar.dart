@@ -1,6 +1,11 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../audio/sfx.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+
+
+
 class SpaceSnackProgressBar extends StatefulWidget {
   const SpaceSnackProgressBar({
     super.key,
@@ -17,7 +22,10 @@ class _SpaceSnackProgressBarState extends State<SpaceSnackProgressBar>
     with TickerProviderStateMixin {
   late final AnimationController _shipController;
   late final AnimationController _readyController;
+static const Duration _travelDuration = Duration(hours: 2);
 
+static const String _startTimeKey =
+    'space_snack_start_time';
   static const String _barAssetPath =
       'assets/ui/main_menu/VideoProgressionBar.png';
   static const String _shipAssetPath = 'assets/ui/main_menu/Spaceship.png';
@@ -28,30 +36,22 @@ class _SpaceSnackProgressBarState extends State<SpaceSnackProgressBar>
 
   bool _rewardReady = false;
   bool _claimingReward = false;
-
+DateTime? _startTime;
   @override
   void initState() {
     super.initState();
 
-    _shipController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    );
+_shipController = AnimationController(
+  vsync: this,
+  duration: const Duration(seconds: 12),
+)..repeat();
 
-    _readyController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
+_readyController = AnimationController(
+  vsync: this,
+  duration: const Duration(milliseconds: 900),
+)..repeat(reverse: true);
 
-    _shipController.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        setState(() {
-          _rewardReady = true;
-        });
-      }
-    });
-
-    _shipController.forward();
+_loadOrCreateStartTime();
   }
 
   @override
@@ -60,7 +60,38 @@ class _SpaceSnackProgressBarState extends State<SpaceSnackProgressBar>
     _readyController.dispose();
     super.dispose();
   }
+Future<void> _loadOrCreateStartTime() async {
+  final prefs = await SharedPreferences.getInstance();
 
+  final String? saved = prefs.getString(_startTimeKey);
+
+  DateTime start;
+
+  if (saved == null) {
+    start = DateTime.now();
+    await prefs.setString(_startTimeKey, start.toIso8601String());
+  } else {
+    start = DateTime.tryParse(saved) ?? DateTime.now();
+  }
+
+  if (!mounted) return;
+
+  setState(() {
+    _startTime = start;
+    _rewardReady = _logicalProgress() >= 1.0;
+  });
+}
+
+double _logicalProgress() {
+  final DateTime? start = _startTime;
+
+  if (start == null) return 0.0;
+
+  final Duration elapsed = DateTime.now().difference(start);
+
+  return (elapsed.inMilliseconds / _travelDuration.inMilliseconds)
+      .clamp(0.0, 1.0);
+}
   double _wave(double t, double speed, double phase) {
     return sin((t * speed * pi * 2) + phase);
   }
@@ -144,8 +175,17 @@ class _SpaceSnackProgressBarState extends State<SpaceSnackProgressBar>
                         builder: (context, _) {
                           final double t = _shipController.value;
 
-                          final double forwardProgress = t;
+final double forwardProgress = _logicalProgress();
 
+if (!_rewardReady && forwardProgress >= 1.0) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
+
+    setState(() {
+      _rewardReady = true;
+    });
+  });
+}
                           final double backAndForth = _rewardReady
                               ? 0.0
                               : (_wave(t, 3.0, 0.7) * 0.035) +
@@ -568,7 +608,7 @@ style: const TextStyle(
         Positioned(
           left: 116,
           right: 116,
-          bottom: 38,
+          bottom: 18,
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () async {
