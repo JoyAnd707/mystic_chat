@@ -247,7 +247,7 @@ builder: (context, child) {
 }
 
 
-
+const bool kEnableDevReset = false;
 Future<void> devReset(BuildContext context) async {
   final prefs = await SharedPreferences.getInstance();
 

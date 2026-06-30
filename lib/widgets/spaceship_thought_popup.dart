@@ -121,7 +121,7 @@ const List<ThoughtData> _thoughts = [
     ThoughtData(
     userId: 'danielle',
     text:
-        'So... tired...',
+        '',
     silhouetteAsset: 'assets/ui/thoughts/DanielleThought.png',
     color: Color(0xFF4DBDFF),
   ),

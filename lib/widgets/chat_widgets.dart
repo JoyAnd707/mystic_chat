@@ -3056,7 +3056,20 @@ class _VoiceMessageTileState extends State<VoiceMessageTile> {
 
   // ✅ NEW: prevent "completed" firing twice => play finish SFX only once
   bool _finishSfxPlayed = false;
+double _playbackSpeed = 1.0;
 
+Future<void> _togglePlaybackSpeed() async {
+  final double nextSpeed = _playbackSpeed == 1.0 ? 2.0 : 1.0;
+
+  if (!mounted) return;
+  setState(() {
+    _playbackSpeed = nextSpeed;
+  });
+
+  if (_ready) {
+    await _player.setSpeed(nextSpeed);
+  }
+}
 
   Color _darken(Color c, [double amount = 0.25]) {
     final hsl = HSLColor.fromColor(c);
@@ -3105,8 +3118,8 @@ class _VoiceMessageTileState extends State<VoiceMessageTile> {
       }
 
       _dur = _player.duration ?? Duration(milliseconds: widget.durationMs);
-      _ready = true;
-
+_ready = true;
+await _player.setSpeed(_playbackSpeed);
       _player.positionStream.listen((p) {
         if (!mounted) return;
         setState(() => _pos = p);
@@ -3186,12 +3199,13 @@ class _VoiceMessageTileState extends State<VoiceMessageTile> {
         final double playW = 34 * s;
         final double gap1 = 10 * s;
         final double gap2 = 8 * s;
-        final double timeW = 44 * s;
+final double timeW = 44 * s;
+final double speedW = 38 * s;
+final double gap3 = 6 * s;
 
-        final double sliderW = bounded
-            ? (constraints.maxWidth - playW - gap1 - gap2 - timeW).clamp(60 * s, 240 * s)
-            : (140 * s);
-
+final double sliderW = bounded
+    ? (constraints.maxWidth - playW - gap1 - gap2 - timeW - gap3 - speedW).clamp(60 * s, 240 * s)
+    : (140 * s);
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -3310,6 +3324,34 @@ class _VoiceMessageTileState extends State<VoiceMessageTile> {
                 ),
               ),
             ),
+            SizedBox(width: gap3),
+
+GestureDetector(
+  onTap: _togglePlaybackSpeed,
+  behavior: HitTestBehavior.opaque,
+  child: Container(
+    width: speedW,
+    height: 24 * s,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: Colors.black.withOpacity(0.10),
+      borderRadius: BorderRadius.circular(8 * s),
+      border: Border.all(
+        color: Colors.black.withOpacity(0.18),
+        width: 1,
+      ),
+    ),
+    child: Text(
+      _playbackSpeed == 1.0 ? '1x' : '2x',
+      style: TextStyle(
+        fontSize: 11 * s,
+        color: Colors.black.withOpacity(0.72),
+        fontWeight: FontWeight.w700,
+        height: 1.0,
+      ),
+    ),
+  ),
+),
           ],
         );
       },

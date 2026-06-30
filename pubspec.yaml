@@ -85,6 +85,12 @@ flutter:
     - assets/animated_emojis/danielle/danielle_sad_1.png
     - assets/animated_emojis/danielle/danielle_angry_2.png
     - assets/animated_emojis/danielle/danielle_angry_1.png
+    - assets/animated_emojis/nella/nella_happy_2.png
+    - assets/animated_emojis/nella/nella_happy_1.png
+
+
+
+
 
     - assets/ui/settings/tabs/AccountOn.png
     - assets/ui/settings/tabs/AccountOff.png
