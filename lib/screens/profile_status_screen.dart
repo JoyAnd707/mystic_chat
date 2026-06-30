@@ -185,6 +185,111 @@ Future<void> _pickAndUploadProfileImage() async {
     );
   }
 }
+Future<void> _showProfileImageMenu() async {
+  if (!_canEditProfile) return;
+
+  final bool hasCustomImage = await _profileDoc.get().then(
+    (doc) => ((doc.data()?['profileImageUrl'] ?? '').toString().isNotEmpty),
+  );
+
+  final String? action = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: const Color(0xFF101020),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(18),
+      ),
+    ),
+    builder: (context) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Profile Picture',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 18),
+              ListTile(
+                leading: const Icon(
+                  Icons.photo_library_outlined,
+                  color: Color(0xFF46F5D6),
+                ),
+                title: const Text(
+                  'Pick New Image',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () => Navigator.pop(context, 'pick'),
+              ),
+              if (hasCustomImage)
+                ListTile(
+                  leading: const Icon(
+                    Icons.delete_outline,
+                    color: Colors.redAccent,
+                  ),
+                  title: const Text(
+                    'Remove Profile Picture',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  onTap: () => Navigator.pop(context, 'remove'),
+                ),
+              ListTile(
+                leading: const Icon(
+                  Icons.close,
+                  color: Colors.white54,
+                ),
+                title: const Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                onTap: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+
+  if (action == 'pick') {
+    await _pickAndUploadProfileImage();
+    return;
+  }
+
+  if (action != 'remove') return;
+
+  try {
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('profile_images')
+        .child(widget.profileUserId)
+        .child('profile.jpg');
+
+    try {
+      await ref.delete();
+    } catch (_) {}
+
+    await _profileDoc.set({
+      'profileImageUrl': '',
+      'profileImageUpdatedAt': FieldValue.serverTimestamp(),
+      'statusSeenBy': <String, bool>{},
+    }, SetOptions(merge: true));
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not remove profile image: $e'),
+      ),
+    );
+  }
+}
 Future<void> _pickAndUploadBanner() async {
     if (!_canEditProfile) return;
 
@@ -507,15 +612,15 @@ Widget build(BuildContext context) {
                             color: userColor.withOpacity(0.38),
                           ),
                         ),
-                        Positioned(
-                          left: 26,
-                          top: 300,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.translucent,
-                            onTap: _canEditProfile
-                                ? _pickAndUploadProfileImage
-                                : null,
-                            child: Container(
+               Positioned(
+  left: 26,
+  top: 300,
+  child: GestureDetector(
+    behavior: HitTestBehavior.translucent,
+ onTap: _canEditProfile
+    ? _showProfileImageMenu
+    : null,
+    child: Container(
                               width: 145,
                               height: 145,
                               decoration: BoxDecoration(

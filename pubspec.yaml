@@ -79,6 +79,8 @@ flutter:
     - assets/animated_emojis/adi/adi_angry_2.png
     - assets/animated_emojis/adi/adi_sad_2.png
     - assets/animated_emojis/adi/adi_sad_1.png
+    - assets/animated_emojis/danielle/danielle_happy_2.png
+    - assets/animated_emojis/danielle/danielle_happy_1.png
 
     - assets/ui/settings/tabs/AccountOn.png
     - assets/ui/settings/tabs/AccountOff.png
