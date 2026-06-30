@@ -96,47 +96,56 @@ double _logicalProgress() {
     return sin((t * speed * pi * 2) + phase);
   }
 
-  Future<void> _claimReward() async {
-    if (!_rewardReady || _claimingReward) return;
+Future<void> _claimReward() async {
+  if (!_rewardReady || _claimingReward) return;
 
-    setState(() {
-      _claimingReward = true;
-    });
+  setState(() {
+    _claimingReward = true;
+  });
 
-    final Random random = Random();
-    final int hearts = 3 + random.nextInt(18);
-    final int hourglasses = random.nextInt(4);
+  final Random random = Random();
+  final int hearts = 3 + random.nextInt(18);
+  final int hourglasses = random.nextInt(4);
 
-    await showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      barrierLabel: 'Doritos reward',
-      barrierColor: Colors.black.withOpacity(0.72),
-      transitionDuration: const Duration(milliseconds: 180),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return _DoritosRewardOverlay(
-          doritosAssetPath: _doritosAssetPath,
-          rewardMenuAssetPath: _rewardMenuAssetPath,
-          hearts: hearts,
-          hourglasses: hourglasses,
-          onClose: () {
-            Navigator.of(context).pop();
-          },
-        );
-      },
-    );
+  await showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    barrierLabel: 'Doritos reward',
+    barrierColor: Colors.black.withOpacity(0.72),
+    transitionDuration: const Duration(milliseconds: 180),
+    pageBuilder: (context, animation, secondaryAnimation) {
+      return _DoritosRewardOverlay(
+        doritosAssetPath: _doritosAssetPath,
+        rewardMenuAssetPath: _rewardMenuAssetPath,
+        hearts: hearts,
+        hourglasses: hourglasses,
+        onClose: () {
+          Navigator.of(context).pop();
+        },
+      );
+    },
+  );
 
-    if (!mounted) return;
+  if (!mounted) return;
 
-    setState(() {
-      _rewardReady = false;
-      _claimingReward = false;
-    });
+  final DateTime newStartTime = DateTime.now();
 
-    _shipController.reset();
-    _shipController.forward();
-  }
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(
+    _startTimeKey,
+    newStartTime.toIso8601String(),
+  );
 
+  setState(() {
+    _startTime = newStartTime;
+    _rewardReady = false;
+    _claimingReward = false;
+  });
+
+  _shipController
+    ..reset()
+    ..forward();
+}
   @override
   Widget build(BuildContext context) {
     final double fullWidth = widget.width ?? MediaQuery.of(context).size.width;

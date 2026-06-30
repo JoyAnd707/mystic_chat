@@ -132,7 +132,7 @@ flutter:
 
     - assets/ui/status/AdiNewStatus.png
     - assets/ui/status/AdiNoStatus.png
-
+    - assets/fx/LOLOLsfx.mp3
     - assets/ui/status/DanielleNewStatus.png
     - assets/ui/status/DanielleNoStatus.png
 

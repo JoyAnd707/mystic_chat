@@ -1124,6 +1124,7 @@ void _openStickerPicker() {
       );
 
       Sfx.I.playSend();
+      
     },
     onSendArchivedSticker: (stickerUrl, storagePath, ts) async {
       _pendingScrollToBottomTs = ts;
@@ -2498,28 +2499,34 @@ Future<void> _sendMessage() async {
     }
   });
 
-  await FirestoreChatService.sendTextMessage(
-    roomId: widget.roomId,
-    senderId: widget.currentUserId,
-    text: text,
-    ts: ts,
-    bubbleTemplate: templateForThisMessage.name,
-    decor: decorForThisMessage.name,
-    fontFamily: fontFamilyForThisMessage,
-    replyToMessageId: replyToId,
-    replyToSenderId: replyToSenderId,
-    replyToText: replyToText,
-  );
+await FirestoreChatService.sendTextMessage(
+  roomId: widget.roomId,
+  senderId: widget.currentUserId,
+  text: text,
+  ts: ts,
+  bubbleTemplate: templateForThisMessage.name,
+  decor: decorForThisMessage.name,
+  fontFamily: fontFamilyForThisMessage,
+  replyToMessageId: replyToId,
+  replyToSenderId: replyToSenderId,
+  replyToText: replyToText,
+);
 
-  Sfx.I.playSend();
+Sfx.I.playSend();
 
-  if (triggerEgg) {
-    Sfx.I.play707VoiceLine();
-  }
+final normalized = text.trim().toLowerCase();
 
-  if (triggerCreepy) {
-    _playCreepyEggFx();
-  }
+if (normalized == 'lolol') {
+  Sfx.I.playLolol();
+}
+
+if (triggerEgg) {
+  Sfx.I.play707VoiceLine();
+}
+
+if (triggerCreepy) {
+  _playCreepyEggFx();
+}
 }
 
 
@@ -2565,6 +2572,7 @@ Future<void> _sendVoiceMessage({
   );
 
   Sfx.I.playSend();
+  
   _scrollToBottom(animated: true, keepFocus: true);
 }
 
