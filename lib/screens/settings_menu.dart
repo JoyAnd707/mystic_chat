@@ -9,6 +9,8 @@ import '../main.dart';
 
 
 import '../widgets/settings/settings_tabs.dart';
+const bool kEnableDevReset = false;
+
 class SettingsMenuScreen extends StatefulWidget {
   final String currentUserId;
 
@@ -89,9 +91,11 @@ Positioned(
   bottom: 0,
   child: GestureDetector(
     behavior: HitTestBehavior.translucent,
-    onTap: () async {
-      await devReset(context);
-    },
+    onTap: kEnableDevReset
+        ? () async {
+            await devReset(context);
+          }
+        : null,
     child: const SizedBox(
       width: 120,
       height: 65,
