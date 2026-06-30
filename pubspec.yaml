@@ -150,7 +150,14 @@ flutter:
 
     - assets/ui/main_menu/Doritos.png
 
+    - assets/ui/main_menu/Spaceship.png
+    - assets/ui/main_menu/RewardsMenu.png
 
+    - assets/ui/main_menu/Cloud1.png
+    - assets/ui/main_menu/Cloud2.png
+    - assets/ui/main_menu/Cloud3.png
+    - assets/ui/main_menu/Cloud4.png
+    - assets/ui/main_menu/Cloud5.png
 
     
   fonts:

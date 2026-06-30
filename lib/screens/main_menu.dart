@@ -225,16 +225,7 @@ Positioned(
     child: SpaceSnackProgressBar(),
   ),
 ),
-Positioned(
-  right: 10,
-  bottom: 38,
-  child: Image.asset(
-    'assets/ui/main_menu/Doritos.png',
-    width: 52,
-    fit: BoxFit.contain,
-    filterQuality: FilterQuality.high,
-  ),
-),
+
 Transform.scale(
   scale: 0.88,
   alignment: Alignment.topLeft,
