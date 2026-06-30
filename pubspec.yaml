@@ -160,6 +160,17 @@ flutter:
     - assets/ui/main_menu/Cloud5.png
     - assets/ui/main_menu/Tap.png
 
+
+    - assets/ui/thoughts/ThoughtWindowBG.png
+    - assets/ui/thoughts/JoyThought.png
+    - assets/ui/thoughts/AdiThought.png
+    - assets/ui/thoughts/DanielleThought.png
+    - assets/ui/thoughts/LeraThought.png
+    - assets/ui/thoughts/LihiThought.png
+    - assets/ui/thoughts/LianThought.png
+    - assets/ui/thoughts/TalThought.png
+    - assets/ui/thoughts/NellaThought.png
+
     
   fonts:
     - family: NotoSans

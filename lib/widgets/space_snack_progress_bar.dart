@@ -2,7 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../audio/sfx.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'spaceship_thought_popup.dart';
 
 
 
@@ -214,21 +214,35 @@ if (!_rewardReady && forwardProgress >= 1.0) {
                               : (_wave(t, 5.0, 0.4) * 0.13) +
                                   (_wave(t, 9.0, 2.0) * 0.06);
 
-                          return Positioned(
-                            left: x + driftX,
-                            top: _rewardReady
-    ? pathY - 34
-    : pathY + bobY - 20,
-                            child: Transform.rotate(
-                              angle: tilt,
-                              child: Image.asset(
-                                _shipAssetPath,
-                                width: 46,
-                                fit: BoxFit.contain,
-                                filterQuality: FilterQuality.high,
-                              ),
-                            ),
-                          );
+             return Positioned(
+  left: x + driftX,
+  top: _rewardReady
+      ? pathY - 34
+      : pathY + bobY - 20,
+  child: GestureDetector(
+    behavior: HitTestBehavior.translucent,
+onTap: _rewardReady
+    ? null
+    : () {
+        showRandomSpaceshipThought(context);
+      },
+    child: SizedBox(
+      width: 58,
+      height: 58,
+      child: Center(
+        child: Transform.rotate(
+          angle: tilt,
+          child: Image.asset(
+            _shipAssetPath,
+            width: 46,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+          ),
+        ),
+      ),
+    ),
+  ),
+);
                         },
                       ),
                     ],
