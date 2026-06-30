@@ -170,7 +170,8 @@ flutter:
     - assets/ui/thoughts/LianThought.png
     - assets/ui/thoughts/TalThought.png
     - assets/ui/thoughts/NellaThought.png
-
+    
+    - assets/ui/guest_archive/
     
   fonts:
     - family: NotoSans

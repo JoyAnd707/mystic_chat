@@ -525,6 +525,20 @@ return Positioned(
                 children: [
 
 
+// 🎙️ Mic button
+TapToRecordMicButton(
+  size: tapSize,
+  iconSize: s(32),
+  uiScale: uiScale,
+  onSendVoice: onSendVoice,
+  onStartRecordingSfx: () {
+  },
+  onCancelRecordingSfx: () {
+  },
+),
+
+SizedBox(width: s(6)),
+
 // 📷 Camera button
 GestureDetector(
   onTap: onPickImage,
@@ -544,8 +558,6 @@ GestureDetector(
   ),
 ),
 
-
-
 SizedBox(width: s(6)),
 
 // ✨ Bubble menu button
@@ -564,6 +576,9 @@ GestureDetector(
     ),
   ),
 ),
+
+
+
                 ],
               ),
             ),

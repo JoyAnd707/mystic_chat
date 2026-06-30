@@ -16,7 +16,7 @@ import 'settings_menu.dart';
 import 'gallery_screen.dart';
 import '../widgets/main_menu_status_row.dart';
 import '../widgets/space_snack_progress_bar.dart';
-
+import 'guest_archive_screen.dart';
 
 class MainMenuScreen extends StatefulWidget {
   final String currentUserId;
@@ -342,6 +342,28 @@ Positioned(
         await Bgm.I.leaveGroupAndResumeHomeDm();
       });
     },
+  ),
+),
+Positioned(
+  left: 6,
+  top: 360,
+  child: GestureDetector(
+    behavior: HitTestBehavior.translucent,
+    onTap: () {
+      try {
+        Sfx.I.playMainMenuButtonRow();
+      } catch (_) {}
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const GuestArchiveScreen(),
+        ),
+      );
+    },
+child: const SizedBox(
+  width: 72,
+  height: 60,
+),
   ),
 ),
       Positioned(
