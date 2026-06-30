@@ -229,54 +229,136 @@ class _MysticStickerPickerSheetState extends State<_MysticStickerPickerSheet> {
                                   ts,
                                 );
                               },
-                              onLongPress: () async {
-                                if (stickerId.isEmpty) return;
+    onLongPress: () async {
+  if (stickerId.isEmpty) return;
 
-                                final bool? shouldDelete =
-                                    await showDialog<bool>(
-                                  context: context,
-                                  builder: (dialogContext) {
-                                    return AlertDialog(
-                                      backgroundColor: Colors.black,
-                                      title: const Text(
-                                        'Delete sticker?',
-                                        style: TextStyle(color: Colors.white),
-                                      ),
-                                      content: const Text(
-                                        'Remove this sticker from your archive?',
-                                        style: TextStyle(color: Colors.white70),
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(
-                                            dialogContext,
-                                            false,
-                                          ),
-                                          child: const Text('Cancel'),
-                                        ),
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(
-                                            dialogContext,
-                                            true,
-                                          ),
-                                          child: const Text('Delete'),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                );
+  final bool isFavorite = sticker['isFavorite'] == true;
 
-                                if (shouldDelete != true) return;
+  final String? action = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: const Color(0xFF061522),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+    ),
+    builder: (sheetContext) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF46F5D6).withOpacity(0.45),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Sticker Options',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.92),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 14),
+              _StickerOptionTile(
+                icon: isFavorite
+                    ? Icons.star_outline_rounded
+                    : Icons.star_rounded,
+                title: isFavorite
+                    ? 'Remove from Favorites'
+                    : 'Add to Favorites',
+                color: const Color(0xFF46F5D6),
+                onTap: () {
+                  Navigator.pop(
+                    sheetContext,
+                    isFavorite ? 'unfavorite' : 'favorite',
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              _StickerOptionTile(
+                icon: Icons.delete_outline_rounded,
+                title: 'Delete from Archive',
+                color: const Color(0xFFFF6B7A),
+                onTap: () {
+                  Navigator.pop(sheetContext, 'delete');
+                },
+              ),
+              const SizedBox(height: 8),
+              _StickerOptionTile(
+                icon: Icons.close_rounded,
+                title: 'Cancel',
+                color: Colors.white70,
+                onTap: () {
+                  Navigator.pop(sheetContext, 'cancel');
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 
-                                await FirestoreChatService.deleteArchivedSticker(
-                                  userId: widget.currentUserId,
-                                  stickerId: stickerId,
-                                  storagePath: storagePath,
-                                );
+  if (action == null || action == 'cancel') return;
 
-                                if (!mounted) return;
-                                setState(() {});
-                              },
+  if (action == 'favorite' || action == 'unfavorite') {
+    await FirestoreChatService.setArchivedStickerFavorite(
+      userId: widget.currentUserId,
+      stickerId: stickerId,
+      isFavorite: action == 'favorite',
+    );
+
+    if (!mounted) return;
+    setState(() {});
+    return;
+  }
+
+  if (action == 'delete') {
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: Colors.black,
+          title: const Text(
+            'Delete sticker?',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: const Text(
+            'Remove this sticker from your archive?',
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) return;
+
+    await FirestoreChatService.deleteArchivedSticker(
+      userId: widget.currentUserId,
+      stickerId: stickerId,
+      storagePath: storagePath,
+    );
+
+    if (!mounted) return;
+    setState(() {});
+  }
+},
                               child: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
@@ -445,6 +527,61 @@ class _CreateStickerTile extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+class _StickerOptionTile extends StatelessWidget {
+  const _StickerOptionTile({
+    required this.icon,
+    required this.title,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withOpacity(0.06),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: color.withOpacity(0.28),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: color,
+                size: 23,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.88),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

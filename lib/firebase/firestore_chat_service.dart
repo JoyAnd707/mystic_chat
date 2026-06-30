@@ -303,7 +303,7 @@ static Future<void> sendVoiceMessage({
   }
 
 
-  static Future<List<Map<String, dynamic>>> loadStickerArchive({
+static Future<List<Map<String, dynamic>>> loadStickerArchive({
   required String userId,
 }) async {
   final snap = await _db
@@ -313,11 +313,25 @@ static Future<void> sendVoiceMessage({
       .orderBy('createdAt', descending: true)
       .get();
 
-  return snap.docs.map((doc) {
+  final stickers = snap.docs.map((doc) {
     final data = doc.data();
     data['id'] = doc.id;
+    data['isFavorite'] = data['isFavorite'] == true;
     return data;
   }).toList();
+
+  stickers.sort((a, b) {
+    final bool aFavorite = a['isFavorite'] == true;
+    final bool bFavorite = b['isFavorite'] == true;
+
+    if (aFavorite == bFavorite) {
+      return 0;
+    }
+
+    return aFavorite ? -1 : 1;
+  });
+
+  return stickers;
 }
 
 static Future<void> sendArchivedStickerMessage({
@@ -467,6 +481,7 @@ static Future<void> deleteArchivedSticker({
     } catch (_) {
       // ignore if file already deleted
     }
+    
   }
 
   await _db
@@ -483,4 +498,18 @@ static Future<void> deleteArchivedSticker({
   }) async {
     await _messagesCol(roomId).doc(messageId).delete();
   }
+  static Future<void> setArchivedStickerFavorite({
+  required String userId,
+  required String stickerId,
+  required bool isFavorite,
+}) async {
+  await _db
+      .collection('users')
+      .doc(userId)
+      .collection('stickers')
+      .doc(stickerId)
+      .set({
+    'isFavorite': isFavorite,
+  }, SetOptions(merge: true));
+}
 }
