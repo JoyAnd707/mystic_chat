@@ -286,12 +286,29 @@ class _DoritosRewardOverlayState extends State<_DoritosRewardOverlay>
 bool _showRewardMenu = false;
 
   final List<String> _sarcasticMessages = const [
-    'Congratulations. You touched a bag.',
-    'Five hours later, and this is your legacy.',
-    'The snack economy has chosen mercy.',
-    'Wow. Productivity is trembling.',
-    'A suspicious bag has rewarded your patience.',
-    'You may now continue pretending this was worth it.',
+    'One of Lian\'s guitar strings.',
+    'A mixed bag of Tuli and Shmitz\'s whiskers.',
+    'An ultra rare Ruki Cheki.',
+    'A Sex Pistols CD. The disk is missing.',
+    'A rusty tattooing needle. Ew.',
+    'A piece of a torn poster signed by an idol. Worth much?',
+    'A Zoro figure with its tits out. Lucky!',
+    'A losing bingo sheet.',
+    'A polaroid photo that turned out blurry.',
+    '100\$ edible cake paper.',
+    'A \'Manga drawing for begginers\' guide book.',
+    'The bag is full of small Gackt photos.',
+    'Divorce papers.',
+    'A low- calorie Ninja Creami pint that never runs out',
+    'Overpriced yaoi posters from Dizengoff Center.',
+    'A fishing rod. For fishing.',
+    'Adi\'s last set of wispy lashes. Use carefully.',
+    'A message in a snack bag, sent from far away Gongaga.',
+    'An answer sheet for an anime quiz.',
+    'A chewed up plant piece Shmitz threw up.',
+    'A cracked glasses lens. Who lost it?',
+    'Premium grade cow meat. Yum.',
+    
   ];
 
   late final String _message;
