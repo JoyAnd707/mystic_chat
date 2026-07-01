@@ -129,9 +129,18 @@ Widget _buildImageHeartOverlay({
 
 // ✅ VER103 — helpers
 bool _isMyDeletableMessage(ChatMessage msg) {
-  if (msg.type == ChatMessageType.system) return false;
+  // ✅ Joy יכולה למחוק הודעות מערכת של entered / left
+  if (msg.type == ChatMessageType.system) {
+    if (widget.currentUserId != 'joy') return false;
+
+    final text = msg.text.toLowerCase();
+
+    return text.contains('has entered the chatroom') ||
+        text.contains('has left the chatroom');
+  }
+
+  // הודעות רגילות - רק של השולח
   return msg.senderId == widget.currentUserId;
-  
 }
 // ✅ VER104 — custom text shown when reply target was deleted
 static const String _deletedReplyLabel =
@@ -2903,27 +2912,88 @@ final bool replyTargetExists = (replyId == null)
                                     );
                                   }
 
-                                  if (msg.type == ChatMessageType.system) {
-                                    const double systemSideInset = 2.0;
-                                    pieces.add(
-                                      Padding(
-                                        padding: EdgeInsets.fromLTRB(
-                                          systemSideInset * uiScale,
-                                          topSpacing * uiScale,
-                                          systemSideInset * uiScale,
-                                          0,
-                                        ),
-                                        child: SystemMessageBar(
-                                            text: msg.text, uiScale: uiScale),
-                                      ),
-                                    );
+                 if (msg.type == ChatMessageType.system) {
+  const double systemSideInset = 2.0;
+  final bool canDeleteSystem = _isMyDeletableMessage(msg);
+  final bool isArmedDelete = _isArmedDelete(msg);
 
-                                    return Column(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                                      children: pieces,
-                                    );
-                                  }
+  pieces.add(
+    Padding(
+      padding: EdgeInsets.fromLTRB(
+        systemSideInset * uiScale,
+        topSpacing * uiScale,
+        systemSideInset * uiScale,
+        0,
+      ),
+      child: Column(
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onLongPress: () {
+              if (canDeleteSystem) {
+                _toggleArmDelete(msg);
+              }
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: EdgeInsets.all(isArmedDelete ? 4 * uiScale : 0),
+              decoration: BoxDecoration(
+                color: isArmedDelete
+                    ? const Color(0xFFFF6769).withOpacity(0.16)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8 * uiScale),
+                border: isArmedDelete
+                    ? Border.all(
+                        color: const Color(0xFFFF6769).withOpacity(0.95),
+                        width: 1.2 * uiScale,
+                      )
+                    : null,
+              ),
+              child: SystemMessageBar(
+                text: msg.text,
+                uiScale: uiScale,
+              ),
+            ),
+          ),
 
+          if (isArmedDelete)
+            Padding(
+              padding: EdgeInsets.only(top: 8 * uiScale),
+              child: GestureDetector(
+                onTap: () {
+                  _deleteArmedMessage(msg);
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 14 * uiScale,
+                    vertical: 7 * uiScale,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF6769).withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    'Delete',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12 * uiScale,
+                      fontWeight: FontWeight.w900,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: pieces,
+  );
+}
                                   final user = users[msg.senderId];
                                   if (user == null) return const SizedBox.shrink();
 
