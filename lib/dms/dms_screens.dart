@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -420,22 +420,127 @@ bool _isArmedDeleteDmMessage(String messageId) {
   return _armedDeleteMessageId != null &&
       _armedDeleteMessageId == messageId;
 }
+Future<void> _copyDmMessageText(Map<String, dynamic> data) async {
+  final String text = (data['text'] ?? '').toString().trim();
 
+  if (text.isEmpty) return;
+
+  await Clipboard.setData(
+    ClipboardData(text: text),
+  );
+
+  if (!mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Message copied'),
+      duration: Duration(seconds: 1),
+    ),
+  );
+}
 void _toggleArmDeleteDmMessage({
   required String messageId,
   required Map<String, dynamic> data,
-}) {
-  if (!_isMyDeletableDmMessage(data)) return;
+}) async {
+  final bool canDelete = _isMyDeletableDmMessage(data);
 
-  setState(() {
-    if (_armedDeleteMessageId == messageId) {
-      _armedDeleteMessageId = null;
-    } else {
+  final String type = (data['type'] ?? 'text').toString();
+  final String text = (data['text'] ?? '').toString().trim();
+
+  final bool canCopy = type == 'text' && text.isNotEmpty;
+
+  if (!canDelete && !canCopy) return;
+
+  final String? action = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: const Color(0xFF061522),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+    ),
+    builder: (sheetContext) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF46F5D6).withOpacity(0.45),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Message Options',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.92),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              if (canCopy) ...[
+                _DmMessageOptionTile(
+                  icon: Icons.copy_rounded,
+                  title: 'Copy Message',
+                  color: const Color(0xFF46F5D6),
+                  onTap: () {
+                    Navigator.pop(sheetContext, 'copy');
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+
+              if (canDelete) ...[
+                _DmMessageOptionTile(
+                  icon: Icons.delete_outline_rounded,
+                  title: 'Delete Message',
+                  color: const Color(0xFFFF6B7A),
+                  onTap: () {
+                    Navigator.pop(sheetContext, 'delete');
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+
+              _DmMessageOptionTile(
+                icon: Icons.close_rounded,
+                title: 'Cancel',
+                color: Colors.white70,
+                onTap: () {
+                  Navigator.pop(sheetContext, 'cancel');
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+
+  if (!mounted) return;
+  if (action == null || action == 'cancel') return;
+
+  if (action == 'copy') {
+    await _copyDmMessageText(data);
+    return;
+  }
+
+  if (action == 'delete') {
+    setState(() {
       _armedDeleteMessageId = messageId;
-    }
-  });
-}
+    });
 
+    await _deleteArmedDmMessage(
+      messageId: messageId,
+      data: data,
+    );
+  }
+}
 Future<void> _deleteArmedDmMessage({
   required String messageId,
   required Map<String, dynamic> data,
@@ -2145,10 +2250,69 @@ height: (_replyToText != null && _replyToText!.trim().isNotEmpty)
       ),
     ),
   );
+  }
 }
 
 
+
+class _DmMessageOptionTile extends StatelessWidget {
+  const _DmMessageOptionTile({
+    required this.icon,
+    required this.title,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withOpacity(0.06),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: color.withOpacity(0.28),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: color,
+                size: 23,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.88),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
+
+
+
 
 
 
