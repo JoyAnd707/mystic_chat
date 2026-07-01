@@ -1851,6 +1851,8 @@ storagePath: messageType == 'voice'
       : null,
   time: timeLabel,
   uiScale: uiScale,
+  meUserId: widget.currentUserId,
+  otherUserId: widget.otherUserId,
                           heartReactorIds: List<String>.from(
                             m['heartReactorIds'] ?? const [],
                           ),

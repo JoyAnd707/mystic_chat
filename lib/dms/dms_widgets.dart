@@ -1023,6 +1023,8 @@ class _DmMediaMessageRow extends StatelessWidget {
   final VoidCallback? onLongPressSticker;
   final String time;
   final double uiScale;
+  final String meUserId;
+  final String otherUserId;
 
   final String meLetter;
   final String otherLetter;
@@ -1044,6 +1046,8 @@ class _DmMediaMessageRow extends StatelessWidget {
     this.onLongPressSticker,
     required this.time,
     required this.uiScale,
+    required this.meUserId,
+    required this.otherUserId,
     required this.meLetter,
     required this.otherLetter,
     required this.heartReactorIds,
@@ -1442,8 +1446,8 @@ final Widget bubbleVisual = Stack(
   ],
 );
 
-    final Widget avatar = _simpleAvatar(
-      letter: isMe ? meLetter : otherLetter,
+    final Widget avatar = MysticProfileAvatar(
+      userId: isMe ? meUserId : otherUserId,
       size: avatarSize,
     );
 
