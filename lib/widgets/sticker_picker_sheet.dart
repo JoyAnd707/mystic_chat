@@ -359,20 +359,36 @@ class _MysticStickerPickerSheetState extends State<_MysticStickerPickerSheet> {
     setState(() {});
   }
 },
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.06),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.12),
-                                  ),
-                                ),
-                                child: Image.network(
-                                  stickerUrl,
-                                  fit: BoxFit.contain,
-                                ),
-                              ),
+              child: Stack(
+  children: [
+    Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.12),
+        ),
+      ),
+      child: Image.network(
+        stickerUrl,
+        fit: BoxFit.contain,
+      ),
+    ),
+
+    if (sticker['isFavorite'] == true)
+      Positioned(
+        left: 6,
+        top: 6,
+        child: const Icon(
+
+          Icons.star_rounded,
+          color: Color(0xFFFFD84D),
+          size: 22,
+        ),
+      ),
+  ],
+),
                             );
                           },
                         ),

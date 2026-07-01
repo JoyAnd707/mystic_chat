@@ -151,18 +151,116 @@ bool _isArmedDelete(ChatMessage msg) {
   return _armedDeleteMessageId != null && _armedDeleteMessageId == msg.id;
 }
 
-void _toggleArmDelete(ChatMessage msg) {
-  if (!_isMyDeletableMessage(msg)) return;
+void _toggleArmDelete(ChatMessage msg) async {
+  final bool canDelete = _isMyDeletableMessage(msg);
+  final bool canCopy = msg.type == ChatMessageType.text && msg.text.trim().isNotEmpty;
 
-  setState(() {
-    if (_armedDeleteMessageId == msg.id) {
-      _armedDeleteMessageId = null; // toggle off
-    } else {
-      _armedDeleteMessageId = msg.id; // arm this one
-    }
-  });
+  if (!canDelete && !canCopy) return;
+
+  final String? action = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: const Color(0xFF061522),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+    ),
+    builder: (sheetContext) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF46F5D6).withOpacity(0.45),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Message Options',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.92),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              if (canCopy) ...[
+                _MessageOptionTile(
+                  icon: Icons.copy_rounded,
+                  title: 'Copy Message',
+                  color: const Color(0xFF46F5D6),
+                  onTap: () {
+                    Navigator.pop(sheetContext, 'copy');
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+
+              if (canDelete) ...[
+                _MessageOptionTile(
+                  icon: Icons.delete_outline_rounded,
+                  title: 'Delete Message',
+                  color: const Color(0xFFFF6B7A),
+                  onTap: () {
+                    Navigator.pop(sheetContext, 'delete');
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+
+              _MessageOptionTile(
+                icon: Icons.close_rounded,
+                title: 'Cancel',
+                color: Colors.white70,
+                onTap: () {
+                  Navigator.pop(sheetContext, 'cancel');
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+
+  if (!mounted) return;
+  if (action == null || action == 'cancel') return;
+
+  if (action == 'copy') {
+    await _copyMessageText(msg);
+    return;
+  }
+
+  if (action == 'delete') {
+    setState(() {
+      _armedDeleteMessageId = msg.id;
+    });
+    await _deleteArmedMessage(msg);
+  }
 }
+Future<void> _copyMessageText(ChatMessage msg) async {
+  final String text = msg.text.trim();
 
+  if (text.isEmpty) return;
+
+  await Clipboard.setData(
+    ClipboardData(text: text),
+  );
+
+  if (!mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Message copied'),
+      duration: Duration(seconds: 1),
+    ),
+  );
+}
 Future<void> _deleteArmedMessage(ChatMessage msg) async {
   if (!_isMyDeletableMessage(msg)) return;
   if (!_isArmedDelete(msg)) return;
@@ -2996,12 +3094,10 @@ final bool replyTargetExists = (replyId == null)
   child: GestureDetector(
   behavior: HitTestBehavior.translucent,
 
-  // ✅ VER103 — long press arms delete ONLY for my own messages
-  onLongPress: () {
-    if (_isMyDeletableMessage(msg)) {
-      _toggleArmDelete(msg);
-    }
-  },
+// ✅ long press opens Copy/Delete options
+onLongPress: () {
+  _toggleArmDelete(msg);
+},
 
   onDoubleTap: (msg.type == ChatMessageType.image)
       ? null
@@ -3426,6 +3522,61 @@ AnimatedPadding(
 ),
 
           ],
+        ),
+      ),
+    );
+  }
+}
+class _MessageOptionTile extends StatelessWidget {
+  const _MessageOptionTile({
+    required this.icon,
+    required this.title,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withOpacity(0.06),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: color.withOpacity(0.28),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: color,
+                size: 23,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.88),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
