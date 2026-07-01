@@ -1,3 +1,6 @@
+
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 part of 'chat_screen.dart';
 
 /// ✅ סוג בועה לשליחה (תפריט)
@@ -154,8 +157,9 @@ bool _isArmedDelete(ChatMessage msg) {
 void _toggleArmDelete(ChatMessage msg) async {
   final bool canDelete = _isMyDeletableMessage(msg);
   final bool canCopy = msg.type == ChatMessageType.text && msg.text.trim().isNotEmpty;
+  final bool isStarred = await _isMessageStarredByMe(msg);
 
-  if (!canDelete && !canCopy) return;
+  if (!mounted) return;
 
   final String? action = await showModalBottomSheet<String>(
     context: context,
@@ -188,6 +192,16 @@ void _toggleArmDelete(ChatMessage msg) async {
                 ),
               ),
               const SizedBox(height: 14),
+
+              _MessageOptionTile(
+                icon: isStarred ? Icons.star_rounded : Icons.star_border_rounded,
+                title: isStarred ? 'Unstar Message' : 'Star Message',
+                color: const Color(0xFFFFD95A),
+                onTap: () {
+                  Navigator.pop(sheetContext, 'star');
+                },
+              ),
+              const SizedBox(height: 8),
 
               if (canCopy) ...[
                 _MessageOptionTile(
@@ -231,6 +245,11 @@ void _toggleArmDelete(ChatMessage msg) async {
   if (!mounted) return;
   if (action == null || action == 'cancel') return;
 
+  if (action == 'star') {
+    await _toggleStarForMessage(msg, isCurrentlyStarred: isStarred);
+    return;
+  }
+
   if (action == 'copy') {
     await _copyMessageText(msg);
     return;
@@ -260,6 +279,72 @@ Future<void> _copyMessageText(ChatMessage msg) async {
       duration: Duration(seconds: 1),
     ),
   );
+}
+
+
+
+Future<bool> _isMessageStarredByMe(ChatMessage msg) async {
+  try {
+    final doc = await FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(widget.roomId)
+        .collection('messages')
+        .doc(msg.id)
+        .get();
+
+    final data = doc.data();
+    final raw = data?['starredBy'];
+
+    if (raw is List) {
+      return raw.map((e) => e.toString()).contains(widget.currentUserId);
+    }
+
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+Future<void> _toggleStarForMessage(
+  ChatMessage msg, {
+  required bool isCurrentlyStarred,
+}) async {
+  try {
+    final ref = FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(widget.roomId)
+        .collection('messages')
+        .doc(msg.id);
+
+    if (isCurrentlyStarred) {
+      await ref.update({
+        'starredBy': FieldValue.arrayRemove([widget.currentUserId]),
+      });
+    } else {
+      await ref.update({
+        'starredBy': FieldValue.arrayUnion([widget.currentUserId]),
+        'starredUpdatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isCurrentlyStarred ? 'Message unstarred' : 'Message starred'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not update star: $e'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
 }
 Future<void> _deleteArmedMessage(ChatMessage msg) async {
   if (!_isMyDeletableMessage(msg)) return;

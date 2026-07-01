@@ -16,6 +16,8 @@ import '../services/notifications_service.dart'; // ✅ ADD THIS
 import 'package:image_picker/image_picker.dart';
 import '../widgets/sticker_picker_sheet.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 // ✅ ADD THIS
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../services/image_message_service.dart';

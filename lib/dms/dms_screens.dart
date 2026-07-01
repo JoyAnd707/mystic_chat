@@ -450,6 +450,57 @@ Future<void> _copyDmMessageText(Map<String, dynamic> data) async {
     ),
   );
 }
+Future<bool> _isDmMessageStarredByMe(String messageId) async {
+  try {
+    final doc = await _msgsRef.doc(messageId).get();
+    final data = doc.data();
+    final raw = data?['starredBy'];
+
+    if (raw is List) {
+      return raw.map((e) => e.toString()).contains(widget.currentUserId);
+    }
+
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<void> _toggleStarForDmMessage(
+  String messageId, {
+  required bool isCurrentlyStarred,
+}) async {
+  try {
+    if (isCurrentlyStarred) {
+      await _msgsRef.doc(messageId).update({
+        'starredBy': FieldValue.arrayRemove([widget.currentUserId]),
+      });
+    } else {
+      await _msgsRef.doc(messageId).update({
+        'starredBy': FieldValue.arrayUnion([widget.currentUserId]),
+        'starredUpdatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isCurrentlyStarred ? 'Message unstarred' : 'Message starred'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not update star: $e'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
 void _toggleArmDeleteDmMessage({
   required String messageId,
   required Map<String, dynamic> data,
@@ -460,8 +511,9 @@ void _toggleArmDeleteDmMessage({
   final String text = (data['text'] ?? '').toString().trim();
 
   final bool canCopy = type == 'text' && text.isNotEmpty;
+  final bool isStarred = await _isDmMessageStarredByMe(messageId);
 
-  if (!canDelete && !canCopy) return;
+  if (!mounted) return;
 
   final String? action = await showModalBottomSheet<String>(
     context: context,
@@ -494,7 +546,15 @@ void _toggleArmDeleteDmMessage({
                 ),
               ),
               const SizedBox(height: 14),
-
+              _DmMessageOptionTile(
+                icon: isStarred ? Icons.star_rounded : Icons.star_border_rounded,
+                title: isStarred ? 'Unstar Message' : 'Star Message',
+                color: const Color(0xFFFFD95A),
+                onTap: () {
+                  Navigator.pop(sheetContext, 'star');
+                },
+              ),
+              const SizedBox(height: 8),
               if (canCopy) ...[
                 _DmMessageOptionTile(
                   icon: Icons.copy_rounded,
@@ -541,7 +601,13 @@ void _toggleArmDeleteDmMessage({
     await _copyDmMessageText(data);
     return;
   }
-
+  if (action == 'star') {
+    await _toggleStarForDmMessage(
+      messageId,
+      isCurrentlyStarred: isStarred,
+    );
+    return;
+  }
   if (action == 'delete') {
     setState(() {
       _armedDeleteMessageId = messageId;
