@@ -384,6 +384,13 @@ String? _armedDeleteMessageId;
 String? _heartJumpMessageId;
 String? _heartJumpFromUserId;
 int _heartJumpShownAtMs = 0;
+bool _dmSearchOpen = false;
+final TextEditingController _dmSearchController = TextEditingController();
+Timer? _dmSearchDebounce;
+String _dmSearchQuery = '';
+List<String> _dmSearchResultMessageIds = <String>[];
+List<QueryDocumentSnapshot<Map<String, dynamic>>> _currentDmDocs =
+    <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 final Map<String, Set<String>> _lastDmReactorsByMessageId = <String, Set<String>>{};
 bool _dmHeartSnapshotInitialized = false;
 // ✅ DM typing indicator
@@ -688,7 +695,87 @@ void _flashMessageHighlight(String messageId) {
   });
 }
 
+String _dmSearchDateLabel(int ms) {
+  if (ms <= 0) return '';
 
+  final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+  final now = DateTime.now();
+
+  bool sameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  final yesterday = DateTime(now.year, now.month, now.day - 1);
+
+  if (sameDay(dt, now)) return 'Today';
+  if (sameDay(dt, yesterday)) return 'Yesterday';
+
+  return '${dt.day.toString().padLeft(2, '0')}/'
+      '${dt.month.toString().padLeft(2, '0')}/'
+      '${dt.year}';
+}
+
+String _dmSearchPreviewText(String text) {
+  final clean = text.replaceAll('\n', ' ').trim();
+
+  if (clean.length <= 90) return clean;
+
+  return '${clean.substring(0, 90)}...';
+}
+
+
+void _runDmMessageSearch(String rawQuery) {
+  _dmSearchDebounce?.cancel();
+
+  _dmSearchDebounce = Timer(const Duration(milliseconds: 250), () {
+    if (!mounted) return;
+
+    final String q = rawQuery.trim().toLowerCase();
+
+    if (q.isEmpty) {
+      setState(() {
+        _dmSearchQuery = '';
+        _dmSearchResultMessageIds = <String>[];
+      });
+      return;
+    }
+
+    final List<String> results = _currentDmDocs
+        .where((d) {
+          final data = d.data();
+          final String type = (data['type'] ?? 'text').toString();
+          final String text = (data['text'] ?? '').toString();
+
+          if (type != 'text') return false;
+          return text.toLowerCase().contains(q);
+        })
+        .map((d) => d.id)
+        .toList();
+
+    setState(() {
+      _dmSearchQuery = q;
+      _dmSearchResultMessageIds = results;
+    });
+  });
+}
+
+void _closeDmMessageSearch() {
+  _dmSearchDebounce?.cancel();
+
+  setState(() {
+    _dmSearchOpen = false;
+    _dmSearchQuery = '';
+    _dmSearchResultMessageIds = <String>[];
+  });
+
+  _dmSearchController.clear();
+}
+
+void _openDmMessageSearch() {
+  setState(() {
+    _dmSearchOpen = true;
+  });
+}
 
 void _showDmHeartJumpNotification({
   required String messageId,
@@ -1010,7 +1097,22 @@ Future<void> _pickAndSendDmMedia() async {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            
             children: [
+              ListTile(
+  leading: const Icon(
+    Icons.search_rounded,
+    color: Color(0xFF46F5D6),
+  ),
+  title: const Text(
+    'Search Messages',
+    style: TextStyle(color: Colors.white),
+  ),
+  onTap: () {
+    Navigator.pop(sheetContext);
+    _openDmMessageSearch();
+  },
+),
               ListTile(
                 leading: const Icon(
                   Icons.sticky_note_2_outlined,
@@ -1575,7 +1677,8 @@ void dispose() {
 
   _scroll.removeListener(_onDmScroll);
   _scroll.dispose();
-
+_dmSearchDebounce?.cancel();
+_dmSearchController.dispose();
   _c.dispose();
   _focus.dispose();
   super.dispose();
@@ -1730,6 +1833,8 @@ Widget build(BuildContext context) {
                       stream: _msgsStream,
                       builder: (context, snap) {
 final docs = snap.data?.docs ?? const [];
+_currentDmDocs =
+    List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(docs);
 _messageIdsInOrder = docs.map((d) => d.id).toList();
 
 if (snap.hasData) {
@@ -2365,6 +2470,170 @@ if (_heartJumpMessageId != null && _heartJumpFromUserId != null)
       ),
     ),
   ),
+  if (_dmSearchOpen)
+  Positioned(
+    left: s(14),
+    right: s(14),
+    top: s(14),
+    child: Material(
+      color: Colors.transparent,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: s(420),
+        ),
+        padding: EdgeInsets.all(s(12)),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.88),
+          borderRadius: BorderRadius.circular(s(16)),
+          border: Border.all(
+            color: const Color(0xFF46F5D6).withOpacity(0.65),
+            width: s(1.2),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.search_rounded,
+                  color: const Color(0xFF46F5D6),
+                  size: s(22),
+                ),
+                SizedBox(width: s(8)),
+                Expanded(
+                  child: TextField(
+                    controller: _dmSearchController,
+                    autofocus: true,
+                    onChanged: _runDmMessageSearch,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: s(14),
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: 'Search messages...',
+                      hintStyle: TextStyle(color: Colors.white54),
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _closeDmMessageSearch,
+                  child: Icon(
+                    Icons.close_rounded,
+                    color: Colors.white70,
+                    size: s(22),
+                  ),
+                ),
+              ],
+            ),
+
+            if (_dmSearchQuery.isNotEmpty) ...[
+              SizedBox(height: s(8)),
+              Divider(
+                color: Colors.white24,
+                height: 1,
+              ),
+              SizedBox(height: s(8)),
+
+              if (_dmSearchResultMessageIds.isEmpty)
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: s(18)),
+                  child: Text(
+                    'No results',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: s(13),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                )
+              else
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _dmSearchResultMessageIds.length,
+                    itemBuilder: (context, index) {
+                      final id = _dmSearchResultMessageIds[index];
+
+                      final data = _currentDmDocs
+                          .firstWhere((d) => d.id == id)
+                          .data();
+
+                      final String sender =
+                          dmUsers[(data['senderId'] ?? '').toString()]?.name ??
+                              '';
+
+                      final String text =
+                          (data['text'] ?? '').toString();
+
+                      final int ts =
+                          (data['tsMs'] ?? 0) as int;
+
+                      return GestureDetector(
+                        onTap: () {
+                          _closeDmMessageSearch();
+                          _jumpToMessage(id);
+                        },
+                        child: Container(
+                          margin: EdgeInsets.only(bottom: s(8)),
+                          padding: EdgeInsets.all(s(10)),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(s(12)),
+                            border: Border.all(
+                              color: Colors.white10,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      sender,
+                                      style: TextStyle(
+                                        color: const Color(0xFF46F5D6),
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: s(12),
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    _dmSearchDateLabel(ts),
+                                    style: TextStyle(
+                                      color: Colors.white54,
+                                      fontSize: s(11),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: s(4)),
+                              Text(
+                                _dmSearchPreviewText(text),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: s(12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    ),
+  ),
 
                   ],
                   
@@ -2388,6 +2657,7 @@ height: (_replyToText != null && _replyToText!.trim().isNotEmpty)
   focusNode: _focus,
   onSend: _send,
   onPickMedia: _pickAndSendDmMedia,
+  onOpenSearch: _openDmMessageSearch,
   uiScale: uiScale,
 
   replyToSenderName: _replyToSenderName,

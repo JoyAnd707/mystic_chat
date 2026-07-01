@@ -364,6 +364,7 @@ class _DmBottomBar extends StatelessWidget {
   final VoidCallback onTapTypeMessage;
   final Future<void> Function() onSend;
   final Future<void> Function() onPickMedia;
+  final VoidCallback onOpenSearch;
   final TextEditingController controller;
   final FocusNode focusNode;
   final double uiScale;
@@ -379,6 +380,7 @@ class _DmBottomBar extends StatelessWidget {
     required this.focusNode,
     required this.onSend,
     required this.onPickMedia,
+    required this.onOpenSearch,
     required this.uiScale,
     this.replyToSenderName,
     this.replyToText,

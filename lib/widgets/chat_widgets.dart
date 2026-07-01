@@ -588,23 +588,22 @@ return Positioned(
             ),
           ),
 
-          // ✅ Debug Search hitbox exactly over Max Speed
-          Positioned(
-            left: s(50),
-            top: 0,
-            bottom: 0,
-            child: Center(
-              child: GestureDetector(
-                onTap: onOpenSearch,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  width: s(57),
-                  height: s(42),
-                  color: Colors.red.withOpacity(0.35),
-                ),
-              ),
-            ),
-          ),
+ // ✅ Invisible Search hitbox exactly over Max Speed
+Positioned(
+  left: s(50),
+  top: 0,
+  bottom: 0,
+  child: Center(
+    child: GestureDetector(
+      onTap: onOpenSearch,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: s(57),
+        height: s(42),
+      ),
+    ),
+  ),
+),
         ],
       ),
     );
