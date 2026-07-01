@@ -534,6 +534,11 @@ case ChatMessageType.sticker:
 String? _heartJumpMessageId;
 String? _heartJumpFromUserId;
 int _heartJumpShownAtMs = 0;
+bool _searchOpen = false;
+final TextEditingController _searchController = TextEditingController();
+Timer? _searchDebounce;
+String _searchQuery = '';
+List<String> _searchResultMessageIds = <String>[];
   // ✅ NEW: whether there is a mention below (so we can show @)
   bool _newBelowHasMention = false;
 
@@ -633,6 +638,87 @@ int _heartJumpShownAtMs = 0;
     }
     return 0;
   }
+void _runMessageSearch(String rawQuery) {
+  _searchDebounce?.cancel();
+
+  _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+    if (!mounted) return;
+
+    final String q = rawQuery.trim().toLowerCase();
+
+    if (q.isEmpty) {
+      setState(() {
+        _searchQuery = '';
+        _searchResultMessageIds = <String>[];
+      });
+      return;
+    }
+
+    final List<String> results = _messages
+        .where((m) {
+          if (m.type != ChatMessageType.text) return false;
+          return m.text.toLowerCase().contains(q);
+        })
+        .map((m) => m.id)
+        .toList();
+
+    setState(() {
+      _searchQuery = q;
+      _searchResultMessageIds = results;
+    });
+  });
+}
+
+void _closeMessageSearch() {
+  _searchDebounce?.cancel();
+
+  setState(() {
+    _searchOpen = false;
+    _searchQuery = '';
+    _searchResultMessageIds = <String>[];
+  });
+
+  _searchController.clear();
+}
+
+void _openMessageSearch() {
+  debugPrint('SEARCH BUTTON PRESSED');
+
+  setState(() {
+    _searchOpen = true;
+  });
+}
+
+
+String _searchDateLabel(int ms) {
+  if (ms <= 0) return '';
+
+  final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+  final now = DateTime.now();
+
+  bool sameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  final yesterday = DateTime(now.year, now.month, now.day - 1);
+
+  if (sameDay(dt, now)) return 'Today';
+  if (sameDay(dt, yesterday)) return 'Yesterday';
+
+  return '${dt.day.toString().padLeft(2, '0')}/'
+      '${dt.month.toString().padLeft(2, '0')}/'
+      '${dt.year}';
+}
+
+String _searchPreviewText(String text) {
+  final clean = text.replaceAll('\n', ' ').trim();
+
+  if (clean.length <= 90) return clean;
+
+  return '${clean.substring(0, 90)}...';
+}
+
+
 
   Future<void> _loadLastReadTsOnce() async {
     if (_lastReadLoaded) return;
@@ -2286,7 +2372,8 @@ _wiggleTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       displayName: _displayNameForId(widget.currentUserId),
       isTyping: false,
     );
-
+_searchDebounce?.cancel();
+_searchController.dispose();
     _scrollController.dispose();
 _wiggleTimer?.cancel();
 _wiggleCtrl.dispose();
@@ -2790,6 +2877,7 @@ return ActiveUsersBar(
     Navigator.of(context).maybePop();
   },
   onOpenBubbleMenu: _openBubbleTemplateMenu,
+  onOpenSearch: _openMessageSearch,
 onPickImage: () async {
   try {
     final roomId = widget.roomId;
@@ -3509,7 +3597,174 @@ if (_newBelowCount > 0 && !_nearBottomCached)
                         ),
                       ),
                     ),
+if (_searchOpen)
+  Positioned(
+    left: 14 * uiScale,
+    right: 14 * uiScale,
+    top: 14 * uiScale,
+    child: Material(
+      color: Colors.transparent,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: 420 * uiScale,
+        ),
+        padding: EdgeInsets.all(12 * uiScale),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.88),
+          borderRadius: BorderRadius.circular(16 * uiScale),
+          border: Border.all(
+            color: const Color(0xFF46F5D6).withOpacity(0.65),
+            width: 1.2 * uiScale,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.search_rounded,
+                  color: const Color(0xFF46F5D6),
+                  size: 22 * uiScale,
+                ),
+                SizedBox(width: 8 * uiScale),
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    onChanged: _runMessageSearch,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14 * uiScale,
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: 'Search messages...',
+                      hintStyle: TextStyle(color: Colors.white54),
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _closeMessageSearch,
+                  child: Icon(
+                    Icons.close_rounded,
+                    color: Colors.white70,
+                    size: 22 * uiScale,
+                  ),
+                ),
+              ],
+            ),
 
+            if (_searchQuery.isNotEmpty) ...[
+              SizedBox(height: 8 * uiScale),
+              Divider(
+                color: Colors.white.withOpacity(0.14),
+                height: 1,
+              ),
+              SizedBox(height: 8 * uiScale),
+
+              if (_searchResultMessageIds.isEmpty)
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: 18 * uiScale),
+                  child: Text(
+                    'No results',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 13 * uiScale,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                )
+              else
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _searchResultMessageIds.length,
+                    itemBuilder: (context, index) {
+                      final String messageId =
+                          _searchResultMessageIds[index];
+
+                      final ChatMessage msg = _messages.firstWhere(
+                        (m) => m.id == messageId,
+                      );
+
+                      final String senderName =
+                          users[msg.senderId]?.name ?? msg.senderId;
+                          final Color senderColor =
+    users[msg.senderId]?.bubbleColor ?? Colors.white;
+
+                      return GestureDetector(
+                        onTap: () {
+                          final String id = msg.id;
+
+                          _closeMessageSearch();
+                          _jumpToMessageId(id);
+                        },
+                        child: Container(
+                          margin: EdgeInsets.only(bottom: 8 * uiScale),
+                          padding: EdgeInsets.all(10 * uiScale),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.06),
+                            borderRadius:
+                                BorderRadius.circular(12 * uiScale),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.10),
+                              width: 1,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      senderName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: senderColor,
+                                        fontSize: 12 * uiScale,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 8 * uiScale),
+                                  Text(
+                                    _searchDateLabel(msg.ts),
+                                    style: TextStyle(
+                                      color: Colors.white54,
+                                      fontSize: 11 * uiScale,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 5 * uiScale),
+                              Text(
+                                _searchPreviewText(msg.text),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.88),
+                                  fontSize: 12 * uiScale,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    ),
+  ),
                          if (_heartJumpMessageId != null &&
                       _heartJumpFromUserId != null)
                     Positioned(
@@ -3574,6 +3829,7 @@ if (_newBelowCount > 0 && !_nearBottomCached)
                       ),
                     ),
                 ],
+                
               ),
             ),
 

@@ -369,6 +369,7 @@ class ActiveUsersBar extends StatelessWidget {
 
   /// ✅ opens the bubble-style menu
   final VoidCallback onOpenBubbleMenu;
+  final VoidCallback onOpenSearch;
 
   /// ✅ pick image (camera button)
   final VoidCallback onPickImage;
@@ -383,6 +384,7 @@ class ActiveUsersBar extends StatelessWidget {
   final double uiScale;
 
   const ActiveUsersBar({
+    required this.onOpenSearch,
     super.key,
     required this.usersById,
     required this.onlineUserIds,
@@ -444,20 +446,20 @@ class ActiveUsersBar extends StatelessWidget {
             ),
           ),
 
-          // ✅ Max Speed (LEFT) — נשאר
-          Positioned(
-            left: s(50),
-            top: 0,
-            bottom: 0,
-            child: Center(
-              child: Image.asset(
-                'assets/ui/MaxSpeedDecoy.png',
-                width: s(57),
-                height: s(42),
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
+// ✅ Max Speed (LEFT)
+Positioned(
+  left: s(50),
+  top: 0,
+  bottom: 0,
+  child: Center(
+    child: Image.asset(
+      'assets/ui/MaxSpeedDecoy.png',
+      width: s(57),
+      height: s(42),
+      fit: BoxFit.contain,
+    ),
+  ),
+),
 
 // ✅ Active users text (center) — SHOW ALL NAMES
 Builder(
@@ -532,62 +534,74 @@ return Positioned(
                 mainAxisSize: MainAxisSize.min,
                 children: [
 
+                  // 🎙️ Mic button
+                  TapToRecordMicButton(
+                    size: tapSize,
+                    iconSize: s(32),
+                    uiScale: uiScale,
+                    onSendVoice: onSendVoice,
+                    onStartRecordingSfx: () {},
+                    onCancelRecordingSfx: () {},
+                  ),
 
-// 🎙️ Mic button
-TapToRecordMicButton(
-  size: tapSize,
-  iconSize: s(32),
-  uiScale: uiScale,
-  onSendVoice: onSendVoice,
-  onStartRecordingSfx: () {
-  },
-  onCancelRecordingSfx: () {
-  },
-),
+                  SizedBox(width: s(6)),
 
-SizedBox(width: s(6)),
+                  // 📷 Camera button
+                  GestureDetector(
+                    onTap: onPickImage,
+                    behavior: HitTestBehavior.opaque,
+                    child: SizedBox(
+                      width: tapSize,
+                      height: tapSize,
+                      child: Center(
+                        child: Image.asset(
+                          'assets/ui/CameraIcon.png',
+                          width: s(32),
+                          height: s(32),
+                          fit: BoxFit.contain,
+                          color: Colors.white.withOpacity(0.92),
+                        ),
+                      ),
+                    ),
+                  ),
 
-// 📷 Camera button
-GestureDetector(
-  onTap: onPickImage,
-  behavior: HitTestBehavior.opaque,
-  child: SizedBox(
-    width: tapSize,
-    height: tapSize,
-    child: Center(
-      child: Image.asset(
-        'assets/ui/CameraIcon.png',
-        width: s(32),
-        height: s(32),
-        fit: BoxFit.contain,
-        color: Colors.white.withOpacity(0.92),
-      ),
-    ),
-  ),
-),
+                  SizedBox(width: s(6)),
 
-SizedBox(width: s(6)),
-
-// ✨ Bubble menu button
-GestureDetector(
-  onTap: onOpenBubbleMenu,
-  behavior: HitTestBehavior.opaque,
-  child: SizedBox(
-    width: tapSize,
-    height: tapSize,
-    child: Center(
-      child: Icon(
-        Icons.auto_awesome,
-        size: s(20),
-        color: Colors.white.withOpacity(0.9),
-      ),
-    ),
-  ),
-),
-
-
-
+                  // ✨ Bubble menu button
+                  GestureDetector(
+                    onTap: onOpenBubbleMenu,
+                    behavior: HitTestBehavior.opaque,
+                    child: SizedBox(
+                      width: tapSize,
+                      height: tapSize,
+                      child: Center(
+                        child: Icon(
+                          Icons.auto_awesome,
+                          size: s(20),
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
+              ),
+            ),
+          ),
+
+          // ✅ Debug Search hitbox exactly over Max Speed
+          Positioned(
+            left: s(50),
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: GestureDetector(
+                onTap: onOpenSearch,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: s(57),
+                  height: s(42),
+                  color: Colors.red.withOpacity(0.35),
+                ),
               ),
             ),
           ),
