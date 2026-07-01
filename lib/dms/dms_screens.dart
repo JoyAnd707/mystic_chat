@@ -448,12 +448,71 @@ Future<void> _deleteArmedDmMessage({
   });
 
   try {
-    await FirebaseFirestore.instance
-        .collection(_roomsCol)
-        .doc(widget.roomId)
-        .collection(_msgsSub)
-        .doc(messageId)
-        .delete();
+    await _msgsRef.doc(messageId).delete();
+
+    await Future.delayed(const Duration(milliseconds: 250));
+
+    final latestSnap = await _msgsRef
+        .orderBy('tsMs', descending: true)
+        .get();
+
+if (latestSnap.docs.isEmpty) {
+  await _roomRef.update({
+    'lastUpdatedMs': 0,
+    'lastSenderId': '',
+    'lastText': FieldValue.delete(),
+  });
+  return;
+}
+
+String lastText = '';
+String lastSenderId = '';
+int lastUpdatedMs = 0;
+
+for (final doc in latestSnap.docs) {
+      if (doc.id == messageId) continue;
+
+      final m = doc.data();
+      final type = (m['type'] ?? 'text').toString();
+
+      if (type == 'system') continue;
+
+      lastSenderId = (m['senderId'] ?? '').toString();
+      lastUpdatedMs = (m['tsMs'] is int) ? m['tsMs'] as int : 0;
+
+      if (type == 'text') {
+        lastText = (m['text'] ?? '').toString();
+      } else if (type == 'image') {
+        lastText = '📷 Photo';
+      } else if (type == 'video') {
+        lastText = '🎥 Video';
+      } else if (type == 'sticker') {
+        lastText = '🙂 Sticker';
+      } else if (type == 'animatedEmoji') {
+        final label = (m['text'] ?? '').toString().trim();
+        lastText = label.isEmpty ? '✨ Animated Emoji' : '✨ $label';
+      } else if (type == 'voice') {
+        lastText = '🎙️ Voice message';
+      } else {
+        continue;
+      }
+
+      break;
+    }
+
+if (lastText.trim().isEmpty) {
+  await _roomRef.update({
+    'lastUpdatedMs': 0,
+    'lastSenderId': '',
+    'lastText': FieldValue.delete(),
+  });
+} else {
+  await _roomRef.update({
+    'lastUpdatedMs': lastUpdatedMs,
+    'lastSenderId': lastSenderId,
+    'lastText': lastText,
+  });
+}
   } catch (e) {
     if (!mounted) return;
 
@@ -464,21 +523,6 @@ Future<void> _deleteArmedDmMessage({
       ),
     );
   }
-}
-void _flashMessageHighlight(String messageId) {
-  if (!mounted) return;
-
-  setState(() {
-    _highlightedMessageIds.add(messageId);
-  });
-
-  Future.delayed(const Duration(milliseconds: 900), () {
-    if (!mounted) return;
-
-    setState(() {
-      _highlightedMessageIds.remove(messageId);
-    });
-  });
 }
 
 Future<void> _jumpToMessage(String messageId) async {
@@ -518,7 +562,21 @@ Future<void> _jumpToMessage(String messageId) async {
   _flashMessageHighlight(messageId);
 }
 
+void _flashMessageHighlight(String messageId) {
+  if (!mounted) return;
 
+  setState(() {
+    _highlightedMessageIds.add(messageId);
+  });
+
+  Future.delayed(const Duration(milliseconds: 1200), () {
+    if (!mounted) return;
+
+    setState(() {
+      _highlightedMessageIds.remove(messageId);
+    });
+  });
+}
 Future<void> _toggleHeartForMessage(
   String messageId,
   List<String> currentReactors,
