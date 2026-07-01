@@ -2849,8 +2849,29 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
   }
 
   Future<bool> _ensureMicPermission() async {
-    final status = await Permission.microphone.request();
-    return status.isGranted;
+ final before = await Permission.microphone.status;
+
+if (mounted) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('Before request: $before'),
+      duration: const Duration(seconds: 3),
+    ),
+  );
+}
+
+final status = await Permission.microphone.request();
+
+if (mounted) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('After request: $status'),
+      duration: const Duration(seconds: 3),
+    ),
+  );
+}
+
+return status.isGranted;
   }
 
   Future<void> _pauseBgmOnce() async {
