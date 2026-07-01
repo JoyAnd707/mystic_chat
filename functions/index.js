@@ -57,18 +57,44 @@ async function notifyForMessage({ snap, roomPath, roomId, messageId, roomKindDef
     const recipientAppUserId = (u.appUserId || "").toString();
     const activeDmWith = (u.activeDmWith || "").toString();
     const textPushEnabled = u.textPushEnabled !== false;
-const chatroomPushEnabled = u.chatroomPushEnabled !== false;
+    const chatroomPushEnabled = u.chatroomPushEnabled !== false;
+    const dmNotificationSettings =
+      u.dmNotificationSettings && typeof u.dmNotificationSettings === "object"
+        ? u.dmNotificationSettings
+        : {};
 
-if (roomKindDefault === "dm" && !textPushEnabled) {
-  console.log(`Skipping DM push for ${recipientAppUserId}: textPush disabled`);
-  return;
-}
+    if (roomKindDefault === "dm" && !textPushEnabled) {
+      console.log(`Skipping DM push for ${recipientAppUserId}: textPush disabled`);
+      return;
+    }
 
-if (roomKindDefault === "group" && !chatroomPushEnabled) {
-  console.log(`Skipping group push for ${recipientAppUserId}: chatroomPush disabled`);
-  return;
-}
+    if (
+      roomKindDefault === "dm" &&
+      dmNotificationSettings[senderAppUserId] === false
+    ) {
+      console.log(
+        `Skipping DM push for ${recipientAppUserId}: muted ${senderAppUserId}`
+      );
+      return;
+    }
 
+    if (roomKindDefault === "group" && !chatroomPushEnabled) {
+      console.log(`Skipping group push for ${recipientAppUserId}: chatroomPush disabled`);
+      return;
+    }
+
+    // If this is a DM, and the recipient is currently inside
+    // the DM with this exact sender, do not send push to this recipient.
+    if (
+      roomKindDefault === "dm" &&
+      activeDmWith &&
+      activeDmWith === senderAppUserId
+    ) {
+      console.log(
+        `Skipping DM push for ${recipientAppUserId}: active DM with ${senderAppUserId}`
+      );
+      return;
+    }
     // If this is a DM, and the recipient is currently inside
     // the DM with this exact sender, do not send push to this recipient.
     if (

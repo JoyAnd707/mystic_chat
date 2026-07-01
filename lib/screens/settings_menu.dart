@@ -5,6 +5,7 @@ import '../widgets/mystic_settings_top_status_bar.dart';
 import '../widgets/mystic_title_bar.dart';
 import '../widgets/settings/settings_others_page.dart';
 import '../widgets/settings/settings_sound_sliders.dart';
+import '../widgets/settings/settings_dm_notification_toggles.dart';
 import '../main.dart';
 
 
@@ -124,11 +125,22 @@ SizedBox(
   ),
 ),
 const SizedBox(height: 12),
-    Image.asset(
-      'assets/ui/settings/sound/VoiceDecoy.png',
-      width: 330,
-      
-    ),
+SizedBox(
+  width: 330,
+  child: Stack(
+    children: [
+      Image.asset(
+        'assets/ui/settings/sound/VoiceDecoy.png',
+        width: 330,
+      ),
+      Positioned.fill(
+        child: SettingsDmNotificationToggles(
+          currentUserId: widget.currentUserId,
+        ),
+      ),
+    ],
+  ),
+),
   ],
 ),
 _ => const SettingsOthersPage(),
