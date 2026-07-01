@@ -709,31 +709,31 @@ class _DmBottomBar extends StatelessWidget {
     );
   }
 
-  Widget _mediaButtonLeftOnly({
-    required double Function(double) s,
-  }) {
-    return Positioned(
-          left: s(4),
-      child: Transform.translate(
-        offset: Offset(0, s(_sendDown)),
-        child: GestureDetector(
-          onTap: () async => await onPickMedia(),
-          behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            width: s(_sendBoxSize),
-            height: s(_sendBoxSize),
-            child: Center(
-              child: Icon(
-                Icons.photo_library_rounded,
-                color: const Color(0xFF46F5D6),
-                size: s(25),
-              ),
+Widget _mediaButtonLeftOnly({
+  required double Function(double) s,
+}) {
+  return Positioned(
+    left: s(4),
+    child: Transform.translate(
+      offset: Offset(0, s(_sendDown)),
+      child: GestureDetector(
+        onTap: () async => await onPickMedia(),
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: s(_sendBoxSize),
+          height: s(_sendBoxSize),
+          child: Center(
+            child: Icon(
+              Icons.auto_awesome,
+              color: const Color(0xFF46F5D6),
+              size: s(25),
             ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 class _DmMediaClipper extends CustomClipper<Path> {
   final bool isMe;

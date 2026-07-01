@@ -813,6 +813,20 @@ Future<void> _pickAndSendDmMedia() async {
             children: [
               ListTile(
                 leading: const Icon(
+                  Icons.sticky_note_2_outlined,
+                  color: Color(0xFF46F5D6),
+                ),
+                title: const Text(
+                  'Sticker',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  _openDmStickerPicker();
+                },
+              ),
+              ListTile(
+                leading: const Icon(
                   Icons.photo_library_rounded,
                   color: Color(0xFF46F5D6),
                 ),
@@ -827,16 +841,22 @@ Future<void> _pickAndSendDmMedia() async {
               ),
               ListTile(
                 leading: const Icon(
-                  Icons.sticky_note_2_outlined,
+                  Icons.mic_rounded,
                   color: Color(0xFF46F5D6),
                 ),
                 title: const Text(
-                  'Stickers',
+                  'Voice Message',
                   style: TextStyle(color: Colors.white),
                 ),
                 onTap: () async {
                   Navigator.pop(sheetContext);
-                  _openDmStickerPicker();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Voice messages in DMs are not connected yet.'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
                 },
               ),
             ],
