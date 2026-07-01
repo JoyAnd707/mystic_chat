@@ -14,6 +14,9 @@ static Future<void> sendAnimatedEmojiMessage({
   required String senderId,
   required MysticAnimatedEmoji emoji,
   required int ts,
+  String? replyToMessageId,
+  String? replyToSenderId,
+  String? replyToText,
 }) async {
   await _ensureDmRoomDocExists(roomId);
 
@@ -33,6 +36,10 @@ static Future<void> sendAnimatedEmojiMessage({
     'decor': 'none',
     'fontFamily': null,
     'heartReactorIds': <String>[],
+
+    'replyToMessageId': replyToMessageId,
+    'replyToSenderId': replyToSenderId,
+    'replyToText': replyToText,
   });
 
   await _roomDoc(roomId).set({
@@ -236,12 +243,15 @@ static Future<void> sendVoiceMessage({
   /// 2) uploads image to Storage
   /// 3) saves sticker to user's archive
   /// 4) updates Firestore with stickerUrl
-  static Future<void> sendStickerMessage({
-    required String roomId,
-    required String senderId,
-    required String localFilePath,
-    required int ts,
-  }) async {
+static Future<void> sendStickerMessage({
+  required String roomId,
+  required String senderId,
+  required String localFilePath,
+  required int ts,
+  String? replyToMessageId,
+  String? replyToSenderId,
+  String? replyToText,
+}) async {
     await _ensureDmRoomDocExists(roomId);
 
     final docId = ts.toString();
@@ -262,6 +272,9 @@ static Future<void> sendVoiceMessage({
       'decor': 'none',
       'fontFamily': null,
       'heartReactorIds': <String>[],
+      'replyToMessageId': replyToMessageId,
+'replyToSenderId': replyToSenderId,
+'replyToText': replyToText,
     });
 
     await _roomDoc(roomId).set({
@@ -340,6 +353,9 @@ static Future<void> sendArchivedStickerMessage({
   required String stickerUrl,
   required String storagePath,
   required int ts,
+  String? replyToMessageId,
+  String? replyToSenderId,
+  String? replyToText,
 }) async {
   await _ensureDmRoomDocExists(roomId);
 
@@ -357,6 +373,9 @@ static Future<void> sendArchivedStickerMessage({
     'decor': 'none',
     'fontFamily': null,
     'heartReactorIds': <String>[],
+    'replyToMessageId': replyToMessageId,
+'replyToSenderId': replyToSenderId,
+'replyToText': replyToText,
   });
 
   await _roomDoc(roomId).set({

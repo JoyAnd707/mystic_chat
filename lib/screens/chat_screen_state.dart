@@ -1110,24 +1110,41 @@ Widget buildImageHeartOverlay({
 
 
 void _openStickerPicker() {
+  final ChatMessage? reply = _replyTarget;
+  final String? replyToId = reply?.id;
+  final String? replyToSenderId = reply?.senderId;
+  final String? replyToText =
+      (reply == null) ? null : _replyPreviewForMessage(reply);
+
+  void clearReplyAfterSend() {
+    if (!mounted) return;
+    setState(() {
+      _replyTarget = null;
+    });
+  }
+
   showMysticStickerPickerSheet(
     context: context,
     currentUserId: widget.currentUserId,
     onCreateSticker: (localFilePath, ts) async {
       _pendingScrollToBottomTs = ts;
+      clearReplyAfterSend();
 
       await FirestoreChatService.sendStickerMessage(
         roomId: widget.roomId,
         senderId: widget.currentUserId,
         localFilePath: localFilePath,
         ts: ts,
+        replyToMessageId: replyToId,
+        replyToSenderId: replyToSenderId,
+        replyToText: replyToText,
       );
 
       Sfx.I.playSend();
-      
     },
     onSendArchivedSticker: (stickerUrl, storagePath, ts) async {
       _pendingScrollToBottomTs = ts;
+      clearReplyAfterSend();
 
       await FirestoreChatService.sendArchivedStickerMessage(
         roomId: widget.roomId,
@@ -1135,18 +1152,25 @@ void _openStickerPicker() {
         stickerUrl: stickerUrl,
         storagePath: storagePath,
         ts: ts,
+        replyToMessageId: replyToId,
+        replyToSenderId: replyToSenderId,
+        replyToText: replyToText,
       );
 
       Sfx.I.playSend();
     },
     onSendAnimatedEmoji: (emoji, ts) async {
       _pendingScrollToBottomTs = ts;
+      clearReplyAfterSend();
 
       await FirestoreChatService.sendAnimatedEmojiMessage(
         roomId: widget.roomId,
         senderId: widget.currentUserId,
         emoji: emoji,
         ts: ts,
+        replyToMessageId: replyToId,
+        replyToSenderId: replyToSenderId,
+        replyToText: replyToText,
       );
 
       Sfx.I.playSend();
