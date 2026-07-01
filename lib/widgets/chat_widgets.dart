@@ -2871,9 +2871,11 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
   }
 
   Future<void> _start() async {
+    debugPrint('🎙 _start() called');
     if (_isRecording) return;
 
     final ok = await _ensureMicPermission();
+    debugPrint('🎙 Permission granted: $ok');
     if (!ok) return;
 
     await _pauseBgmOnce();
@@ -2884,21 +2886,26 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
     _currentPath = path;
 
     try {
+      debugPrint('🎙 Starting recorder...');
       await _recorder.start(
+        
         const RecordConfig(
           encoder: AudioEncoder.aacLc,
           bitRate: 128000,
           sampleRate: 44100,
         ),
+        
         path: path,
       );
-    } catch (_) {
+   } catch (e, st) {
+  debugPrint('🎙 Recorder start ERROR: $e');
+  debugPrint('$st');
       _startedAtMs = 0;
       _currentPath = null;
       await _resumeBgmIfPausedByMe();
       return;
     }
-
+debugPrint('🎙 Recorder started');
     try {
       widget.onStartRecordingSfx?.call();
     } catch (_) {}
