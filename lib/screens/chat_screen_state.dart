@@ -1606,26 +1606,7 @@ void _openStickerPicker() {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-  width: double.infinity,
-  child: OutlinedButton.icon(
-onPressed: () {
-  Navigator.pop(context);
-  _openStickerPicker();
-},
-    icon: const Icon(Icons.sticky_note_2_outlined),
-    label: const Text('Stickers'),
-    style: OutlinedButton.styleFrom(
-      foregroundColor: Colors.white,
-      side: BorderSide(
-        color: Colors.white.withOpacity(0.2),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 14),
-    ),
-  ),
-),
 
-const SizedBox(height: 16),
                 const Text(
                   'Bubble Style',
                   style: TextStyle(
@@ -3439,6 +3420,7 @@ AnimatedPadding(
     controller: _controller,
     focusNode: _focusNode,
     onSend: _sendMessage,
+    onOpenStickerPicker: _openStickerPicker,
     uiScale: uiScale,
   ),
 ),

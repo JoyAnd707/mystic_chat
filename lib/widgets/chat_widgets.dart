@@ -73,6 +73,7 @@ class BottomBorderBar extends StatefulWidget {
   final bool isTyping;
   final VoidCallback onTapTypeMessage;
   final VoidCallback onSend;
+  final VoidCallback onOpenStickerPicker;
   final TextEditingController controller;
   final FocusNode focusNode;
 
@@ -87,9 +88,9 @@ class BottomBorderBar extends StatefulWidget {
     required this.controller,
     required this.focusNode,
     required this.onSend,
+    required this.onOpenStickerPicker,
     required this.uiScale,
   });
-
   static const double _typeButtonWidth = 260;
   static const double _sendBoxSize = 40;
   static const double _sendScale = 1.0;
@@ -174,7 +175,7 @@ class _BottomBorderBarState extends State<BottomBorderBar> {
             ),
           ),
         ),
-        _inactiveSendButton(left: true, s: s),
+        _activeSendButton(left: true, s: s),
         _inactiveSendButton(left: false, s: s),
       ],
     );
@@ -311,9 +312,11 @@ Widget _activeSendButton({
   required bool left,
   required double Function(double) s,
 }) {
-  final String asset = _canSend
-      ? 'assets/ui/SendMessageButtonActive.png'
-      : 'assets/ui/SendMessageButton.png';
+final bool shouldLookActive = left || _canSend;
+
+final String asset = shouldLookActive
+    ? 'assets/ui/SendMessageButtonActive.png'
+    : 'assets/ui/SendMessageButton.png';
 
   return Positioned(
     left: left ? s(BottomBorderBar._sendInset) : null,
@@ -321,10 +324,15 @@ Widget _activeSendButton({
     child: Transform.translate(
       offset: Offset(0, s(BottomBorderBar._sendDown)),
       child: GestureDetector(
-        onTap: () {
-          if (!_canSend) return; // ✅ block empty/whitespace-only
-          widget.onSend();
-        },
+onTap: () {
+  if (left) {
+    widget.onOpenStickerPicker();
+    return;
+  }
+
+  if (!_canSend) return; // ✅ block empty/whitespace-only
+  widget.onSend();
+},
         behavior: HitTestBehavior.opaque,
         child: SizedBox(
           width: s(BottomBorderBar._sendBoxSize),
