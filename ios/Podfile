@@ -31,7 +31,7 @@ end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
-    # Flutter recommended iOS settings (חשוב שישאר)
+    # Flutter recommended iOS settings
     flutter_additional_ios_build_settings(target)
 
     # Fix Xcode 16: remove the flag that turns into "-G"
@@ -45,9 +45,13 @@ post_install do |installer|
       end
     end
 
-    # Keep iOS deployment target consistent
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)',
+        'PERMISSION_MICROPHONE=1',
+      ]
     end
   end
 end
