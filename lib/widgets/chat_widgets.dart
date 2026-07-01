@@ -2871,10 +2871,24 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
   }
 
   Future<void> _start() async {
-    debugPrint('🎙 _start() called');
-    if (_isRecording) return;
+if (mounted) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('1️⃣ _start() called'),
+      duration: Duration(seconds: 1),
+    ),
+  );
+}    if (_isRecording) return;
 
     final ok = await _ensureMicPermission();
+    if (mounted) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('2️⃣ Permission: $ok'),
+      duration: const Duration(seconds: 1),
+    ),
+  );
+}
     debugPrint('🎙 Permission granted: $ok');
     if (!ok) return;
 
@@ -2887,6 +2901,14 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
 
     try {
       debugPrint('🎙 Starting recorder...');
+      if (mounted) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('3️⃣ Starting recorder...'),
+      duration: Duration(seconds: 1),
+    ),
+  );
+}
       await _recorder.start(
         
         const RecordConfig(
@@ -2900,12 +2922,28 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
    } catch (e, st) {
   debugPrint('🎙 Recorder start ERROR: $e');
   debugPrint('$st');
+  if (mounted) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('❌ Recorder ERROR: $e'),
+      duration: const Duration(seconds: 5),
+    ),
+  );
+}
       _startedAtMs = 0;
       _currentPath = null;
       await _resumeBgmIfPausedByMe();
       return;
     }
 debugPrint('🎙 Recorder started');
+if (mounted) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('4️⃣ Recorder started'),
+      duration: Duration(seconds: 1),
+    ),
+  );
+}
     try {
       widget.onStartRecordingSfx?.call();
     } catch (_) {}
