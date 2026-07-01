@@ -59,8 +59,18 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     return;
   }
 
-  await NotificationsService.instance.showFromRemoteMessage(message);
-}
+  final String action =
+      (message.data['action']?.toString() ?? '').trim().toLowerCase();
+
+  if (action == 'delete_notification') {
+    final String messageId =
+        (message.data['messageId']?.toString() ?? '').trim();
+
+    await NotificationsService.instance.cancelNotificationForMessageId(messageId);
+    return;
+  }
+
+  await NotificationsService.instance.showFromRemoteMessage(message);}
 
 Future<void> _enableImmersiveSticky() async {
   // Hide Android navigation bar + status bar until user swipes.

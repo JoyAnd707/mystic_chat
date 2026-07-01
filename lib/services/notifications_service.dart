@@ -64,8 +64,18 @@ if (_activeRoomId != null && incomingRoomKey == _activeRoomId) {
   return;
 }
 
-await showFromRemoteMessage(message);
+final String action =
+    (message.data['action']?.toString() ?? '').trim().toLowerCase();
 
+if (action == 'delete_notification') {
+  final String messageId =
+      (message.data['messageId']?.toString() ?? '').trim();
+
+  await cancelNotificationForMessageId(messageId);
+  return;
+}
+
+await showFromRemoteMessage(message);
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
@@ -184,7 +194,18 @@ Future<void> _initLocalPlugin() async {
     // If user is currently viewing THIS room -> suppress
     return incomingRoomKey != active;
   }
+Future<void> cancelNotificationForMessageId(String messageId) async {
+  final String trimmed = messageId.trim();
+  if (trimmed.isEmpty) return;
 
+  final int notificationId = trimmed.hashCode;
+
+  await _local.cancel(notificationId);
+
+  debugPrint(
+    'NotificationsService | cancelled notification for messageId=$trimmed id=$notificationId',
+  );
+}
 Future<void> showFromRemoteMessage(RemoteMessage message) async {
   // We prefer data fields for chat formatting
   final String rawSender =
@@ -248,9 +269,12 @@ Future<void> showFromRemoteMessage(RemoteMessage message) async {
   final NotificationDetails details =
       NotificationDetails(android: androidDetails);
 
-  // Stable-ish id to reduce accidental duplicates
-  final int notificationId =
-      (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString())
+  final String firestoreMessageId =
+      (message.data['messageId']?.toString() ?? '').trim();
+
+  final int notificationId = firestoreMessageId.isNotEmpty
+      ? firestoreMessageId.hashCode
+      : (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString())
           .hashCode;
 
   await _local.show(
@@ -259,7 +283,6 @@ Future<void> showFromRemoteMessage(RemoteMessage message) async {
     body,
     details,
   );
-
   // Update last notification time for this room scope
   await _setLastNotifyMs(roomKey, nowMs);
 }

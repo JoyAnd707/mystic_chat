@@ -213,3 +213,112 @@ exports.notifyOnNewDmMessage = functions.firestore
       roomKindDefault: "dm",
     });
   });
+
+  async function notifyDeleteForMessage({ snap, roomPath, roomId, messageId, roomKindDefault }) {
+  const msg = snap.data() || {};
+
+  const senderAppUserId = (msg.senderId || "").toString();
+  const type = (msg.type || "").toString();
+
+  if (type === "system") return null;
+
+  const roomRef = admin.firestore().doc(`${roomPath}/${roomId}`);
+  const roomSnap = await roomRef.get();
+  if (!roomSnap.exists) return null;
+
+  const room = roomSnap.data() || {};
+
+  const memberIds = Array.isArray(room.memberIds)
+    ? room.memberIds
+    : (Array.isArray(room.participants) ? room.participants : []);
+
+  if (!memberIds.length) return null;
+
+  const recipientAppUserIds = memberIds
+    .map((x) => (x || "").toString())
+    .filter((id) => id && id !== senderAppUserId);
+
+  if (!recipientAppUserIds.length) return null;
+
+  const usersSnap = await admin
+    .firestore()
+    .collection("users")
+    .where("appUserId", "in", recipientAppUserIds)
+    .get();
+
+  const tokens = [];
+
+  usersSnap.forEach((doc) => {
+    const u = doc.data() || {};
+    const fcmTokens = u.fcmTokens;
+
+    if (Array.isArray(fcmTokens)) {
+      fcmTokens.forEach((t) => {
+        if (typeof t === "string" && t.trim()) tokens.push(t.trim());
+      });
+    } else if (fcmTokens && typeof fcmTokens === "object") {
+      Object.keys(fcmTokens).forEach((t) => {
+        if (typeof t === "string" && t.trim()) tokens.push(t.trim());
+      });
+    }
+  });
+
+  const uniqueTokens = Array.from(new Set(tokens)).filter(Boolean);
+  if (!uniqueTokens.length) return null;
+
+  const multicast = {
+    tokens: uniqueTokens,
+
+    data: {
+      action: "delete_notification",
+      kind: String(roomKindDefault),
+      roomId: String(roomId),
+      messageId: String(messageId),
+    },
+
+    android: {
+      priority: "high",
+    },
+
+    apns: {
+      headers: {
+        "apns-priority": "10",
+        "apns-push-type": "background",
+      },
+      payload: {
+        aps: {
+          "content-available": 1,
+        },
+      },
+    },
+  };
+
+  await admin.messaging().sendEachForMulticast(multicast);
+  return null;
+}
+
+exports.notifyOnDeletedRoomMessage = functions.firestore
+  .document("rooms/{roomId}/messages/{messageId}")
+  .onDelete((snap, context) => {
+    const { roomId, messageId } = context.params;
+    return notifyDeleteForMessage({
+      snap,
+      roomPath: "rooms",
+      roomId,
+      messageId,
+      roomKindDefault: "group",
+    });
+  });
+
+exports.notifyOnDeletedDmMessage = functions.firestore
+  .document("dm_rooms/{roomId}/messages/{messageId}")
+  .onDelete((snap, context) => {
+    const { roomId, messageId } = context.params;
+    return notifyDeleteForMessage({
+      snap,
+      roomPath: "dm_rooms",
+      roomId,
+      messageId,
+      roomKindDefault: "dm",
+    });
+  });
