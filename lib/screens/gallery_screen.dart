@@ -74,31 +74,33 @@ child: MysticStarTwinkleOverlay(
                 MysticTopStatusBar(now: DateTime.now()),
                 const GalleryTopBar(),
                 const SizedBox(height: 12),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      children: [
-                        for (int i = 0; i < albums.length; i += 2) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              GalleryAlbumTile(
-                                title: albums[i][0],
-                                userId: albums[i][1],
-                              ),
-                              GalleryAlbumTile(
-                                title: albums[i + 1][0],
-                                userId: albums[i + 1][1],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-                      ],
-                    ),
-                  ),
+Expanded(
+  child: SingleChildScrollView(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        children: [
+          for (int i = 0; i < albums.length; i += 2) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                GalleryAlbumTile(
+                  title: albums[i][0],
+                  userId: albums[i][1],
                 ),
+                GalleryAlbumTile(
+                  title: albums[i + 1][0],
+                  userId: albums[i + 1][1],
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+          ],
+        ],
+      ),
+    ),
+  ),
+),
               ],
             ),
           ),
