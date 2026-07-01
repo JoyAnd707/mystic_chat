@@ -531,7 +531,9 @@ case ChatMessageType.sticker:
   // NEW "messages below" badge (overlay)
   // =======================
   int _newBelowCount = 0;
-
+String? _heartJumpMessageId;
+String? _heartJumpFromUserId;
+int _heartJumpShownAtMs = 0;
   // ✅ NEW: whether there is a mention below (so we can show @)
   bool _newBelowHasMention = false;
 
@@ -1199,7 +1201,32 @@ Widget buildImageHeartOverlay({
   // =======================
   final Map<int, Set<String>> _lastReactorSnapshotByTs = <int, Set<String>>{};
   bool _heartsSnapshotInitialized = false;
+void _showHeartJumpNotification({
+  required String messageId,
+  required String fromUserId,
+}) {
+  if (!mounted) return;
 
+  setState(() {
+    _heartJumpMessageId = messageId;
+    _heartJumpFromUserId = fromUserId;
+    _heartJumpShownAtMs = DateTime.now().millisecondsSinceEpoch;
+  });
+
+  Future.delayed(const Duration(seconds: 6), () {
+    if (!mounted) return;
+
+    final int nowMs = DateTime.now().millisecondsSinceEpoch;
+
+    if (nowMs - _heartJumpShownAtMs < 5900) return;
+
+    setState(() {
+      _heartJumpMessageId = null;
+      _heartJumpFromUserId = null;
+      _heartJumpShownAtMs = 0;
+    });
+  });
+}
   Future<void> _spawnHeartsForReactors(List<String> reactorIds) async {
     for (final rid in reactorIds) {
       if (!mounted) return;
@@ -2395,9 +2422,16 @@ if (!_openingLock) {
 
             added.remove(widget.currentUserId);
 
-            if (added.isNotEmpty) {
-              reactorsToAnimate.addAll(added.toList()..sort());
-            }
+         if (added.isNotEmpty) {
+  final addedList = added.toList()..sort();
+
+  reactorsToAnimate.addAll(addedList);
+
+  _showHeartJumpNotification(
+    messageId: m.id,
+    fromUserId: addedList.first,
+  );
+}
 
             _lastReactorSnapshotByTs[m.ts] = now;
           }
@@ -3476,7 +3510,69 @@ if (_newBelowCount > 0 && !_nearBottomCached)
                       ),
                     ),
 
-       
+                         if (_heartJumpMessageId != null &&
+                      _heartJumpFromUserId != null)
+                    Positioned(
+                      right: 16 * uiScale,
+                      bottom: _nearBottomCached
+                          ? 16 * uiScale
+                          : 68 * uiScale,
+                      child: GestureDetector(
+                        onTap: () {
+                          final String? id = _heartJumpMessageId;
+                          if (id == null) return;
+
+                          setState(() {
+                            _heartJumpMessageId = null;
+                            _heartJumpFromUserId = null;
+                            _heartJumpShownAtMs = 0;
+                          });
+
+                          _jumpToMessageId(id);
+                        },
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 12 * uiScale,
+                            vertical: 9 * uiScale,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.78),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: const Color(0xFFEF797E).withOpacity(0.9),
+                              width: 1.2 * uiScale,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFEF797E).withOpacity(0.35),
+                                blurRadius: 14 * uiScale,
+                                spreadRadius: 1 * uiScale,
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.favorite_rounded,
+                                color: const Color(0xFFEF797E),
+                                size: 18 * uiScale,
+                              ),
+                              SizedBox(width: 7 * uiScale),
+                              Text(
+                                '${_displayNameForId(_heartJumpFromUserId!)} liked your message',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12 * uiScale,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.0,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

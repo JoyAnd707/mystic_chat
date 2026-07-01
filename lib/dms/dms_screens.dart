@@ -381,6 +381,11 @@ bool _isTyping = false;
 bool _nearBottomCached = true;
 // ✅ DM delete mode
 String? _armedDeleteMessageId;
+String? _heartJumpMessageId;
+String? _heartJumpFromUserId;
+int _heartJumpShownAtMs = 0;
+final Map<String, Set<String>> _lastDmReactorsByMessageId = <String, Set<String>>{};
+bool _dmHeartSnapshotInitialized = false;
 // ✅ DM typing indicator
 Timer? _typingStopTimer;
 bool _sentTypingState = false;
@@ -679,6 +684,35 @@ void _flashMessageHighlight(String messageId) {
 
     setState(() {
       _highlightedMessageIds.remove(messageId);
+    });
+  });
+}
+
+
+
+void _showDmHeartJumpNotification({
+  required String messageId,
+  required String fromUserId,
+}) {
+  if (!mounted) return;
+
+  setState(() {
+    _heartJumpMessageId = messageId;
+    _heartJumpFromUserId = fromUserId;
+    _heartJumpShownAtMs = DateTime.now().millisecondsSinceEpoch;
+  });
+
+  Future.delayed(const Duration(seconds: 6), () {
+    if (!mounted) return;
+
+    final int nowMs = DateTime.now().millisecondsSinceEpoch;
+
+    if (nowMs - _heartJumpShownAtMs < 5900) return;
+
+    setState(() {
+      _heartJumpMessageId = null;
+      _heartJumpFromUserId = null;
+      _heartJumpShownAtMs = 0;
     });
   });
 }
@@ -1695,8 +1729,59 @@ Widget build(BuildContext context) {
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: _msgsStream,
                       builder: (context, snap) {
-       final docs = snap.data?.docs ?? const [];
+final docs = snap.data?.docs ?? const [];
 _messageIdsInOrder = docs.map((d) => d.id).toList();
+
+if (snap.hasData) {
+  final Map<String, Set<String>> currentReactorsByMessageId =
+      <String, Set<String>>{};
+
+  for (final d in docs) {
+    final data = d.data();
+
+    final String messageId = d.id;
+    final String senderId = (data['senderId'] ?? '').toString();
+    final String type = (data['type'] ?? 'text').toString();
+
+    if (type == 'system') continue;
+
+    final Set<String> reactors =
+        List<String>.from(data['heartReactorIds'] ?? const [])
+            .map((e) => e.toString())
+            .toSet();
+
+    currentReactorsByMessageId[messageId] = reactors;
+
+    if (_dmHeartSnapshotInitialized &&
+        senderId == widget.currentUserId) {
+      final Set<String> previous =
+          _lastDmReactorsByMessageId[messageId] ?? <String>{};
+
+      final Set<String> added = reactors.difference(previous);
+
+      added.remove(widget.currentUserId);
+
+      if (added.isNotEmpty) {
+        final List<String> addedList = added.toList()..sort();
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+
+          _showDmHeartJumpNotification(
+            messageId: messageId,
+            fromUserId: addedList.first,
+          );
+        });
+      }
+    }
+  }
+
+  _lastDmReactorsByMessageId
+    ..clear()
+    ..addAll(currentReactorsByMessageId);
+
+  _dmHeartSnapshotInitialized = true;
+}
 if (snap.hasData && _lastReadLoaded && !_didInitialDmOpenJump) {
   _didInitialDmOpenJump = true;
 
@@ -2139,7 +2224,8 @@ if (_typingUserIds.isNotEmpty)
       uiScale: uiScale,
     ),
   ),
-  if (!_nearBottomCached)
+
+if (!_nearBottomCached)
   Positioned(
     right: s(18),
     bottom: s(18),
@@ -2219,7 +2305,69 @@ if (_typingUserIds.isNotEmpty)
     ),
   ),
 
+if (_heartJumpMessageId != null && _heartJumpFromUserId != null)
+  Positioned(
+    right: s(18),
+    bottom: _nearBottomCached ? s(18) : s(78),
+    child: GestureDetector(
+      onTap: () {
+        final String? id = _heartJumpMessageId;
+        if (id == null) return;
+
+        setState(() {
+          _heartJumpMessageId = null;
+          _heartJumpFromUserId = null;
+          _heartJumpShownAtMs = 0;
+        });
+
+        _jumpToMessage(id);
+      },
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: s(12),
+          vertical: s(9),
+        ),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.78),
+          borderRadius: BorderRadius.circular(s(999)),
+          border: Border.all(
+            color: const Color(0xFFEF797E),
+            width: s(1.2),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFEF797E).withOpacity(0.35),
+              blurRadius: s(14),
+              spreadRadius: s(1),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.favorite_rounded,
+              color: const Color(0xFFEF797E),
+              size: s(18),
+            ),
+            SizedBox(width: s(7)),
+            Text(
+              '${dmUsers[_heartJumpFromUserId!]?.name ?? _heartJumpFromUserId!} liked your message',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: s(12),
+                fontWeight: FontWeight.w800,
+                height: 1.0,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ),
+
                   ],
+                  
                 ),
               ),
             ),
