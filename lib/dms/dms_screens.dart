@@ -6,8 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
 import '../widgets/sticker_picker_sheet.dart';
 import '../firebase/firestore_chat_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,6 +21,7 @@ import '../widgets/fullscreen_video_player.dart';
 import '../widgets/video_preview_tile.dart';
 import '../widgets/mystic_top_status_bar.dart';
 import '../widgets/mystic_profile_avatar.dart';
+import '../widgets/chat_widgets.dart';
 part 'dms_core.dart';
 part 'dms_widgets.dart';
 part 'dms_painters.dart';
@@ -596,7 +597,9 @@ bool _isReadableDmMessageType(String type) {
   return type == 'text' ||
       type == 'image' ||
       type == 'video' ||
-      type == 'sticker';
+      type == 'sticker' ||
+      type == 'animatedEmoji' ||
+      type == 'voice';
 }
   int _latestIncomingReadableTs(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
@@ -850,12 +853,56 @@ Future<void> _pickAndSendDmMedia() async {
                 ),
                 onTap: () async {
                   Navigator.pop(sheetContext);
+                  _openDmVoiceRecorderSheet();
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+  
+}
+void _openDmVoiceRecorderSheet() {
+  final double uiScale = mysticUiScale(context);
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Voice messages in DMs are not connected yet.'),
-                      duration: Duration(seconds: 2),
-                    ),
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.black.withOpacity(0.94),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+    ),
+    builder: (sheetContext) {
+      return SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            16 * uiScale,
+            18 * uiScale,
+            16 * uiScale,
+            24 * uiScale,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Tap the mic to record',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16 * uiScale,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              SizedBox(height: 18 * uiScale),
+              TapToRecordMicButton(
+                size: 72 * uiScale,
+                iconSize: 46 * uiScale,
+                uiScale: uiScale,
+                onSendVoice: (filePath, durationMs) async {
+                  Navigator.pop(sheetContext);
+                  await _sendDmVoiceMessage(
+                    filePath: filePath,
+                    durationMs: durationMs,
                   );
                 },
               ),
@@ -867,6 +914,82 @@ Future<void> _pickAndSendDmMedia() async {
   );
 }
 
+Future<void> _sendDmVoiceMessage({
+  required String filePath,
+  required int durationMs,
+}) async {
+  final int nowMs = DateTime.now().millisecondsSinceEpoch;
+  final docRef = _msgsRef.doc();
+
+  final String storagePath =
+      'dm_rooms/${widget.roomId}/voice/${docRef.id}.m4a';
+
+  try {
+    await docRef.set({
+      'type': 'voice',
+      'senderId': widget.currentUserId,
+      'text': '',
+      'tsMs': nowMs,
+      'mediaUrl': '',
+      'voiceUrl': '',
+      'voicePath': filePath,
+      'voiceDurationMs': durationMs,
+      'storagePath': storagePath,
+      'heartReactorIds': <String>[],
+      'replyToMessageId': _replyToMessageId,
+      'replyToSenderId': _replyToSenderId,
+      'replyToSenderName': _replyToSenderName,
+      'replyToText': _replyToText,
+    });
+
+    final ref = FirebaseStorage.instance.ref(storagePath);
+
+    await ref.putFile(
+      File(filePath),
+      SettableMetadata(contentType: 'audio/mp4'),
+    );
+
+    final String downloadUrl = await ref.getDownloadURL();
+
+    await docRef.update({
+      'mediaUrl': downloadUrl,
+      'voiceUrl': downloadUrl,
+      'voicePath': downloadUrl,
+    });
+
+    await _roomRef.set({
+      'lastUpdatedMs': nowMs,
+      'lastSenderId': widget.currentUserId,
+      'lastText': '🎙️ Voice message',
+    }, SetOptions(merge: true));
+
+    try {
+      Sfx.I.playSend();
+    } catch (_) {}
+
+    setState(() {
+      _replyToMessageId = null;
+      _replyToSenderId = null;
+      _replyToSenderName = null;
+      _replyToText = null;
+    });
+
+    _scrollToBottom(keepFocus: false);
+  } catch (e) {
+    try {
+      await docRef.delete();
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not send voice message: $e'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
 Future<void> _pickAndSendDmPhotoOrVideo() async {
   final XFile? picked = await _mediaPicker.pickMedia();
 
@@ -1524,10 +1647,10 @@ if (messageType != 'text' &&
     messageType != 'image' &&
     messageType != 'video' &&
     messageType != 'sticker' &&
-    messageType != 'animatedEmoji') {
+    messageType != 'animatedEmoji' &&
+    messageType != 'voice') {
   return const SizedBox.shrink();
 }
-
 final sender = (m['senderId'] ?? '').toString();
 final isMe = sender == widget.currentUserId;
 final text = (m['text'] ?? '').toString();
@@ -1685,17 +1808,22 @@ if (i > 0) {
                   onHorizontalDragEnd: (_) {
                     _dragDx = 0.0;
                   },
-
-                  child: (messageType == 'image' ||
+child: (messageType == 'image' ||
         messageType == 'video' ||
         messageType == 'sticker' ||
-        messageType == 'animatedEmoji')
+        messageType == 'animatedEmoji' ||
+        messageType == 'voice')
                       ? _DmMediaMessageRow(
   isMe: isMe,
   messageType: messageType,
   mediaUrl: mediaUrl,
-  storagePath: (m['storagePath'] ?? '').toString(),
-  animatedEmojiId: (m['animatedEmojiId'] ?? '').toString(),
+storagePath: messageType == 'voice'
+    ? ((m['voicePath'] ?? '').toString().trim().isNotEmpty
+        ? (m['voicePath'] ?? '').toString()
+        : ((m['voiceUrl'] ?? '').toString().trim().isNotEmpty
+            ? (m['voiceUrl'] ?? '').toString()
+            : (m['mediaUrl'] ?? '').toString()))
+    : (m['storagePath'] ?? '').toString(),  animatedEmojiId: (m['animatedEmojiId'] ?? '').toString(),
   frame1Asset: (m['frame1Asset'] ?? '').toString(),
   frame2Asset: (m['frame2Asset'] ?? '').toString(),
   onLongPressSticker: messageType == 'sticker'

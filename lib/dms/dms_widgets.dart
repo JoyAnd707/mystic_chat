@@ -772,6 +772,246 @@ class _DmMediaClipper extends CustomClipper<Path> {
     return oldClipper.isMe != isMe || oldClipper.cut != cut;
   }
 }
+class _DmVoiceMessageTile extends StatefulWidget {
+  final String filePath;
+  final double uiScale;
+  final double width;
+  final Color bubbleColor;
+
+  const _DmVoiceMessageTile({
+    required this.filePath,
+    required this.uiScale,
+    required this.width,
+    required this.bubbleColor,
+  });
+
+  @override
+  State<_DmVoiceMessageTile> createState() => _DmVoiceMessageTileState();
+}
+
+class _DmVoiceMessageTileState extends State<_DmVoiceMessageTile> {
+  final AudioPlayer _player = AudioPlayer();
+
+  Duration _pos = Duration.zero;
+  Duration _dur = Duration.zero;
+  bool _ready = false;
+  bool _loading = false;
+  double _playbackSpeed = 1.0;
+
+  String _fmt(Duration d) {
+    final m = d.inMinutes;
+    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  Future<void> _ensureLoaded() async {
+    if (_ready) return;
+
+    final path = widget.filePath.trim();
+    if (path.isEmpty) return;
+
+    setState(() {
+      _loading = true;
+    });
+
+    try {
+      final isRemote = path.startsWith('http://') || path.startsWith('https://');
+
+      if (isRemote) {
+        await _player.setUrl(path);
+      } else {
+        final f = File(path);
+        if (!await f.exists()) return;
+        await _player.setFilePath(path);
+      }
+
+      await _player.setSpeed(_playbackSpeed);
+
+      _dur = _player.duration ?? Duration.zero;
+      _ready = true;
+    } catch (_) {
+      _ready = false;
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _togglePlay() async {
+    await _ensureLoaded();
+
+    if (!_ready) return;
+
+    if (_player.playing) {
+      await _player.pause();
+      return;
+    }
+
+    if (_dur > Duration.zero && _pos >= _dur) {
+      await _player.seek(Duration.zero);
+    }
+
+    await _player.play();
+  }
+
+  Future<void> _toggleSpeed() async {
+    final next = _playbackSpeed == 1.0 ? 2.0 : 1.0;
+
+    setState(() {
+      _playbackSpeed = next;
+    });
+
+    if (_ready) {
+      await _player.setSpeed(next);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    _player.positionStream.listen((p) {
+      if (!mounted) return;
+      setState(() {
+        _pos = p;
+      });
+    });
+
+    _player.durationStream.listen((d) {
+      if (!mounted) return;
+      if (d == null) return;
+      setState(() {
+        _dur = d;
+      });
+    });
+
+    _player.playerStateStream.listen((state) {
+      if (!mounted) return;
+
+      if (state.processingState == ProcessingState.completed) {
+        _player.pause();
+        _player.seek(Duration.zero);
+      }
+
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+@override
+Widget build(BuildContext context) {
+  double s(double v) => v * widget.uiScale;
+
+  final bool playing = _player.playing;
+  final totalMs = _dur.inMilliseconds <= 0 ? 1 : _dur.inMilliseconds;
+  final posMs = _pos.inMilliseconds.clamp(0, totalMs).toDouble();
+
+  return SizedBox(
+    width: widget.width,
+    height: s(52),
+    child: Row(
+      mainAxisSize: MainAxisSize.max,
+      children: [
+        GestureDetector(
+          onTap: _togglePlay,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: s(42),
+            height: s(42),
+            child: Center(
+              child: _loading
+                  ? SizedBox(
+                      width: s(18),
+                      height: s(18),
+                      child: CircularProgressIndicator(
+                        strokeWidth: s(2.2),
+                        color: Colors.black.withOpacity(0.70),
+                      ),
+                    )
+                  : Icon(
+                      playing
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                      color: Colors.black.withOpacity(0.78),
+                      size: s(34),
+                    ),
+            ),
+          ),
+        ),
+        SizedBox(width: s(2)),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: s(4),
+              thumbShape: RoundSliderThumbShape(
+                enabledThumbRadius: s(6.5),
+              ),
+              overlayShape: SliderComponentShape.noOverlay,
+              activeTrackColor: Colors.black.withOpacity(0.60),
+              inactiveTrackColor: Colors.black.withOpacity(0.20),
+              thumbColor: Colors.black.withOpacity(0.72),
+            ),
+            child: Slider(
+              value: posMs,
+              min: 0,
+              max: totalMs.toDouble(),
+              onChanged: !_ready
+                  ? null
+                  : (v) {
+                      _player.seek(Duration(milliseconds: v.round()));
+                    },
+            ),
+          ),
+        ),
+        SizedBox(width: s(3)),
+        Text(
+          _fmt(_dur > Duration.zero ? _dur : _pos),
+          style: TextStyle(
+            color: Colors.black.withOpacity(0.76),
+            fontSize: s(13),
+            fontWeight: FontWeight.w800,
+            height: 1.0,
+          ),
+        ),
+        SizedBox(width: s(4)),
+        GestureDetector(
+          onTap: _toggleSpeed,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            height: s(28),
+            padding: EdgeInsets.symmetric(horizontal: s(7)),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(s(7)),
+              border: Border.all(
+                color: Colors.black.withOpacity(0.22),
+                width: s(1),
+              ),
+            ),
+            child: Text(
+              _playbackSpeed == 1.0 ? '1x' : '2x',
+              style: TextStyle(
+                color: Colors.black.withOpacity(0.78),
+                fontSize: s(13),
+                fontWeight: FontWeight.w900,
+                height: 1.0,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+}
 class _DmMediaMessageRow extends StatelessWidget {
   final bool isMe;
   final String messageType;
@@ -918,9 +1158,8 @@ class _DmMediaMessageRow extends StatelessWidget {
 
     final double avatarSize = s(48);
     final double gap = s(18);
-    final double mediaW = s(150);
-    final double mediaH = s(210);
-
+final double mediaW = messageType == 'voice' ? s(184) : s(150);
+final double mediaH = s(210);
     final String cornerAsset = isMe
         ? 'assets/ui/DMSbubbleCornerISME.png'
         : 'assets/ui/DMSbubbleCornerOTHERS.png';
@@ -1005,7 +1244,29 @@ Widget mediaContent() {
       ),
     );
   }
+if (messageType == 'voice') {
+  if (storagePath.trim().isEmpty) {
+    return SizedBox(
+      width: mediaW,
+      height: s(60),
+      child: Center(
+        child: RotatingEnvelope(
+          assetPath: 'assets/ui/DMSmessageUnread.png',
+          size: s(34),
+          duration: const Duration(milliseconds: 1800),
+          opacity: 1.0,
+        ),
+      ),
+    );
+  }
 
+return _DmVoiceMessageTile(
+  filePath: storagePath,
+  uiScale: uiScale,
+  width: mediaW,
+  bubbleColor: const Color(0xB3606060),
+);
+}
   if (messageType == 'sticker') {
 return GestureDetector(
   onTap: () => _openImageViewer(context, mediaUrl),

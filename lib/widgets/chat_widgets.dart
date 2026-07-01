@@ -2848,31 +2848,10 @@ class _TapToRecordMicButtonState extends State<TapToRecordMicButton> {
     return '${dir.path}/voice_$ts.m4a';
   }
 
-  Future<bool> _ensureMicPermission() async {
- final before = await Permission.microphone.status;
-
-if (mounted) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('Before request: $before'),
-      duration: const Duration(seconds: 3),
-    ),
-  );
+Future<bool> _ensureMicPermission() async {
+  final status = await Permission.microphone.request();
+  return status.isGranted;
 }
-
-final status = await Permission.microphone.request();
-
-if (mounted) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('After request: $status'),
-      duration: const Duration(seconds: 3),
-    ),
-  );
-}
-
-return status.isGranted;
-  }
 
   Future<void> _pauseBgmOnce() async {
     try {
@@ -2891,87 +2870,42 @@ return status.isGranted;
     _didPauseBgm = false;
   }
 
-  Future<void> _start() async {
-if (mounted) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('1️⃣ _start() called'),
-      duration: Duration(seconds: 1),
-    ),
-  );
-}    if (_isRecording) return;
+Future<void> _start() async {
+  if (_isRecording) return;
 
-    final ok = await _ensureMicPermission();
-    if (mounted) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('2️⃣ Permission: $ok'),
-      duration: const Duration(seconds: 1),
-    ),
-  );
-}
-    debugPrint('🎙 Permission granted: $ok');
-    if (!ok) return;
+  final ok = await _ensureMicPermission();
+  if (!ok) return;
 
-    await _pauseBgmOnce();
+  await _pauseBgmOnce();
 
-    final path = await _makeTempPath();
+  final path = await _makeTempPath();
 
-    _startedAtMs = DateTime.now().millisecondsSinceEpoch;
-    _currentPath = path;
+  _startedAtMs = DateTime.now().millisecondsSinceEpoch;
+  _currentPath = path;
 
-    try {
-      debugPrint('🎙 Starting recorder...');
-      if (mounted) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('3️⃣ Starting recorder...'),
-      duration: Duration(seconds: 1),
-    ),
-  );
-}
-      await _recorder.start(
-        
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 128000,
-          sampleRate: 44100,
-        ),
-        
-        path: path,
-      );
-   } catch (e, st) {
-  debugPrint('🎙 Recorder start ERROR: $e');
-  debugPrint('$st');
-  if (mounted) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('❌ Recorder ERROR: $e'),
-      duration: const Duration(seconds: 5),
-    ),
-  );
-}
-      _startedAtMs = 0;
-      _currentPath = null;
-      await _resumeBgmIfPausedByMe();
-      return;
-    }
-debugPrint('🎙 Recorder started');
-if (mounted) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('4️⃣ Recorder started'),
-      duration: Duration(seconds: 1),
-    ),
-  );
-}
-    try {
-      widget.onStartRecordingSfx?.call();
-    } catch (_) {}
-
-    if (!mounted) return;
-    setState(() => _isRecording = true);
+  try {
+    await _recorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 128000,
+        sampleRate: 44100,
+      ),
+      path: path,
+    );
+  } catch (_) {
+    _startedAtMs = 0;
+    _currentPath = null;
+    await _resumeBgmIfPausedByMe();
+    return;
   }
+
+  try {
+    widget.onStartRecordingSfx?.call();
+  } catch (_) {}
+
+  if (!mounted) return;
+  setState(() => _isRecording = true);
+}
 
   Future<void> _stopAndSend() async {
     if (!_isRecording) return;

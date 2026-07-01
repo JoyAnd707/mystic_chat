@@ -10,7 +10,6 @@ import '../bots/daily_fact_bot.dart';
 import '../dms/dms_screens.dart';
 import '../firebase/push_service.dart';
 import '../widgets/mystic_top_status_bar.dart';
-import '../widgets/mystic_starfield.dart';
 import 'chat_screen.dart';
 import 'settings_menu.dart';
 import 'gallery_screen.dart';

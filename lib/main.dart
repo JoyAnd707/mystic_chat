@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'dms/dms_screens.dart';
-import 'screens/chat_screen.dart';
 import '../fx/heart_reaction_fly_layer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase/auth_service.dart';
 import '../fx/tap_sparkle_layer.dart';
 import 'audio/sfx.dart';
 import 'audio/bgm.dart';
-import 'bots/daily_fact_bot.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
