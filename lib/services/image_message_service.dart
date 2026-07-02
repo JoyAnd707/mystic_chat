@@ -331,7 +331,34 @@ Future<void> _sendPickedVideoFile({
     rethrow;
   }
 }
+Future<bool> pickAndSendCameraImage({
+  required String roomId,
+  required String senderId,
+  required int ts,
+  int imageQuality = 82,
+  String? replyToMessageId,
+  String? replyToSenderId,
+  String? replyToText,
+}) async {
+  final XFile? picked = await _picker.pickImage(
+    source: ImageSource.camera,
+    imageQuality: imageQuality,
+  );
 
+  if (picked == null) return false;
+
+  await _sendPickedImageFile(
+    picked: picked,
+    roomId: roomId,
+    senderId: senderId,
+    ts: ts,
+    replyToMessageId: replyToMessageId,
+    replyToSenderId: replyToSenderId,
+    replyToText: replyToText,
+  );
+
+  return true;
+}
 Future<bool> pickAndSendMedia({
   required String roomId,
   required String senderId,

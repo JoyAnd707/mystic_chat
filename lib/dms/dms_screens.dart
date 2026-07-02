@@ -1181,6 +1181,20 @@ Future<void> _pickAndSendDmMedia() async {
 ),
               ListTile(
                 leading: const Icon(
+                  Icons.photo_camera_rounded,
+                  color: Color(0xFF46F5D6),
+                ),
+                title: const Text(
+                  'Camera',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await _pickAndSendDmCameraPhoto();
+                },
+              ),
+              ListTile(
+                leading: const Icon(
                   Icons.sticky_note_2_outlined,
                   color: Color(0xFF46F5D6),
                 ),
@@ -1350,6 +1364,70 @@ Future<void> _sendDmVoiceMessage({
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Could not send voice message: $e'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
+Future<void> _pickAndSendDmCameraPhoto() async {
+  final XFile? picked = await _mediaPicker.pickImage(
+    source: ImageSource.camera,
+    imageQuality: 82,
+  );
+
+  if (picked == null) return;
+
+  final String path = picked.path;
+  final int nowMs = DateTime.now().millisecondsSinceEpoch;
+
+  final docRef = _msgsRef.doc();
+
+  final String fileExt = path.split('.').last.toLowerCase();
+  final String storagePath =
+      'dm_rooms/${widget.roomId}/media/${docRef.id}.$fileExt';
+
+  try {
+    await docRef.set({
+      'type': 'image',
+      'senderId': widget.currentUserId,
+      'text': '',
+      'tsMs': nowMs,
+      'mediaUrl': '',
+      'storagePath': storagePath,
+      'heartReactorIds': <String>[],
+      'replyToMessageId': null,
+      'replyToSenderId': null,
+      'replyToSenderName': null,
+      'replyToText': null,
+    });
+
+    final ref = FirebaseStorage.instance.ref(storagePath);
+
+    await ref.putFile(File(path));
+
+    final String downloadUrl = await ref.getDownloadURL();
+
+    await docRef.update({
+      'mediaUrl': downloadUrl,
+    });
+
+    await _roomRef.set({
+      'lastUpdatedMs': nowMs,
+      'lastSenderId': widget.currentUserId,
+      'lastText': '📷 Photo',
+    }, SetOptions(merge: true));
+
+    _scrollToBottom(keepFocus: false);
+  } catch (e) {
+    try {
+      await docRef.delete();
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not send camera photo: $e'),
         duration: const Duration(seconds: 2),
       ),
     );

@@ -1,6 +1,5 @@
 
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 part of 'chat_screen.dart';
 
 /// ✅ סוג בועה לשליחה (תפריט)
@@ -396,6 +395,124 @@ if (msg.type == ChatMessageType.voice) {
     return maxVisible >= (lastIndex - thresholdItems);
   }
 
+  bool _isNearTop({int thresholdItems = 4}) {
+    final positions = _itemPositionsListener.itemPositions.value;
+    if (positions.isEmpty) return false;
+    if (_messages.isEmpty) return false;
+
+    final visibleIndexes = positions
+        .where((p) => p.itemTrailingEdge > 0 && p.itemLeadingEdge < 1)
+        .map((p) => p.index)
+        .toList();
+
+    if (visibleIndexes.isEmpty) return false;
+
+    final minVisible = visibleIndexes.fold<int>(
+      visibleIndexes.first,
+      (a, b) => a < b ? a : b,
+    );
+
+    return minVisible <= thresholdItems;
+  }
+
+  List<ChatMessage> _mergeOlderAndLiveMessages(
+    List<ChatMessage> older,
+    List<ChatMessage> live,
+  ) {
+    final Map<String, ChatMessage> byId = <String, ChatMessage>{};
+
+    for (final m in older) {
+      byId[m.id] = m;
+    }
+
+    for (final m in live) {
+      byId[m.id] = m;
+    }
+
+    final merged = byId.values.toList()
+      ..sort((a, b) => a.ts.compareTo(b.ts));
+
+    return merged;
+  }
+
+  Future<void> _loadOlderMessagesIfNeeded() async {
+    if (_isLoadingOlderMessages) return;
+    if (!_hasMoreOlderMessages) return;
+    if (_messages.isEmpty) return;
+    if (!_initialOpenPositionApplied) return;
+    if (!_itemScrollController.isAttached) return;
+
+    final positions = _itemPositionsListener.itemPositions.value;
+    if (positions.isEmpty) return;
+
+    final visible = positions
+        .where((p) => p.itemTrailingEdge > 0 && p.itemLeadingEdge < 1)
+        .toList();
+
+    if (visible.isEmpty) return;
+
+    visible.sort((a, b) => a.index.compareTo(b.index));
+
+    final int firstVisibleIndexBefore = visible.first.index;
+    final double firstVisibleLeadingEdgeBefore = visible.first.itemLeadingEdge;
+
+    final int oldestTs = _messages.first.ts;
+    if (oldestTs <= 0) return;
+
+    _isLoadingOlderMessages = true;
+
+    try {
+      final rows = await FirestoreChatService.loadMessageMapsBeforeTs(
+        widget.roomId,
+        beforeTs: oldestTs,
+        limit: _olderPageSize,
+      );
+
+      if (!mounted) return;
+
+      if (rows.isEmpty) {
+        setState(() {
+          _hasMoreOlderMessages = false;
+        });
+        return;
+      }
+
+      final olderBatch = rows.map((m) => ChatMessage.fromMap(m)).toList();
+
+      final beforeCount = _messages.length;
+
+      setState(() {
+        _olderLoadedMessages.addAll(olderBatch);
+
+        _messages = _mergeOlderAndLiveMessages(
+          _olderLoadedMessages,
+          _messages,
+        );
+
+        if (rows.length < _olderPageSize) {
+          _hasMoreOlderMessages = false;
+        }
+      });
+
+      final int addedCount = _messages.length - beforeCount;
+
+      if (addedCount > 0 && _itemScrollController.isAttached) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (!_itemScrollController.isAttached) return;
+
+          _itemScrollController.jumpTo(
+            index: firstVisibleIndexBefore + addedCount,
+            alignment: firstVisibleLeadingEdgeBefore,
+          );
+        });
+      }
+    } catch (e) {
+      debugPrint('load older messages failed: $e');
+    } finally {
+      _isLoadingOlderMessages = false;
+    }
+  }
   // =======================
   // Mentions (@) (WhatsApp-like picker)
   // =======================
@@ -899,6 +1016,11 @@ bool _initialOpenPositionApplied = false;
     // ✅ Always compute and cache "near bottom"
     final bool nearBottom = _isNearBottom();
 
+    // ✅ Load older messages when user scrolls near the top
+    if (_isNearTop()) {
+      _loadOlderMessagesIfNeeded();
+    }
+
     // ✅ Force rebuild when near-bottom changes (this fixes the button "stuck" issue)
     if (nearBottom != _nearBottomCached) {
       setState(() {
@@ -938,7 +1060,6 @@ bool _initialOpenPositionApplied = false;
       await _saveScrollOffsetNow();
     });
   }
-
   void _tryRestoreScrollOnce() {
     if (_didRestoreScroll) return;
 
@@ -1333,8 +1454,16 @@ Widget buildImageHeartOverlay({
     });
   }
 
-  bool _isTyping = false;
+    bool _isTyping = false;
   late List<ChatMessage> _messages;
+
+  static const int _liveMessageLimit = 100;
+  static const int _olderPageSize = 100;
+
+  final List<ChatMessage> _olderLoadedMessages = <ChatMessage>[];
+
+  bool _isLoadingOlderMessages = false;
+  bool _hasMoreOlderMessages = true;
 
   // =======================
   // NEW badge (live in-room)
@@ -2474,7 +2603,10 @@ _wiggleCtrl.dispose();
   void _startFirestoreSubscription() {
     _roomSub?.cancel();
 
-    _roomSub = FirestoreChatService.messagesStreamMaps(widget.roomId).listen(
+    _roomSub = FirestoreChatService.messagesStreamMaps(
+      widget.roomId,
+      limit: _liveMessageLimit,
+    ).listen(
       (rows) async {
         final List<ChatMessage> oldMessages = List<ChatMessage>.from(_messages);
         final int oldCount = oldMessages.length;
@@ -2489,13 +2621,45 @@ _wiggleCtrl.dispose();
           }
         }
 
-        final next = rows.map((m) => ChatMessage.fromMap(m)).toList();
+        final liveMessages = rows.map((m) => ChatMessage.fromMap(m)).toList();
+
+        final next = _mergeOlderAndLiveMessages(
+          _olderLoadedMessages,
+          liveMessages,
+        );
+
         _messages = next;
 
-        final bool hasNewMessages = next.length > oldCount;
+        final oldIds = oldMessages.map((m) => m.id).toSet();
+        final addedLiveMessages = next
+            .where((m) => !oldIds.contains(m.id))
+            .where((m) => m.ts > 0)
+            .toList();
+
+        final bool hasNewMessages = addedLiveMessages.isNotEmpty;
+
         if (hasNewMessages && !wasNearBottomBefore) {
-          final int added = _countAddedUnreadishMessages(oldMessages, next);
-          final bool addedMention = _hasAddedMentionsOfMe(oldMessages, next);
+          int added = 0;
+          bool addedMention = false;
+
+          for (final m in addedLiveMessages) {
+            if (m.type == ChatMessageType.text &&
+                m.senderId != widget.currentUserId) {
+              added++;
+            }
+
+            if (m.type == ChatMessageType.text &&
+                m.senderId != widget.currentUserId) {
+              if (m.replyToSenderId != null &&
+                  m.replyToSenderId == widget.currentUserId) {
+                addedMention = true;
+              }
+
+              if (_textMentionsUser(m, widget.currentUserId)) {
+                addedMention = true;
+              }
+            }
+          }
 
           if ((added > 0 || addedMention) && mounted) {
             setState(() {
@@ -2505,34 +2669,33 @@ _wiggleCtrl.dispose();
           }
         }
 
-final bool snapshotContainsMyPendingMessage =
-    (_pendingScrollToBottomTs > 0) &&
-        next.any((m) =>
-            m.ts == _pendingScrollToBottomTs &&
-            m.senderId == widget.currentUserId);
+        final bool snapshotContainsMyPendingMessage =
+            (_pendingScrollToBottomTs > 0) &&
+                next.any((m) =>
+                    m.ts == _pendingScrollToBottomTs &&
+                    m.senderId == widget.currentUserId);
 
-// ✅ During initial open, do NOT auto-scroll based on snapshot.
-// We only allow ONE initial jump (to UNREAD or bottom) in firstLoad.
-if (!_openingLock) {
-  if (wasNearBottomBefore || snapshotContainsMyPendingMessage) {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
+        // ✅ During initial open, do NOT auto-scroll based on snapshot.
+        // We only allow ONE initial jump (to UNREAD or bottom) in firstLoad.
+        if (!_openingLock) {
+          if (wasNearBottomBefore || snapshotContainsMyPendingMessage) {
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              if (!mounted) return;
 
-      // ✅ one frame is enough; avoid double post-frame
-      _scrollToBottom(animated: true, keepFocus: true);
+              // ✅ one frame is enough; avoid double post-frame
+              _scrollToBottom(animated: true, keepFocus: true);
 
-      if (snapshotContainsMyPendingMessage) {
-        _pendingScrollToBottomTs = 0;
-      }
-    });
-  }
-} else {
-  // ✅ Still clear pending ts if we already saw it (prevents later surprise scroll)
-  if (snapshotContainsMyPendingMessage) {
-    _pendingScrollToBottomTs = 0;
-  }
-}
-
+              if (snapshotContainsMyPendingMessage) {
+                _pendingScrollToBottomTs = 0;
+              }
+            });
+          }
+        } else {
+          // ✅ Still clear pending ts if we already saw it (prevents later surprise scroll)
+          if (snapshotContainsMyPendingMessage) {
+            _pendingScrollToBottomTs = 0;
+          }
+        }
 
         await _loadLastReadTsOnce();
 
@@ -2544,7 +2707,7 @@ if (!_openingLock) {
             if (m.ts > 0) _seenMessageTs.add(m.ts);
           }
         } else {
-          for (final m in _messages) {
+          for (final m in addedLiveMessages) {
             final int ts = m.ts;
             if (ts > 0 && !oldSeen.contains(ts)) {
               _seenMessageTs.add(ts);
@@ -2594,16 +2757,16 @@ if (!_openingLock) {
 
             added.remove(widget.currentUserId);
 
-         if (added.isNotEmpty) {
-  final addedList = added.toList()..sort();
+            if (added.isNotEmpty) {
+              final addedList = added.toList()..sort();
 
-  reactorsToAnimate.addAll(addedList);
+              reactorsToAnimate.addAll(addedList);
 
-  _showHeartJumpNotification(
-    messageId: m.id,
-    fromUserId: addedList.first,
-  );
-}
+              _showHeartJumpNotification(
+                messageId: m.id,
+                fromUserId: addedList.first,
+              );
+            }
 
             _lastReactorSnapshotByTs[m.ts] = now;
           }
@@ -2616,34 +2779,31 @@ if (!_openingLock) {
           }
         }
 
-final bool firstLoad = (oldCount == 0 && !_didRestoreScroll);
+        final bool firstLoad = (oldCount == 0 && !_didRestoreScroll);
 
-if (firstLoad && next.isNotEmpty) {
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
-    if (!mounted) return;
+        if (firstLoad && next.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!mounted) return;
 
-    // ✅ One initial positioning, NO animation.
-    await _jumpToFirstUnreadIfAny(animated: false);
+            // ✅ One initial positioning, NO animation.
+            await _jumpToFirstUnreadIfAny(animated: false);
 
-    if (!mounted) return;
+            if (!mounted) return;
 
-    setState(() {
-      _initialOpenPositionApplied = true;
-      _openingLock = false; // ✅ allow auto-scroll only AFTER initial positioning
-    });
+            setState(() {
+              _initialOpenPositionApplied = true;
+              _openingLock = false; // ✅ allow auto-scroll only AFTER initial positioning
+            });
 
-    _didRestoreScroll = true;
+            _didRestoreScroll = true;
 
-    // Do NOT force-hide unread divider here.
-    // Let _onPositionsChanged decide based on near-bottom state.
-  });
-}
-
-
+            // Do NOT force-hide unread divider here.
+            // Let _onPositionsChanged decide based on near-bottom state.
+          });
+        }
       },
     );
   }
-
   void _openKeyboard() {
     if (_isTyping) {
       _focusNode.requestFocus();
@@ -2964,37 +3124,112 @@ return ActiveUsersBar(
   onOpenBubbleMenu: _openBubbleTemplateMenu,
   onOpenSearch: _openMessageSearch,
 onPickImage: () async {
-  try {
-    final roomId = widget.roomId;
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    _pendingScrollToBottomTs = ts;
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.black.withOpacity(0.92),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+    ),
+    builder: (sheetContext) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(
+                  Icons.photo_camera_rounded,
+                  color: Color(0xFF46F5D6),
+                ),
+                title: const Text(
+                  'Camera',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
 
-    final ChatMessage? reply = _replyTarget;
-    final String? replyToId = reply?.id;
-    final String? replyToSenderId = reply?.senderId;
-    final String? replyToText =
-        (reply == null) ? null : _replyPreviewForMessage(reply);
+                  try {
+                    final roomId = widget.roomId;
+                    final ts = DateTime.now().millisecondsSinceEpoch;
+                    _pendingScrollToBottomTs = ts;
 
-    setState(() {
-      _replyTarget = null;
-    });
+                    final ChatMessage? reply = _replyTarget;
+                    final String? replyToId = reply?.id;
+                    final String? replyToSenderId = reply?.senderId;
+                    final String? replyToText =
+                        (reply == null) ? null : _replyPreviewForMessage(reply);
 
-    await _imageService.pickAndSendMedia(
-      roomId: roomId,
-      senderId: widget.currentUserId,
-      ts: ts,
-      replyToMessageId: replyToId,
-      replyToSenderId: replyToSenderId,
-      replyToText: replyToText,
-    );
-  } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to pick/send image: $e')),
-    );
-  }
+                    setState(() {
+                      _replyTarget = null;
+                    });
+
+                    await _imageService.pickAndSendCameraImage(
+                      roomId: roomId,
+                      senderId: widget.currentUserId,
+                      ts: ts,
+                      replyToMessageId: replyToId,
+                      replyToSenderId: replyToSenderId,
+                      replyToText: replyToText,
+                    );
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to open camera: $e')),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.photo_library_rounded,
+                  color: Color(0xFF46F5D6),
+                ),
+                title: const Text(
+                  'Photo / Video',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+
+                  try {
+                    final roomId = widget.roomId;
+                    final ts = DateTime.now().millisecondsSinceEpoch;
+                    _pendingScrollToBottomTs = ts;
+
+                    final ChatMessage? reply = _replyTarget;
+                    final String? replyToId = reply?.id;
+                    final String? replyToSenderId = reply?.senderId;
+                    final String? replyToText =
+                        (reply == null) ? null : _replyPreviewForMessage(reply);
+
+                    setState(() {
+                      _replyTarget = null;
+                    });
+
+                    await _imageService.pickAndSendMedia(
+                      roomId: roomId,
+                      senderId: widget.currentUserId,
+                      ts: ts,
+                      replyToMessageId: replyToId,
+                      replyToSenderId: replyToSenderId,
+                      replyToText: replyToText,
+                    );
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to pick/send media: $e')),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 },
-
   // ✅ NEW: voice
   onSendVoice: (filePath, durationMs) =>
       _sendVoiceMessage(filePath: filePath, durationMs: durationMs),

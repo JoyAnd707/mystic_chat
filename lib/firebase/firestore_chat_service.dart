@@ -87,11 +87,21 @@ static Future<void> sendAnimatedEmojiMessage({
   /// Stream of messages ordered by ts ascending.
   /// Injects:
   /// - id (docId)
-  static Stream<List<Map<String, dynamic>>> messagesStreamMaps(String roomId) {
-    return _messagesCol(roomId)
-        .orderBy('ts', descending: false)
-        .snapshots()
-        .map((snap) {
+  ///
+  /// If limit is provided, Firestore loads only the latest N messages,
+  /// but still returns them in ascending order for the chat UI.
+  static Stream<List<Map<String, dynamic>>> messagesStreamMaps(
+    String roomId, {
+    int? limit,
+  }) {
+    Query<Map<String, dynamic>> query = _messagesCol(roomId)
+        .orderBy('ts', descending: false);
+
+    if (limit != null && limit > 0) {
+      query = query.limitToLast(limit);
+    }
+
+    return query.snapshots().map((snap) {
       return snap.docs.map((d) {
         final data = d.data();
         data['id'] = d.id;
@@ -100,6 +110,33 @@ static Future<void> sendAnimatedEmojiMessage({
     });
   }
 
+  /// Loads older messages before the currently oldest loaded message.
+  /// Used for WhatsApp-like pagination when scrolling upward.
+  static Future<List<Map<String, dynamic>>> loadMessageMapsBeforeTs(
+    String roomId, {
+    required int beforeTs,
+    int limit = 100,
+  }) async {
+    if (beforeTs <= 0) {
+      return <Map<String, dynamic>>[];
+    }
+
+    Query<Map<String, dynamic>> query = _messagesCol(roomId)
+        .where('ts', isLessThan: beforeTs)
+        .orderBy('ts', descending: false);
+
+    if (limit > 0) {
+      query = query.limitToLast(limit);
+    }
+
+    final snap = await query.get();
+
+    return snap.docs.map((d) {
+      final data = d.data();
+      data['id'] = d.id;
+      return data;
+    }).toList();
+  }
   /// docId = ts.toString()
   static Future<void> sendTextMessage({
     required String roomId,
