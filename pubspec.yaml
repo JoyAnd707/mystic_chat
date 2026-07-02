@@ -87,6 +87,10 @@ flutter:
     - assets/animated_emojis/danielle/danielle_angry_1.png
     - assets/animated_emojis/nella/nella_happy_2.png
     - assets/animated_emojis/nella/nella_happy_1.png
+    - assets/animated_emojis/nella/nella_sad_2.png
+    - assets/animated_emojis/nella/nella_sad_1.png
+    - assets/animated_emojis/nella/nella_angry_2.png
+    - assets/animated_emojis/nella/nella_angry_1.png
 
 
 
@@ -132,7 +136,11 @@ flutter:
     - assets/ui/main_menu/TopBarMainMenu.png
     - assets/ui/gallery/GalleryNameplateBase.png
     - assets/fx/ViewStatusSFX.mp3
-
+    - assets/fx/Uruha.mp3
+    - assets/fx/Ruki.mp3
+    - assets/fx/Kai.mp3
+    - assets/fx/Reita.mp3
+    - assets/fx/Aoi.mp3
     - assets/ui/status/JoyNewStatus.png
     - assets/ui/status/JoyNoStatus.png
 

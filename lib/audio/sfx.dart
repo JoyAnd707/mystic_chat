@@ -1,6 +1,7 @@
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/foundation.dart';
 import '../services/app_settings.dart';
+import 'bgm.dart';
 class Sfx {
   Sfx._();
   static final Sfx I = Sfx._();
@@ -40,23 +41,56 @@ Future<void> playCloseImage() =>
     _next = (_next + 1) % _pool.length;
     return p;
   }
+Future<void> playUruha() =>
+    _playOne('assets/fx/Uruha.mp3', volume: 0.9, pauseBgm: true);
 
-  Future<void> _playOne(String assetPath, {double volume = 0.9}) async {
-    if (!enabled) return;
+Future<void> playRuki() =>
+    _playOne('assets/fx/Ruki.mp3', volume: 0.9, pauseBgm: true);
 
-    final p = _take();
+Future<void> playAoi() =>
+    _playOne('assets/fx/Aoi.mp3', volume: 0.9, pauseBgm: true);
 
-    try {
-await p.setVolume(volume * _volume);
-      // Stop anything this player was doing, then play the new SFX
-      await p.stop();
-      await p.setAudioSource(AudioSource.asset(assetPath));
-      await p.play();
-    } catch (e) {
-      debugPrint('SFX failed ($assetPath): $e');
+Future<void> playReita() =>
+    _playOne('assets/fx/Reita.mp3', volume: 0.9, pauseBgm: true);
+
+Future<void> playKai() =>
+    _playOne('assets/fx/Kai.mp3', volume: 0.9, pauseBgm: true);
+
+Future<void> playGazette() =>
+    _playOne('assets/fx/Gazette.mp3', volume: 0.9, pauseBgm: true);
+Future<void> _playOne(
+  String assetPath, {
+  double volume = 0.9,
+  bool pauseBgm = false,
+}) async {
+  if (!enabled) return;
+
+  final p = _take();
+
+  try {
+    if (pauseBgm) {
+      await Bgm.I.pause();
+    }
+
+    await p.setVolume(volume * _volume);
+    await p.stop();
+    await p.setAudioSource(AudioSource.asset(assetPath));
+    await p.play();
+
+    if (pauseBgm) {
+      await p.playerStateStream
+          .firstWhere((s) => s.processingState == ProcessingState.completed);
+
+      await Bgm.I.resumeIfPossible();
+    }
+  } catch (e) {
+    debugPrint('SFX failed ($assetPath): $e');
+
+    if (pauseBgm) {
+      await Bgm.I.resumeIfPossible();
     }
   }
-
+}
   Future<void> playSend() => _playOne('assets/fx/send.mp3', volume: 0.8);
   Future<void> playSelectDm() => _playOne('assets/fx/SelectDMsfx.mp3', volume: 0.9);
   Future<void> playSettingsTabChange() =>
@@ -84,6 +118,7 @@ Future<void> playLolol() =>
     _playOne('assets/fx/LOLOLsfx.mp3', volume: 0.9);
 Future<void> playViewStatus() =>
     _playOne('assets/fx/ViewStatusSFX.mp3', volume: 0.9);
+    
 
   Future<void> dispose() async {
     for (final p in _pool) {

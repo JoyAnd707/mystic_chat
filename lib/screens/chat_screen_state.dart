@@ -2920,6 +2920,36 @@ if (mounted) {
 
 Future<void> _sendMessage() async {
   final text = _controller.text.trim();
+  final lower = text.toLowerCase().trim();
+
+if (widget.roomId == 'group_main') {
+  if (lower == 'uruha' || lower == 'אורוהא') {
+    Sfx.I.playUruha();
+  }
+
+  if (lower == 'ruki' || lower == 'רוקי') {
+    Sfx.I.playRuki();
+  }
+
+  if (lower == 'aoi' || lower == 'אאוי') {
+    Sfx.I.playAoi();
+  }
+
+  if (lower == 'reita' ||
+      lower == 'רייטה' ||
+      lower == 'ריטה') {
+    Sfx.I.playReita();
+  }
+
+  if (lower == 'kai' || lower == 'קאי') {
+    Sfx.I.playKai();
+  }
+
+  if (lower == 'gazette' || lower == 'גאזט') {
+    Sfx.I.playGazette();
+  }
+}
+
   final bool triggerCreepy = _shouldTriggerCreepyEgg(text);
 
   if (text.isEmpty) return;
