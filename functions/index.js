@@ -121,9 +121,19 @@ async function notifyForMessage({ snap, roomPath, roomId, messageId, roomKindDef
       });
     }
   });
-  const uniqueTokens = Array.from(new Set(tokens)).filter(Boolean);
-  if (!uniqueTokens.length) return null;
+   const uniqueTokens = Array.from(new Set(tokens)).filter(Boolean);
 
+  console.log("DELETE roomPath:", roomPath);
+  console.log("DELETE roomId:", roomId);
+  console.log("DELETE messageId:", messageId);
+  console.log("DELETE kind:", roomKindDefault);
+  console.log("DELETE sender:", senderAppUserId);
+  console.log("DELETE memberIds:", memberIds);
+  console.log("DELETE recipients:", recipientAppUserIds);
+  console.log("DELETE usersSnap size:", usersSnap.size);
+  console.log("DELETE tokens:", uniqueTokens.length);
+
+  if (!uniqueTokens.length) return null;
   // 3) Build body
   let body = "New message";
   if (type === "text") body = previewText(text) || "New message";
@@ -290,6 +300,17 @@ exports.notifyOnNewDmMessage = functions.firestore
   });
 
   const uniqueTokens = Array.from(new Set(tokens)).filter(Boolean);
+
+  console.log("DELETE roomPath:", roomPath);
+  console.log("DELETE roomId:", roomId);
+  console.log("DELETE messageId:", messageId);
+  console.log("DELETE kind:", roomKindDefault);
+  console.log("DELETE sender:", senderAppUserId);
+  console.log("DELETE memberIds:", memberIds);
+  console.log("DELETE recipients:", recipientAppUserIds);
+  console.log("DELETE usersSnap size:", usersSnap.size);
+  console.log("DELETE tokens:", uniqueTokens.length);
+
   if (!uniqueTokens.length) return null;
 
   const multicast = {
@@ -319,10 +340,31 @@ exports.notifyOnNewDmMessage = functions.firestore
     },
   };
 
-  await admin.messaging().sendEachForMulticast(multicast);
+  const res = await admin.messaging().sendEachForMulticast(multicast);
+
+  console.log(
+    "Delete push result:",
+    res.successCount,
+    "success,",
+    res.failureCount,
+    "failed"
+  );
+
+  res.responses.forEach((r, i) => {
+    if (!r.success) {
+      console.log(
+        "Delete push error token index:",
+        i,
+        "code:",
+        r.error && r.error.code ? r.error.code : "",
+        "message:",
+        r.error && r.error.message ? r.error.message : ""
+      );
+    }
+  });
+
   return null;
 }
-
 exports.notifyOnDeletedRoomMessage = functions.firestore
   .document("rooms/{roomId}/messages/{messageId}")
   .onDelete((snap, context) => {
@@ -347,4 +389,5 @@ exports.notifyOnDeletedDmMessage = functions.firestore
       messageId,
       roomKindDefault: "dm",
     });
+  
   });
