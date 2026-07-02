@@ -36,6 +36,11 @@ class _MainMenuScreenState extends State<MainMenuScreen>
 
   Timer? _clockTimer;
   DateTime _now = DateTime.now();
+    int _hearts = 0;
+  int _hourglasses = 0;
+
+  static const String _heartsKey = 'main_menu_hearts_counter';
+  static const String _hourglassesKey = 'main_menu_hourglasses_counter';
 
   late final AnimationController _twinkleController;
   late final AnimationController _chatroomRingController;
@@ -73,6 +78,7 @@ late final AnimationController _messageRingController;
       ),
     );
     _now = DateTime.now();
+        _loadRewardCounters();
 
     _clockTimer = Timer.periodic(
       const Duration(seconds: 1),
@@ -81,6 +87,7 @@ late final AnimationController _messageRingController;
 
         setState(() {
           _now = DateTime.now();
+          
         });
       },
     );
@@ -106,11 +113,48 @@ late final AnimationController _messageRingController;
     super.dispose();
   }
 
+  Future<void> _loadRewardCounters() async {
+    final prefs = await SharedPreferences.getInstance();
 
-    String _dmRoomId(String a, String b) {
+    if (!mounted) return;
+
+    setState(() {
+      _hearts = prefs.getInt(_heartsKey) ?? 0;
+      _hourglasses = prefs.getInt(_hourglassesKey) ?? 0;
+    });
+  }
+
+  Future<void> _addRewardCounters(int hearts, int hourglasses) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    int nextHearts = _hearts + hearts;
+    int nextHourglasses = _hourglasses + hourglasses;
+
+    if (nextHearts >= 10000) {
+      nextHearts = 0;
+    }
+
+    if (nextHourglasses >= 10000) {
+      nextHourglasses = 0;
+    }
+
+    await prefs.setInt(_heartsKey, nextHearts);
+    await prefs.setInt(_hourglassesKey, nextHourglasses);
+
+    if (!mounted) return;
+
+    setState(() {
+      _hearts = nextHearts;
+      _hourglasses = nextHourglasses;
+    });
+  }
+
+  String _dmRoomId(String a, String b) {
     final pair = [a, b]..sort();
     return 'dm_${pair[0]}_${pair[1]}';
   }
+
+
 
   String _lastReadKeyFor(String roomId) {
     return 'lastReadMs__${widget.currentUserId}__$roomId';
@@ -221,8 +265,10 @@ Positioned(
   left: 0,
   right: 0,
   bottom: 35,
-  child: const Center(
-    child: SpaceSnackProgressBar(),
+  child: Center(
+    child: SpaceSnackProgressBar(
+      onRewardClaimed: _addRewardCounters,
+    ),
   ),
 ),
 
@@ -419,8 +465,9 @@ Positioned(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   MysticTopStatusBar(now: _now),
+                  const SizedBox(height: 0),
 
-const SizedBox(height: 10),
+
 
                   const SizedBox(height: 215),
 

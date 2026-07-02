@@ -129,7 +129,7 @@ flutter:
     - assets/ui/gallery/LianGalleryImage.png
     - assets/ui/gallery/TalGalleryImage.png
     - assets/ui/gallery/NellaGalleryImage.png
-
+    - assets/ui/main_menu/TopBarMainMenu.png
     - assets/ui/gallery/GalleryNameplateBase.png
     - assets/fx/ViewStatusSFX.mp3
 

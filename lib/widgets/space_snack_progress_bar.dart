@@ -10,9 +10,11 @@ class SpaceSnackProgressBar extends StatefulWidget {
   const SpaceSnackProgressBar({
     super.key,
     this.width,
+    this.onRewardClaimed,
   });
 
   final double? width;
+  final void Function(int hearts, int hourglasses)? onRewardClaimed;
 
   @override
   State<SpaceSnackProgressBar> createState() => _SpaceSnackProgressBarState();
@@ -128,8 +130,9 @@ Future<void> _claimReward() async {
 
   if (!mounted) return;
 
-  final DateTime newStartTime = DateTime.now();
+  widget.onRewardClaimed?.call(hearts, hourglasses);
 
+  final DateTime newStartTime = DateTime.now();
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString(
     _startTimeKey,
